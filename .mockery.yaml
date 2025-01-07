@@ -12,6 +12,19 @@ outpkg: mockery
 filename: '{{.InterfaceName}}.{{.PackageName}}.mockery.go'
 mockname: Mock{{.InterfaceName}}_{{.PackageName}}
 packages:
-    github.com/walteh/retab/v2/pkg/format:
+    github.com/walteh/go-tmpl-typer/pkg/parser:
         interfaces:
-            Configuration: {}
+            TemplateParser: {}
+    github.com/walteh/go-tmpl-typer/pkg/ast:
+        interfaces:
+            PackageAnalyzer: {}
+    github.com/walteh/go-tmpl-typer/pkg/diagnostic:
+        interfaces:
+            Generator: {}
+            Formatter: {}
+    github.com/walteh/go-tmpl-typer/pkg/finder:
+        interfaces:
+            TemplateFinder: {}
+    github.com/walteh/go-tmpl-typer/pkg/types:
+        interfaces:
+            Validator: {}
