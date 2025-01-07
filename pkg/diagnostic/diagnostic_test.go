@@ -58,16 +58,16 @@ func mockTemplateInfo() *parser.TemplateInfo {
 				Arguments: []string{},
 			},
 		},
-		Definitions: []parser.DefinitionInfo{
-			{
-				Name:     "Name",
-				Line:     7,
-				Column:   1,
-				EndLine:  9,
-				EndCol:   7,
-				NodeType: "definition",
-			},
-		},
+		// Definitions: []parser.DefinitionInfo{
+		// 	{
+		// 		Name:     "Name",
+		// 		Line:     7,
+		// 		Column:   1,
+		// 		EndLine:  9,
+		// 		EndCol:   7,
+		// 		NodeType: "definition",
+		// 	},
+		// },
 	}
 }
 

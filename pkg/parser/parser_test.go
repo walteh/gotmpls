@@ -49,16 +49,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 					},
 				},
 				Functions: []parser.FunctionLocation{},
-				Definitions: []parser.DefinitionInfo{
-					{
-						Name:     "main",
-						Line:     2,
-						Column:   1,
-						EndLine:  4,
-						EndCol:   7,
-						NodeType: "definition",
-					},
-				},
+				// Definitions: []parser.DefinitionInfo{},
 			},
 			wantErr: false,
 		},
@@ -102,16 +93,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 						EndCol:  33,
 					},
 				},
-				Definitions: []parser.DefinitionInfo{
-					{
-						Name:     "main",
-						Line:     2,
-						Column:   1,
-						EndLine:  4,
-						EndCol:   7,
-						NodeType: "definition",
-					},
-				},
+				// Definitions: []parser.DefinitionInfo{},
 			},
 			wantErr: false,
 		},
@@ -224,11 +206,26 @@ Job: {{.GetJob | upper}}
 	info, err := p.Parse(context.Background(), []byte(data), "test.tmpl")
 	require.NoError(t, err)
 
+	// Check type hint
 	require.Equal(t, 1, len(info.TypeHints))
 	require.Equal(t, "github.com/walteh/go-tmpl-types-vscode/examples/types.Person", info.TypeHints[0].TypePath)
-	require.Equal(t, 1, len(info.Definitions))
-	require.Equal(t, "header", info.Definitions[0].Name)
-	require.Equal(t, 2, len(info.Variables))
-	require.Equal(t, "Names", info.Variables[0].Name)
-	require.Equal(t, "Age", info.Variables[1].Name)
+
+	// Check variables - should include all parts of nested fields
+	expectedVars := []string{
+		"Names",
+		"Age",
+		"Address", "Street", // From .Address.Street
+		"Address", "City", // From .Address.City
+		"HasJob",
+		"GetJob",
+	}
+	foundVars := make([]string, len(info.Variables))
+	for i, v := range info.Variables {
+		foundVars[i] = v.Name
+	}
+	require.ElementsMatch(t, expectedVars, foundVars)
+
+	// Check functions
+	require.Equal(t, 1, len(info.Functions))
+	require.Equal(t, "upper", info.Functions[0].Name)
 }

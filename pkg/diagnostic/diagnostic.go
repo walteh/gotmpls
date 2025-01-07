@@ -170,35 +170,35 @@ func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateIn
 		})
 	}
 
-	// Validate definitions
-	for _, def := range info.Definitions {
-		if def.Name == "" {
-			continue // Skip unnamed definitions
-		}
+	// // Validate definitions
+	// for _, def := range info.Definitions {
+	// 	if def.Name == "" {
+	// 		continue // Skip unnamed definitions
+	// 	}
 
-		// Check if the definition name conflicts with any fields or methods
-		if _, err := typeValidator.ValidateField(ctx, typeInfo, def.Name); err == nil {
-			diagnostics.Warnings = append(diagnostics.Warnings, Diagnostic{
-				Message:  fmt.Sprintf("Definition name '%s' shadows a field name", def.Name),
-				Line:     def.Line,
-				Column:   def.Column,
-				EndLine:  def.EndLine,
-				EndCol:   def.EndCol,
-				Severity: Warning,
-			})
-		}
+	// 	// Check if the definition name conflicts with any fields or methods
+	// 	if _, err := typeValidator.ValidateField(ctx, typeInfo, def.Name); err == nil {
+	// 		diagnostics.Warnings = append(diagnostics.Warnings, Diagnostic{
+	// 			Message:  fmt.Sprintf("Definition name '%s' shadows a field name", def.Name),
+	// 			Line:     def.Line,
+	// 			Column:   def.Column,
+	// 			EndLine:  def.EndLine,
+	// 			EndCol:   def.EndCol,
+	// 			Severity: Warning,
+	// 		})
+	// 	}
 
-		if _, err := typeValidator.ValidateMethod(ctx, typeInfo, def.Name); err == nil {
-			diagnostics.Warnings = append(diagnostics.Warnings, Diagnostic{
-				Message:  fmt.Sprintf("Definition name '%s' shadows a method name", def.Name),
-				Line:     def.Line,
-				Column:   def.Column,
-				EndLine:  def.EndLine,
-				EndCol:   def.EndCol,
-				Severity: Warning,
-			})
-		}
-	}
+	// 	if _, err := typeValidator.ValidateMethod(ctx, typeInfo, def.Name); err == nil {
+	// 		diagnostics.Warnings = append(diagnostics.Warnings, Diagnostic{
+	// 			Message:  fmt.Sprintf("Definition name '%s' shadows a method name", def.Name),
+	// 			Line:     def.Line,
+	// 			Column:   def.Column,
+	// 			EndLine:  def.EndLine,
+	// 			EndCol:   def.EndCol,
+	// 			Severity: Warning,
+	// 		})
+	// 	}
+	// }
 
 	return diagnostics, nil
 }

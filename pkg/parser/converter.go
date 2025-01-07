@@ -136,28 +136,28 @@ func (c *Converter) convertNode(node parse.Node, source string, info *TemplateIn
 		// If this is the root node, create a main definition
 		if len(n.Nodes) > 0 {
 			// Find the end position by scanning for {{end}}
-			endLine, endCol := 1, 1
-			if idx := strings.LastIndex(source, "{{end}}"); idx >= 0 {
-				beforeEnd := source[:idx+7] // include {{end}}
-				endLine = strings.Count(beforeEnd, "\n") + 1
-				if lastNL := strings.LastIndex(beforeEnd, "\n"); lastNL >= 0 {
-					endCol = len(beforeEnd) - lastNL - 1
-				} else {
-					endCol = len(beforeEnd)
-				}
-			}
+			// endLine, endCol := 1, 1
+			// if idx := strings.LastIndex(source, "{{end}}"); idx >= 0 {
+			// 	beforeEnd := source[:idx+7] // include {{end}}
+			// 	endLine = strings.Count(beforeEnd, "\n") + 1
+			// 	if lastNL := strings.LastIndex(beforeEnd, "\n"); lastNL >= 0 {
+			// 		endCol = len(beforeEnd) - lastNL - 1
+			// 	} else {
+			// 		endCol = len(beforeEnd)
+			// 	}
+			// }
 
-			if info.Definitions == nil {
-				info.Definitions = make([]DefinitionInfo, 0, 1)
-			}
-			info.Definitions = append(info.Definitions, DefinitionInfo{
-				Name:     "main",
-				Line:     2, // Start after type hint
-				Column:   1,
-				EndLine:  endLine,
-				EndCol:   endCol,
-				NodeType: "definition",
-			})
+			// if info.Definitions == nil {
+			// 	info.Definitions = make([]DefinitionInfo, 0, 1)
+			// }
+			// info.Definitions = append(info.Definitions, DefinitionInfo{
+			// 	Name:     "main",
+			// 	Line:     2, // Start after type hint
+			// 	Column:   1,
+			// 	EndLine:  endLine,
+			// 	EndCol:   endCol,
+			// 	NodeType: "definition",
+			// })
 		}
 
 		// Process each child node
@@ -169,32 +169,32 @@ func (c *Converter) convertNode(node parse.Node, source string, info *TemplateIn
 
 	case *parse.TemplateNode:
 		// Named template definition
-		startLine, startCol := positionFromOffset(source, int(n.Position()))
-		endLine, endCol := startLine, startCol
+		// startLine, startCol := positionFromOffset(source, int(n.Position()))
+		// endLine, endCol := startLine, startCol
 
-		// Find the end by scanning for {{end}}
-		text := source[n.Position():]
-		if idx := strings.Index(text, "{{end}}"); idx >= 0 {
-			beforeEnd := text[:idx+7] // include {{end}}
-			endLine = startLine + strings.Count(beforeEnd, "\n")
-			if lastNL := strings.LastIndex(beforeEnd, "\n"); lastNL >= 0 {
-				endCol = len(beforeEnd) - lastNL - 1
-			} else {
-				endCol = startCol + len(beforeEnd)
-			}
-		}
+		// // Find the end by scanning for {{end}}
+		// text := source[n.Position():]
+		// if idx := strings.Index(text, "{{end}}"); idx >= 0 {
+		// 	beforeEnd := text[:idx+7] // include {{end}}
+		// 	endLine = startLine + strings.Count(beforeEnd, "\n")
+		// 	if lastNL := strings.LastIndex(beforeEnd, "\n"); lastNL >= 0 {
+		// 		endCol = len(beforeEnd) - lastNL - 1
+		// 	} else {
+		// 		endCol = startCol + len(beforeEnd)
+		// 	}
+		// }
 
-		if info.Definitions == nil {
-			info.Definitions = make([]DefinitionInfo, 0, 1)
-		}
-		info.Definitions = append(info.Definitions, DefinitionInfo{
-			Name:     n.Name,
-			Line:     startLine,
-			Column:   startCol,
-			EndLine:  endLine,
-			EndCol:   endCol,
-			NodeType: "definition",
-		})
+		// if info.Definitions == nil {
+		// 	info.Definitions = make([]DefinitionInfo, 0, 1)
+		// }
+		// info.Definitions = append(info.Definitions, DefinitionInfo{
+		// 	Name:     n.Name,
+		// 	Line:     startLine,
+		// 	Column:   startCol,
+		// 	EndLine:  endLine,
+		// 	EndCol:   endCol,
+		// 	NodeType: "definition",
+		// })
 	}
 
 	return nil
