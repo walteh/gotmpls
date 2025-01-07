@@ -7,3 +7,6 @@ never modify significant portions of code without asking
 always assume errors you introduce are a result of code you wrote, if you think otherwise, ask to make sure you can make changes elsewhere.
 run linting checks before you make changes to get a better sense of what errors you might be introducing
 never directly modify go.mod or go.sum files, always use go mod tidy and go mod init to update them (or other commands that are appropriate)
+
+
+don't take wild guesses about what the structure of variables look like, utilize "github.com/k0kubun/pp/v3" pp.Printf to print out the structure of variables for debugging purposes

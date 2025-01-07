@@ -135,15 +135,15 @@ func TestPackageAnalyzer_AnalyzePackage(t *testing.T) {
 	tests := []struct {
 		name       string
 		packageDir string
-		want       *ast.PackageInfo
+		want       *ast.TypeRegistry
 		wantErr    bool
 	}{
 		{
 			name:       "valid package",
 			packageDir: "testdata/valid",
-			want: func() *ast.PackageInfo {
-				info := ast.NewPackageInfo()
-				// TODO: Add expected package types
+			want: func() *ast.TypeRegistry {
+				info := ast.NewTypeRegistry()
+				info.Types["github.com/example/types"] = types.NewPackage("github.com/example/types", "types")
 				return info
 			}(),
 			wantErr: false,
@@ -187,46 +187,45 @@ func TestPackageAnalyzer_AnalyzePackage(t *testing.T) {
 	}
 }
 
-func TestPackageInfo_TypeExists(t *testing.T) {
+func TestTypeRegistry_TypeExists(t *testing.T) {
 	tests := []struct {
 		name     string
-		setup    func() *ast.PackageInfo
 		typePath string
+		setup    func() *ast.TypeRegistry
 		want     bool
 	}{
 		{
-			name: "type exists",
-			setup: func() *ast.PackageInfo {
-				info := ast.NewPackageInfo()
-				pkg := types.NewPackage("github.com/example/types", "types")
-				info.Types["github.com/example/types.Config"] = pkg
+			name:     "existing type",
+			typePath: "github.com/example/types.Person",
+			setup: func() *ast.TypeRegistry {
+				info := ast.NewTypeRegistry()
+				info.Types["github.com/example/types.Person"] = types.NewPackage("github.com/example/types", "types")
 				return info
 			},
-			typePath: "github.com/example/types.Config",
-			want:     true,
+			want: true,
 		},
 		{
-			name: "type does not exist",
-			setup: func() *ast.PackageInfo {
-				return ast.NewPackageInfo()
+			name:     "non-existent type",
+			typePath: "github.com/example/types.NonExistent",
+			setup: func() *ast.TypeRegistry {
+				return ast.NewTypeRegistry()
 			},
-			typePath: "github.com/example/types.Unknown",
-			want:     false,
+			want: false,
 		},
 		{
-			name: "empty package info",
-			setup: func() *ast.PackageInfo {
-				return ast.NewPackageInfo()
+			name:     "empty registry",
+			typePath: "any.Type",
+			setup: func() *ast.TypeRegistry {
+				return ast.NewTypeRegistry()
 			},
-			typePath: "",
-			want:     false,
+			want: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := tt.setup()
-			got := info.TypeExists(tt.typePath)
+			registry := tt.setup()
+			got := registry.TypeExists(tt.typePath)
 			assert.Equal(t, tt.want, got)
 		})
 	}

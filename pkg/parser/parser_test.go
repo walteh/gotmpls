@@ -13,38 +13,18 @@ import (
 func TestTemplateParser_Parse(t *testing.T) {
 	tests := []struct {
 		name     string
-		content  string
-		filename string
+		template string
 		want     *parser.TemplateInfo
 		wantErr  bool
 	}{
 		{
 			name: "basic template with type hint",
-			content: `{{- /*gotype: github.com/example/types.Config */ -}}
-package templates
-
+			template: `{{- /*gotype: github.com/example/types.Config */ -}}
 {{define "main"}}
-Hello {{.Name}}! You are {{.Age}} years old. zzz32
+Hello {{.Name}}! You are {{.Age}} years old.
 {{end}}`,
-			filename: "test.tmpl",
 			want: &parser.TemplateInfo{
-				Functions: []parser.FunctionLocation{},
-				Variables: []parser.VariableLocation{
-					{
-						Name:    "Name",
-						Line:    5,
-						Column:  9,
-						EndLine: 5,
-						EndCol:  13,
-					},
-					{
-						Name:    "Age",
-						Line:    5,
-						Column:  28,
-						EndLine: 5,
-						EndCol:  31,
-					},
-				},
+				Filename: "test.tmpl",
 				TypeHints: []parser.TypeHint{
 					{
 						TypePath: "github.com/example/types.Config",
@@ -52,18 +32,51 @@ Hello {{.Name}}! You are {{.Age}} years old. zzz32
 						Column:   12,
 					},
 				},
-				Filename: "test.tmpl",
+				Variables: []parser.VariableLocation{
+					{
+						Name:    "Name",
+						Line:    3,
+						Column:  9,
+						EndLine: 3,
+						EndCol:  13,
+					},
+					{
+						Name:    "Age",
+						Line:    3,
+						Column:  28,
+						EndLine: 3,
+						EndCol:  31,
+					},
+				},
+				Functions: []parser.FunctionLocation{},
+				Definitions: []parser.DefinitionInfo{
+					{
+						Name:     "main",
+						Line:     2,
+						Column:   1,
+						EndLine:  4,
+						EndCol:   7,
+						NodeType: "definition",
+					},
+				},
 			},
 			wantErr: false,
 		},
 		{
 			name: "template with function calls",
-			content: `{{- /*gotype: github.com/example/types.Config */ -}}
+			template: `{{- /*gotype: github.com/example/types.Config */ -}}
 {{define "main"}}
 {{printf "Hello %s" .Name | upper}}
 {{end}}`,
-			filename: "test.tmpl",
 			want: &parser.TemplateInfo{
+				Filename: "test.tmpl",
+				TypeHints: []parser.TypeHint{
+					{
+						TypePath: "github.com/example/types.Config",
+						Line:     1,
+						Column:   12,
+					},
+				},
 				Variables: []parser.VariableLocation{
 					{
 						Name:    "Name",
@@ -89,33 +102,34 @@ Hello {{.Name}}! You are {{.Age}} years old. zzz32
 						EndCol:  33,
 					},
 				},
-				TypeHints: []parser.TypeHint{
+				Definitions: []parser.DefinitionInfo{
 					{
-						TypePath: "github.com/example/types.Config",
-						Line:     1,
-						Column:   12,
+						Name:     "main",
+						Line:     2,
+						Column:   1,
+						EndLine:  4,
+						EndCol:   7,
+						NodeType: "definition",
 					},
 				},
-				Filename: "test.tmpl",
 			},
 			wantErr: false,
 		},
 		{
 			name: "invalid template",
-			content: `{{- /*gotype: github.com/example/types.Config */ -}}
+			template: `{{- /*gotype: github.com/example/types.Config */ -}}
 {{define "main"}}
 {{.Name} // Missing closing brace
 {{end}}`,
-			filename: "test.tmpl",
-			want:     nil,
-			wantErr:  true,
+			want:    nil,
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := parser.NewDefaultTemplateParser()
-			got, err := p.Parse(context.Background(), []byte(tt.content), tt.filename)
+			got, err := p.Parse(context.Background(), []byte(tt.template), "test.tmpl")
 			if tt.wantErr {
 				require.Error(t, err)
 				return

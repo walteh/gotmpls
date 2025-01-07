@@ -139,24 +139,26 @@ func (n *FunctionNode) Position() (start, end Position) {
 // PackageAnalyzer is responsible for analyzing Go packages and extracting type information
 type PackageAnalyzer interface {
 	// AnalyzePackage analyzes a Go package and returns type information
-	AnalyzePackage(ctx context.Context, packageDir string) (*PackageInfo, error)
+	AnalyzePackage(ctx context.Context, packageDir string) (*TypeRegistry, error)
 }
 
-// PackageInfo contains information about a Go package
-type PackageInfo struct {
+// TypeRegistry contains a registry of Go types found in packages
+type TypeRegistry struct {
+	// Types maps fully qualified type paths to their package information
 	Types map[string]*types.Package
-	Err   error
+	// Error encountered during type resolution, if any
+	Err error
 }
 
-// NewPackageInfo creates a new PackageInfo
-func NewPackageInfo() *PackageInfo {
-	return &PackageInfo{
+// NewTypeRegistry creates a new TypeRegistry
+func NewTypeRegistry() *TypeRegistry {
+	return &TypeRegistry{
 		Types: make(map[string]*types.Package),
 	}
 }
 
-// TypeExists checks if a type exists in the package
-func (p *PackageInfo) TypeExists(typePath string) bool {
+// TypeExists checks if a type exists in the registry
+func (p *TypeRegistry) TypeExists(typePath string) bool {
 	_, exists := p.Types[typePath]
 	return exists
 }
