@@ -4,24 +4,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go/types"
 	"strings"
 
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
-	"github.com/walteh/go-tmpl-typer/pkg/types"
+	pkg_types "github.com/walteh/go-tmpl-typer/pkg/types"
 	"gitlab.com/tozd/go/errors"
 )
 
 // Generator is responsible for generating diagnostics from template information
 type Generator interface {
 	// Generate generates diagnostics from template information
-	Generate(ctx context.Context, info *parser.TemplateInfo, typeValidator types.Validator, registry *ast.TypeRegistry) (*Diagnostics, error)
+	Generate(ctx context.Context, info *parser.TemplateInfo, typeValidator pkg_types.Validator, registry *ast.TypeRegistry) (*Diagnostics, error)
 }
 
 // Diagnostics represents diagnostic information that can be formatted in different ways
 type Diagnostics struct {
 	Errors   []Diagnostic
 	Warnings []Diagnostic
+	Hints    []Diagnostic
 }
 
 // Diagnostic represents a single diagnostic message
@@ -41,6 +43,7 @@ const (
 	Error   DiagnosticSeverity = "error"
 	Warning DiagnosticSeverity = "warning"
 	Info    DiagnosticSeverity = "info"
+	Hint    DiagnosticSeverity = "hint"
 )
 
 // DefaultGenerator is the default implementation of Generator
@@ -52,7 +55,7 @@ func NewDefaultGenerator() *DefaultGenerator {
 }
 
 // Generate implements Generator
-func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateInfo, typeValidator types.Validator, registry *ast.TypeRegistry) (*Diagnostics, error) {
+func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateInfo, typeValidator pkg_types.Validator, registry *ast.TypeRegistry) (*Diagnostics, error) {
 	if info == nil {
 		return nil, errors.Errorf("template info is nil")
 	}
@@ -89,6 +92,8 @@ func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateIn
 		return diagnostics, nil
 	}
 
+	fieldMap := make(map[string]pkg_types.FieldInfo)
+
 	// Validate variables
 	for _, variable := range info.Variables {
 		field, err := typeValidator.ValidateField(ctx, typeInfo, variable.Name)
@@ -105,19 +110,20 @@ func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateIn
 		}
 
 		// Add type information as hover info
-		diagnostics.Warnings = append(diagnostics.Warnings, Diagnostic{
+		diagnostics.Hints = append(diagnostics.Hints, Diagnostic{
 			Message:  fmt.Sprintf("Type: %v", field.Type),
 			Line:     variable.Line,
 			Column:   variable.Column,
 			EndLine:  variable.EndLine,
 			EndCol:   variable.EndCol,
-			Severity: Info,
+			Severity: Hint,
 		})
+		fieldMap[variable.Name] = *field
 	}
 
 	// Validate functions
 	for _, function := range info.Functions {
-		method, err := typeValidator.ValidateMethod(ctx, typeInfo, function.Name)
+		method, err := typeValidator.ValidateMethod(ctx, function.Name)
 		if err != nil {
 			diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
 				Message:  fmt.Sprintf("Invalid method call: %v", err),
@@ -132,21 +138,72 @@ func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateIn
 
 		// Only validate arguments if the function has them
 		if len(method.Parameters) > 0 {
-			// If Arguments is nil, treat it as empty slice
-			args := function.Arguments
-			if args == nil {
-				args = []string{}
+
+			args := []types.Type{}
+
+			if function.ArgumentsRef != "" {
+				field, ok := fieldMap[function.ArgumentsRef]
+				if !ok {
+					diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
+						Message:  fmt.Sprintf("Invalid argument reference: %s", function.ArgumentsRef),
+						Line:     function.Line,
+						Column:   function.Column,
+						EndLine:  function.EndLine,
+						EndCol:   function.EndCol,
+						Severity: Error,
+					})
+				}
+
+				if field.MethodInfo != nil {
+					if len(field.MethodInfo.Results) == 0 {
+						diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
+							Message:  fmt.Sprintf("Method %s has no results", function.Name),
+							Line:     function.Line,
+							Column:   function.Column,
+							EndLine:  function.EndLine,
+							EndCol:   function.EndCol,
+							Severity: Error,
+						})
+						continue
+					}
+					args = field.MethodInfo.Results
+				} else {
+					args = []types.Type{field.Type}
+				}
 			}
 
 			if len(args) != len(method.Parameters) {
 				diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
-					Message:  fmt.Sprintf("Wrong number of arguments: expected %d, got %d", len(method.Parameters), len(args)),
+					Message:  fmt.Sprintf("Wrong number of arguments for method %s: expected %d, got %d", function.Name, len(method.Parameters), len(args)),
 					Line:     function.Line,
 					Column:   function.Column,
 					EndLine:  function.EndLine,
 					EndCol:   function.EndCol,
 					Severity: Error,
 				})
+			}
+
+			for i, arg := range args {
+				if arg == nil {
+					args[i] = types.Typ[types.UntypedNil]
+				}
+			}
+
+			for i, arg := range args {
+
+				// fmt.Println(method, arg)
+				// fmt.Println(method.Parameters[i].String())
+				if arg.String() != method.Parameters[i].String() {
+					diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
+						Message:  fmt.Sprintf("Argument %d: expected %s, got %s", i, method.Parameters[i].String(), arg.String()),
+						Line:     function.Line,
+						Column:   function.Column,
+						EndLine:  function.EndLine,
+						EndCol:   function.EndCol,
+						Severity: Error,
+					})
+				}
+
 			}
 		}
 
@@ -160,13 +217,13 @@ func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateIn
 			results[i] = r.String()
 		}
 
-		diagnostics.Warnings = append(diagnostics.Warnings, Diagnostic{
+		diagnostics.Hints = append(diagnostics.Hints, Diagnostic{
 			Message:  fmt.Sprintf("Method signature: %s(%s) (%s)", function.Name, strings.Join(params, ", "), strings.Join(results, ", ")),
 			Line:     function.Line,
 			Column:   function.Column,
 			EndLine:  function.EndLine,
 			EndCol:   function.EndCol,
-			Severity: Info,
+			Severity: Hint,
 		})
 	}
 
@@ -296,6 +353,31 @@ func (f *VSCodeFormatter) Format(diagnostics *Diagnostics) ([]byte, error) {
 				}{
 					Line:      warn.EndLine - 1, // VSCode is 0-based
 					Character: warn.EndCol - 1,  // VSCode is 0-based
+				},
+			},
+		}
+		result = append(result, vd)
+	}
+
+	// Convert hints
+	for _, hint := range diagnostics.Hints {
+		vd := VSCodeDiagnostic{
+			Severity: 4, // Hint
+			Message:  hint.Message,
+			Range: VSCodeRange{
+				Start: struct {
+					Line      int `json:"line"`
+					Character int `json:"character"`
+				}{
+					Line:      hint.Line - 1,   // VSCode is 0-based
+					Character: hint.Column - 1, // VSCode is 0-based
+				},
+				End: struct {
+					Line      int `json:"line"`
+					Character int `json:"character"`
+				}{
+					Line:      hint.EndLine - 1, // VSCode is 0-based
+					Character: hint.EndCol - 1,  // VSCode is 0-based
 				},
 			},
 		}

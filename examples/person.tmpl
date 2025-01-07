@@ -5,7 +5,7 @@
 
 {{template "header"}}
 
-Name: {{.Names}}
+Name: {{.Name}}
 Age: {{.Age}}
 Address:
   Street: {{.Address.Street}}
@@ -13,4 +13,6 @@ Address:
 
 {{if .HasJob}}
 Job: {{.GetJob | upper}}
+JobZ: {{printf "%s" .GetJob | upper}}
+
 {{end}} 

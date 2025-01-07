@@ -2,6 +2,7 @@ package parser_test
 
 import (
 	"context"
+	"go/types"
 	"testing"
 	"text/template/parse"
 
@@ -48,7 +49,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 						EndCol:  31,
 					},
 				},
-				Functions: []parser.FunctionLocation{},
+				Functions: []parser.VariableLocation{},
 				// Definitions: []parser.DefinitionInfo{},
 			},
 			wantErr: false,
@@ -59,42 +60,49 @@ Hello {{.Name}}! You are {{.Age}} years old.
 {{define "main"}}
 {{printf "Hello %s" .Name | upper}}
 {{end}}`,
-			want: &parser.TemplateInfo{
-				Filename: "test.tmpl",
-				TypeHints: []parser.TypeHint{
-					{
-						TypePath: "github.com/example/types.Config",
-						Line:     1,
-						Column:   12,
+			want: func() *parser.TemplateInfo {
+				variable := parser.VariableLocation{
+					Name:    "Name",
+					Line:    3,
+					Column:  21,
+					EndLine: 3,
+					EndCol:  25,
+				}
+				want := &parser.TemplateInfo{
+					Filename: "test.tmpl",
+					TypeHints: []parser.TypeHint{
+						{
+							TypePath: "github.com/example/types.Config",
+							Line:     1,
+							Column:   12,
+						},
 					},
-				},
-				Variables: []parser.VariableLocation{
-					{
-						Name:    "Name",
-						Line:    3,
-						Column:  21,
-						EndLine: 3,
-						EndCol:  25,
+					Variables: []parser.VariableLocation{
+						variable,
 					},
-				},
-				Functions: []parser.FunctionLocation{
-					{
-						Name:    "printf",
-						Line:    3,
-						Column:  3,
-						EndLine: 3,
-						EndCol:  9,
+					Functions: []parser.VariableLocation{
+						{
+							Name:    "printf",
+							Line:    3,
+							Column:  3,
+							EndLine: 3,
+							EndCol:  9,
+							MethodArguments: []types.Type{
+								types.Typ[types.String],
+							},
+						},
+						{
+							Name:            "upper",
+							Line:            3,
+							Column:          28,
+							EndLine:         3,
+							EndCol:          33,
+							MethodArguments: []types.Type{&variable},
+						},
 					},
-					{
-						Name:    "upper",
-						Line:    3,
-						Column:  28,
-						EndLine: 3,
-						EndCol:  33,
-					},
-				},
-				// Definitions: []parser.DefinitionInfo{},
-			},
+				}
+				return want
+			}(),
 			wantErr: false,
 		},
 		{
@@ -105,6 +113,38 @@ Hello {{.Name}}! You are {{.Age}} years old.
 {{end}}`,
 			want:    nil,
 			wantErr: true,
+		},
+		{
+			name:     "method call with pipe to upper",
+			template: `JobZ: {{printf "%s" .GetJob | upper}}`,
+			want: func() *parser.TemplateInfo {
+				variable := parser.VariableLocation{
+					Name:            "GetJob",
+					Line:            1,
+					Column:          24,
+					EndLine:         1,
+					EndCol:          30,
+					MethodArguments: []types.Type{},
+				}
+				want := &parser.TemplateInfo{
+					Filename: "test.tmpl",
+					Variables: []parser.VariableLocation{
+						variable,
+					},
+				}
+				want.Functions = []parser.VariableLocation{
+					{
+						Name:            "upper",
+						Line:            1,
+						Column:          31,
+						EndLine:         1,
+						EndCol:          35,
+						MethodArguments: []types.Type{&variable},
+					},
+				}
+				return want
+			}(),
+			wantErr: false,
 		},
 	}
 
@@ -214,8 +254,8 @@ Job: {{.GetJob | upper}}
 	expectedVars := []string{
 		"Names",
 		"Age",
-		"Address", "Street", // From .Address.Street
-		"Address", "City", // From .Address.City
+		"Address.Street", // From .Address.Street
+		"Address.City",   // From .Address.City
 		"HasJob",
 		"GetJob",
 	}

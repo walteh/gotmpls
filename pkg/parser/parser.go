@@ -2,6 +2,7 @@ package parser
 
 import (
 	"context"
+	"go/types"
 	"regexp"
 	"strings"
 	"text/template"
@@ -63,110 +64,6 @@ func GetLineAndColumn(text string, pos parse.Pos) (line, col int) {
 	return line, col
 }
 
-// findDefinitions walks the AST and finds all definition nodes
-// func (p *DefaultTemplateParser) findDefinitions(node parse.Node, source string) []DefinitionInfo {
-// 	var defs []DefinitionInfo
-
-// 	if node == nil {
-// 		return defs
-// 	}
-
-// 	// Walk the tree to find named definitions
-// 	var walk func(n parse.Node) []DefinitionInfo
-// 	walk = func(n parse.Node) []DefinitionInfo {
-// 		var localDefs []DefinitionInfo
-
-// 		if n == nil {
-// 			return localDefs
-// 		}
-
-// 		switch node := n.(type) {
-// 		case *parse.ListNode:
-// 			for _, child := range node.Nodes {
-// 				if def, ok := child.(*parse.TemplateNode); ok {
-// 					// Found a named template definition
-// 					startLine, startCol := GetLineAndColumn(source, def.Position())
-
-// 					// Find the end by scanning for {{end}}
-// 					text := source[def.Position():]
-// 					endLine, endCol := startLine, startCol
-// 					if idx := strings.Index(text, "{{end}}"); idx >= 0 {
-// 						beforeEnd := text[:idx+7] // include {{end}}
-// 						endLine = startLine + strings.Count(beforeEnd, "\n")
-// 						if lastNL := strings.LastIndex(beforeEnd, "\n"); lastNL >= 0 {
-// 							endCol = len(beforeEnd) - lastNL - 2 // subtract 2 for the closing }}
-// 						} else {
-// 							endCol = startCol + len(beforeEnd) - 2 // subtract 2 for the closing }}
-// 						}
-// 					}
-
-// 					localDefs = append(localDefs, DefinitionInfo{
-// 						Name:     def.Name,
-// 						Line:     startLine,
-// 						Column:   startCol,
-// 						EndLine:  endLine,
-// 						EndCol:   endCol,
-// 						NodeType: "definition",
-// 					})
-// 				}
-// 				localDefs = append(localDefs, walk(child)...)
-// 			}
-// 		}
-
-// 		return localDefs
-// 	}
-
-// 	// First, find all named definitions
-// 	defs = walk(node)
-
-// 	// If we have no definitions and this is a root node, create a root definition
-// 	if len(defs) == 0 && node.Type() == parse.NodeList {
-// 		// Find the end position by looking at the last node
-// 		endLine, endCol := 1, 1
-// 		if list, ok := node.(*parse.ListNode); ok && len(list.Nodes) > 0 {
-// 			lastNode := list.Nodes[len(list.Nodes)-1]
-// 			endLine, endCol = GetLineAndColumn(source, lastNode.Position())
-// 			// Add some padding for the end tag
-// 			endCol += 2
-// 		}
-
-// 		// Find the end by scanning for {{end}}
-// 		if idx := strings.LastIndex(source, "{{end}}"); idx >= 0 {
-// 			beforeEnd := source[:idx+7] // include {{end}}
-// 			endLine = 1 + strings.Count(beforeEnd, "\n")
-// 			if lastNL := strings.LastIndex(beforeEnd, "\n"); lastNL >= 0 {
-// 				endCol = len(beforeEnd) - lastNL - 2 // subtract 2 for the closing }}
-// 			} else {
-// 				endCol = len(beforeEnd) - 2 // subtract 2 for the closing }}
-// 			}
-// 		}
-
-// 		// Add the root definition only if there are nodes to define
-// 		if list, ok := node.(*parse.ListNode); ok && len(list.Nodes) > 0 {
-// 			defs = append(defs, DefinitionInfo{
-// 				Name:     "main", // Use "main" as the name for the root template
-// 				Line:     2,      // Start after the type hint
-// 				Column:   1,
-// 				EndLine:  endLine,
-// 				EndCol:   endCol,
-// 				NodeType: "definition",
-// 			})
-// 		}
-// 	}
-
-// 	return defs
-// }
-
-// DefinitionInfo represents a definition block in the template
-type DefinitionInfo struct {
-	Name     string
-	Line     int
-	Column   int
-	EndLine  int
-	EndCol   int
-	NodeType string // "definition", "if", "range", etc.
-}
-
 // Parse implements TemplateParser
 func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filename string) (*TemplateInfo, error) {
 	contentStr := string(content)
@@ -202,8 +99,7 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 			},
 		},
 		Variables: make([]VariableLocation, 0),
-		Functions: make([]FunctionLocation, 0),
-		// Definitions: make([]DefinitionInfo, 0), // Initialize but don't use
+		Functions: make([]VariableLocation, 0),
 	}
 
 	// Keep track of seen functions to avoid duplicates
@@ -246,42 +142,96 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 			}
 		case *parse.PipeNode:
 			if n != nil {
+				if len(n.Cmds) > 0 {
+					// the result of the first command is the argument to the next command
+				}
+				args := make([]types.Type, 0)
 				for _, cmd := range n.Cmds {
-					for _, arg := range cmd.Args {
+					for i, arg := range cmd.Args {
+						if i == 0 {
+							continue
+						}
 						switch v := arg.(type) {
 						case *parse.FieldNode:
 							// Variable reference
 							line, col := GetLineAndColumn(contentStr, v.Position())
 							endLine, endCol := GetLineAndColumn(contentStr, v.Position()+parse.Pos(len(v.String())-1))
-
+							fullName := ""
 							// Add each part of the field path as a separate variable
 							for _, ident := range v.Ident {
-								// For nested fields, we want to include the full path up to this point
-								// e.g., for .Address.Street, we want both "Address" and "Street"
-								info.Variables = append(info.Variables, VariableLocation{
-									Name:    ident,
-									Line:    line,
-									Column:  col,
-									EndLine: endLine,
-									EndCol:  endCol,
-								})
+								fullName += ident + "."
 							}
+							fullName = strings.TrimSuffix(fullName, ".")
+
+							item := VariableLocation{
+								Name:    fullName,
+								Line:    line,
+								Column:  col,
+								EndLine: endLine,
+								EndCol:  endCol,
+							}
+							// For nested fields, we want to include the full path up to this point
+							// e.g., for .Address.Street, we want both "Address" and "Street"
+							info.Variables = append(info.Variables, item)
+
+							args = append(args, &item)
+
 						case *parse.IdentifierNode:
-							// Function call
-							if !seenFunctions[v.Ident] {
-								line, col := GetLineAndColumn(contentStr, v.Position())
-								// For function calls, we want to include the entire function name
-								endLine, endCol := GetLineAndColumn(contentStr, v.Position()+parse.Pos(len(v.String())))
-								info.Functions = append(info.Functions, FunctionLocation{
-									Name:    v.Ident,
-									Line:    line,
-									Column:  col,
-									EndLine: endLine,
-									EndCol:  endCol,
-								})
-								seenFunctions[v.Ident] = true
+							// if !seenFunctions[v.String()] {
+							line, col := GetLineAndColumn(contentStr, v.Position())
+							// For function calls, we want to include the entire function name
+							endLine, endCol := GetLineAndColumn(contentStr, v.Position()+parse.Pos(len(v.String())))
+							item := VariableLocation{
+								Name:            v.Ident,
+								Line:            line,
+								Column:          col,
+								EndLine:         endLine,
+								EndCol:          endCol,
+								MethodArguments: []types.Type{},
 							}
+							info.Functions = append(info.Functions, item)
+							seenFunctions[v.String()] = true
+
+							args = append(args, &item)
 						}
+
+						// }
+					}
+
+					// now process the
+					root := n.Cmds[0]
+					switch v := root.Args[0].(type) {
+					case *parse.FieldNode:
+						line, col := GetLineAndColumn(contentStr, v.Position())
+						endLine, endCol := GetLineAndColumn(contentStr, v.Position()+parse.Pos(len(v.String())-1))
+						fullName := ""
+						// Add each part of the field path as a separate variable
+						for _, ident := range v.Ident {
+							fullName += ident + "."
+						}
+						fullName = strings.TrimSuffix(fullName, ".")
+
+						item := VariableLocation{
+							Name:            fullName,
+							Line:            line,
+							Column:          col,
+							EndLine:         endLine,
+							EndCol:          endCol,
+							MethodArguments: args,
+						}
+						info.Variables = append(info.Functions, item)
+					case *parse.IdentifierNode:
+						line, col := GetLineAndColumn(contentStr, v.Position())
+						endLine, endCol := GetLineAndColumn(contentStr, v.Position()+parse.Pos(len(v.String())-1))
+						item := VariableLocation{
+							Name:            v.Ident,
+							Line:            line,
+							Column:          col,
+							EndLine:         endLine,
+							EndCol:          endCol,
+							MethodArguments: args,
+						}
+						info.Functions = append(info.Functions, item)
 					}
 				}
 			}
@@ -310,11 +260,12 @@ type TemplateParser interface {
 // TemplateInfo contains information about a parsed template
 type TemplateInfo struct {
 	Variables []VariableLocation
-	Functions []FunctionLocation
+	Functions []VariableLocation
 	TypeHints []TypeHint
 	Filename  string
-	// Definitions []DefinitionInfo // Optional, used by converter
 }
+
+var _ types.Type = &VariableLocation{}
 
 // VariableLocation represents a variable usage in a template
 type VariableLocation struct {
@@ -323,17 +274,36 @@ type VariableLocation struct {
 	Column  int
 	EndLine int
 	EndCol  int
+	// Pipe               bool
+	// MethodArgumentsRef *VariableLocation // take the result of this named type as the argument
+	MethodArguments []types.Type
 }
 
-// FunctionLocation represents the location of a function call in the template
-type FunctionLocation struct {
-	Name      string
-	Line      int
-	Column    int
-	EndLine   int
-	EndCol    int
-	Arguments []string // List of argument names/expressions
+// String implements types.Type.
+func (v *VariableLocation) String() string {
+	return v.Name
 }
+
+// Underlying implements types.Type.
+func (v *VariableLocation) Underlying() types.Type {
+	return nil
+}
+
+// type ArgumentRef struct {
+// 	Variable *VariableLocation
+// 	Function *FunctionLocation
+// }
+
+// // FunctionLocation represents the location of a function call in the template
+// type FunctionLocation struct {
+// 	Name         string
+// 	Line         int
+// 	Column       int
+// 	EndLine      int
+// 	EndCol       int
+// 	ArgumentsRef string // take the result of this named type as the argument
+// 	Arguments    []types.Type
+// }
 
 // TypeHint represents a type hint comment in the template
 type TypeHint struct {

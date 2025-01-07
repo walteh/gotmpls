@@ -98,19 +98,21 @@ func (m *mockTypeValidator) ValidateField(ctx context.Context, typeInfo *pkg_typ
 	return m.fieldInfo, nil
 }
 
-func (m *mockTypeValidator) ValidateMethod(ctx context.Context, typeInfo *pkg_types.TypeInfo, methodName string) (*pkg_types.MethodInfo, error) {
+var _ pkg_types.Validator = &mockTypeValidator{}
+
+func (m *mockTypeValidator) ValidateMethod(ctx context.Context, methodName string) (*pkg_types.MethodInfo, error) {
 	if m.shouldErr {
 		return nil, errors.Errorf("mock error validating method")
 	}
 	if methodName == "NonExistent" {
 		return nil, errors.Errorf("method %s not found", methodName)
 	}
-	// Return method info based on the mock type info
-	if typeInfo != nil && typeInfo.Methods != nil {
-		if method, ok := typeInfo.Methods[methodName]; ok {
-			return method, nil
-		}
-	}
+	// // Return method info based on the mock type info
+	// if typeInfo != nil && typeInfo.Methods != nil {
+	// 	if method, ok := typeInfo.Methods[methodName]; ok {
+	// 		return method, nil
+	// 	}
+	// }
 	// Default method info if not found in type info
 	return &pkg_types.MethodInfo{
 		Name:       methodName,
@@ -147,13 +149,13 @@ func TestDefaultGenerator_Generate(t *testing.T) {
 							}, nil),
 						},
 					},
-					Methods: map[string]*pkg_types.MethodInfo{
-						"GetName": {
-							Name:       "GetName",
-							Parameters: []types.Type{},
-							Results:    []types.Type{types.Typ[types.String]},
-						},
-					},
+					// Methods: map[string]*pkg_types.MethodInfo{
+					// 	"GetName": {
+					// 		Name:       "GetName",
+					// 		Parameters: []types.Type{},
+					// 		Results:    []types.Type{types.Typ[types.String]},
+					// 	},
+					// },
 				},
 				fieldInfo: &pkg_types.FieldInfo{
 					Name: "Name",

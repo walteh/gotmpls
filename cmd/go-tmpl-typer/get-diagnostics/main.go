@@ -18,6 +18,7 @@ type Handler struct {
 	packageDir             string
 	templateFileExtensions []string
 	format                 string // vscode, json, yaml, text
+	showHints              bool
 }
 
 func NewGetDiagnosticsCommand() *cobra.Command {
@@ -30,6 +31,7 @@ func NewGetDiagnosticsCommand() *cobra.Command {
 
 	cmd.Flags().StringSliceVar(&me.templateFileExtensions, "template-file-extensions", []string{".tmpl", ".tmpl.go"}, "the extensions of the template files to get diagnostics from")
 	cmd.Flags().StringVar(&me.format, "format", "vscode", "the format of the diagnostics")
+	cmd.Flags().BoolVar(&me.showHints, "show-hints", false, "show hints")
 	// the glob will will be argument one
 	cmd.Args = cobra.ExactArgs(1)
 
@@ -120,6 +122,9 @@ func (me *Handler) Run(ctx context.Context) error {
 	case "vscode":
 		formatter := diagnostic.NewVSCodeFormatter()
 		for _, d := range allDiagnostics {
+			if !me.showHints {
+				d.Hints = []diagnostic.Diagnostic{}
+			}
 			output, err := formatter.Format(d)
 			if err != nil {
 				return errors.Errorf("failed to format diagnostics: %w", err)

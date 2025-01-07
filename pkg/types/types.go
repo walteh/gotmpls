@@ -11,15 +11,16 @@ import (
 
 // TypeInfo represents information about a Go type
 type TypeInfo struct {
-	Name    string
-	Fields  map[string]*FieldInfo
-	Methods map[string]*MethodInfo
+	Name   string
+	Fields map[string]*FieldInfo
+	// RootMethods map[string]*MethodInfo
 }
 
 // FieldInfo represents information about a struct field
 type FieldInfo struct {
-	Name string
-	Type types.Type
+	Name       string
+	Type       types.Type
+	MethodInfo *MethodInfo
 }
 
 // MethodInfo represents information about a method
@@ -36,15 +37,143 @@ type Validator interface {
 	// ValidateField validates a field access on a type
 	ValidateField(ctx context.Context, typeInfo *TypeInfo, fieldPath string) (*FieldInfo, error)
 	// ValidateMethod validates a method call on a type
-	ValidateMethod(ctx context.Context, typeInfo *TypeInfo, methodName string) (*MethodInfo, error)
+	ValidateMethod(ctx context.Context, methodName string) (*MethodInfo, error)
 }
 
 // DefaultValidator is the default implementation of Validator
-type DefaultValidator struct{}
+type DefaultValidator struct {
+	RootMethods map[string]*MethodInfo
+}
+
+var knownMethods = map[string]*MethodInfo{
+	// "and":      and,
+	// "call":     emptyCall,
+	// "html":     HTMLEscaper,
+	// "index":    index,
+	// "slice":    slice,
+	// "js":       JSEscaper,
+	// "len":      length,
+	// "not":      not,
+	// "or":       or,
+	// "print":    fmt.Sprint,
+	// "printf":   fmt.Sprintf,
+	// "println":  fmt.Sprintln,
+	// "urlquery": URLQueryEscaper,
+
+	// // Comparisons
+	// "eq": eq, // ==
+	// "ge": ge, // >=
+	// "gt": gt, // >
+	// "le": le, // <=
+	// "lt": lt, // <
+	// "ne": ne, // !=
+	"upper": {
+		Name:       "upper",
+		Parameters: []types.Type{types.Typ[types.String]},
+		Results:    []types.Type{types.Typ[types.String]},
+	},
+	"and": {
+		Name:       "and",
+		Parameters: []types.Type{types.Typ[types.Bool], types.Typ[types.Bool]},
+		Results:    []types.Type{types.Typ[types.Bool]},
+	},
+	"call": {
+		Name:       "call",
+		Parameters: []types.Type{types.NewInterfaceType(nil, nil)},
+		Results:    []types.Type{types.NewInterfaceType(nil, nil)},
+	},
+	"html": {
+		Name:       "html",
+		Parameters: []types.Type{types.NewInterfaceType(nil, nil)},
+		Results:    []types.Type{types.NewInterfaceType(nil, nil)},
+	},
+	"index": {
+		Name:       "index",
+		Parameters: []types.Type{types.NewInterfaceType(nil, nil), types.NewInterfaceType(nil, nil)},
+		Results:    []types.Type{types.NewInterfaceType(nil, nil)},
+	},
+	"slice": {
+		Name:       "slice",
+		Parameters: []types.Type{types.NewInterfaceType(nil, nil), types.Typ[types.Int], types.Typ[types.Int]},
+		Results:    []types.Type{types.NewInterfaceType(nil, nil)},
+	},
+	"js": {
+		Name:       "js",
+		Parameters: []types.Type{types.NewInterfaceType(nil, nil)},
+		Results:    []types.Type{types.NewInterfaceType(nil, nil)},
+	},
+	"len": {
+		Name:       "len",
+		Parameters: []types.Type{types.NewInterfaceType(nil, nil)},
+		Results:    []types.Type{types.Typ[types.Int]},
+	},
+	"not": {
+		Name:       "not",
+		Parameters: []types.Type{types.Typ[types.Bool]},
+		Results:    []types.Type{types.Typ[types.Bool]},
+	},
+	"or": {
+		Name:       "or",
+		Parameters: []types.Type{types.Typ[types.Bool], types.Typ[types.Bool]},
+		Results:    []types.Type{types.Typ[types.Bool]},
+	},
+	"print": {
+		Name:       "print",
+		Parameters: []types.Type{types.NewInterfaceType(nil, nil)},
+		Results:    []types.Type{types.Typ[types.String]},
+	},
+	"printf": {
+		Name:       "printf",
+		Parameters: []types.Type{types.Typ[types.String], types.NewInterfaceType(nil, nil)},
+		Results:    []types.Type{types.Typ[types.String]},
+	},
+	"println": {
+		Name:       "println",
+		Parameters: []types.Type{types.NewInterfaceType(nil, nil)},
+		Results:    []types.Type{types.Typ[types.String]},
+	},
+	"urlquery": {
+		Name:       "urlquery",
+		Parameters: []types.Type{types.NewInterfaceType(nil, nil)},
+		Results:    []types.Type{types.NewInterfaceType(nil, nil)},
+	},
+	"eq": {
+		Name:       "eq",
+		Parameters: []types.Type{types.NewInterfaceType(nil, nil), types.NewInterfaceType(nil, nil)},
+		Results:    []types.Type{types.Typ[types.Bool]},
+	},
+	"ge": {
+		Name:       "ge",
+		Parameters: []types.Type{types.NewInterfaceType(nil, nil), types.NewInterfaceType(nil, nil)},
+		Results:    []types.Type{types.Typ[types.Bool]},
+	},
+	"gt": {
+		Name:       "gt",
+		Parameters: []types.Type{types.NewInterfaceType(nil, nil), types.NewInterfaceType(nil, nil)},
+		Results:    []types.Type{types.Typ[types.Bool]},
+	},
+	"le": {
+		Name:       "le",
+		Parameters: []types.Type{types.NewInterfaceType(nil, nil), types.NewInterfaceType(nil, nil)},
+		Results:    []types.Type{types.Typ[types.Bool]},
+	},
+	"lt": {
+		Name:       "lt",
+		Parameters: []types.Type{types.NewInterfaceType(nil, nil), types.NewInterfaceType(nil, nil)},
+		Results:    []types.Type{types.Typ[types.Bool]},
+	},
+	"ne": {
+		Name:       "ne",
+		Parameters: []types.Type{types.NewInterfaceType(nil, nil), types.NewInterfaceType(nil, nil)},
+		Results:    []types.Type{types.Typ[types.Bool]},
+	},
+}
 
 // NewDefaultValidator creates a new DefaultValidator
 func NewDefaultValidator() *DefaultValidator {
-	return &DefaultValidator{}
+	return &DefaultValidator{
+		RootMethods: knownMethods,
+	}
 }
 
 // ValidateType implements Validator
@@ -63,7 +192,6 @@ func (v *DefaultValidator) ValidateType(ctx context.Context, typePath string, re
 		known := ""
 		for k := range registry.Types {
 			known += k + " 	"
-
 		}
 		return nil, errors.Errorf("package %s not found in registry\n\nKnown packages:\n%s", pkgPath, known)
 	}
@@ -85,9 +213,9 @@ func (v *DefaultValidator) ValidateType(ctx context.Context, typePath string, re
 	}
 
 	info := &TypeInfo{
-		Name:    typeName,
-		Fields:  make(map[string]*FieldInfo),
-		Methods: make(map[string]*MethodInfo),
+		Name:   typeName,
+		Fields: make(map[string]*FieldInfo),
+		// Methods: make(map[string]*MethodInfo),
 	}
 
 	// Get fields
@@ -118,7 +246,11 @@ func (v *DefaultValidator) ValidateType(ctx context.Context, typePath string, re
 			methodInfo.Results[j] = sig.Results().At(j).Type()
 		}
 
-		info.Methods[method.Name()] = methodInfo
+		info.Fields[method.Name()] = &FieldInfo{
+			Name:       method.Name(),
+			Type:       method.Type(),
+			MethodInfo: methodInfo,
+		}
 	}
 
 	return info, nil
@@ -155,9 +287,9 @@ func (v *DefaultValidator) ValidateField(ctx context.Context, typeInfo *TypeInfo
 
 		// Create new type info for the nested type
 		nextType := &TypeInfo{
-			Name:    part,
-			Fields:  make(map[string]*FieldInfo),
-			Methods: make(map[string]*MethodInfo),
+			Name:   part,
+			Fields: make(map[string]*FieldInfo),
+			// Methods: make(map[string]*MethodInfo),
 		}
 
 		// Add fields from the struct
@@ -176,10 +308,10 @@ func (v *DefaultValidator) ValidateField(ctx context.Context, typeInfo *TypeInfo
 }
 
 // ValidateMethod implements Validator
-func (v *DefaultValidator) ValidateMethod(ctx context.Context, typeInfo *TypeInfo, methodName string) (*MethodInfo, error) {
-	method, ok := typeInfo.Methods[methodName]
+func (v *DefaultValidator) ValidateMethod(ctx context.Context, methodName string) (*MethodInfo, error) {
+	method, ok := v.RootMethods[methodName]
 	if !ok {
-		return nil, errors.Errorf("method %s not found in type %s", methodName, typeInfo.Name)
+		return nil, errors.Errorf("method %s not known", methodName)
 	}
 	return method, nil
 }
