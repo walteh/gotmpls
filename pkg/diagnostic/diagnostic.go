@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go/types"
-	"strings"
 
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
@@ -138,64 +136,63 @@ func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateIn
 
 		// Only validate arguments if the function has them
 		if len(method.Parameters) > 0 {
-
-			args := []types.Type{}
-
-			if function.ArgumentsRef != "" {
-				field, ok := fieldMap[function.ArgumentsRef]
-				if !ok {
-					diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
-						Message:  fmt.Sprintf("Invalid argument reference: %s", function.ArgumentsRef),
-						Line:     function.Line,
-						Column:   function.Column,
-						EndLine:  function.EndLine,
-						EndCol:   function.EndCol,
-						Severity: Error,
-					})
-				}
-
-				if field.MethodInfo != nil {
-					if len(field.MethodInfo.Results) == 0 {
-						diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
-							Message:  fmt.Sprintf("Method %s has no results", function.Name),
-							Line:     function.Line,
-							Column:   function.Column,
-							EndLine:  function.EndLine,
-							EndCol:   function.EndCol,
-							Severity: Error,
-						})
-						continue
-					}
-					args = field.MethodInfo.Results
-				} else {
-					args = []types.Type{field.Type}
-				}
-			}
-
-			if len(args) != len(method.Parameters) {
+			if len(function.MethodArguments) != len(method.Parameters) {
 				diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
-					Message:  fmt.Sprintf("Wrong number of arguments for method %s: expected %d, got %d", function.Name, len(method.Parameters), len(args)),
+					Message:  fmt.Sprintf("Wrong number of arguments for method %s: expected %d, got %d", function.Name, len(method.Parameters), len(function.MethodArguments)),
 					Line:     function.Line,
 					Column:   function.Column,
 					EndLine:  function.EndLine,
 					EndCol:   function.EndCol,
 					Severity: Error,
 				})
+				continue
 			}
 
-			for i, arg := range args {
+			for i, arg := range function.MethodArguments {
 				if arg == nil {
-					args[i] = types.Typ[types.UntypedNil]
+					continue
 				}
-			}
 
-			for i, arg := range args {
+				// If the argument is a variable location, use its field type
+				if varLoc, ok := arg.(*parser.VariableLocation); ok {
+					field, ok := fieldMap[varLoc.Name]
+					if !ok {
+						diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
+							Message:  fmt.Sprintf("Invalid field reference: %s", varLoc.Name),
+							Line:     varLoc.Line,
+							Column:   varLoc.Column,
+							EndLine:  varLoc.EndLine,
+							EndCol:   varLoc.EndCol,
+							Severity: Error,
+						})
+						continue
+					}
 
-				// fmt.Println(method, arg)
-				// fmt.Println(method.Parameters[i].String())
-				if arg.String() != method.Parameters[i].String() {
+					// If it's a method call, use its return type
+					if field.MethodInfo != nil && len(field.MethodInfo.Results) > 0 {
+						if field.MethodInfo.Results[0].String() != method.Parameters[i].String() {
+							diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
+								Message:  fmt.Sprintf("Argument %d: expected %s, got %s", i+1, method.Parameters[i].String(), field.MethodInfo.Results[0].String()),
+								Line:     varLoc.Line,
+								Column:   varLoc.Column,
+								EndLine:  varLoc.EndLine,
+								EndCol:   varLoc.EndCol,
+								Severity: Error,
+							})
+						}
+					} else if field.Type.String() != method.Parameters[i].String() {
+						diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
+							Message:  fmt.Sprintf("Argument %d: expected %s, got %s", i+1, method.Parameters[i].String(), field.Type.String()),
+							Line:     varLoc.Line,
+							Column:   varLoc.Column,
+							EndLine:  varLoc.EndLine,
+							EndCol:   varLoc.EndCol,
+							Severity: Error,
+						})
+					}
+				} else if arg.String() != method.Parameters[i].String() {
 					diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
-						Message:  fmt.Sprintf("Argument %d: expected %s, got %s", i, method.Parameters[i].String(), arg.String()),
+						Message:  fmt.Sprintf("Argument %d: expected %s, got %s", i+1, method.Parameters[i].String(), arg.String()),
 						Line:     function.Line,
 						Column:   function.Column,
 						EndLine:  function.EndLine,
@@ -203,28 +200,20 @@ func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateIn
 						Severity: Error,
 					})
 				}
-
 			}
 		}
 
-		// Add method signature as hover info
-		params := make([]string, len(method.Parameters))
-		for i, p := range method.Parameters {
-			params[i] = p.String()
+		// Add type information as hover info
+		if method.Results != nil && len(method.Results) > 0 {
+			diagnostics.Hints = append(diagnostics.Hints, Diagnostic{
+				Message:  fmt.Sprintf("Returns: %v", method.Results[0]),
+				Line:     function.Line,
+				Column:   function.Column,
+				EndLine:  function.EndLine,
+				EndCol:   function.EndCol,
+				Severity: Hint,
+			})
 		}
-		results := make([]string, len(method.Results))
-		for i, r := range method.Results {
-			results[i] = r.String()
-		}
-
-		diagnostics.Hints = append(diagnostics.Hints, Diagnostic{
-			Message:  fmt.Sprintf("Method signature: %s(%s) (%s)", function.Name, strings.Join(params, ", "), strings.Join(results, ", ")),
-			Line:     function.Line,
-			Column:   function.Column,
-			EndLine:  function.EndLine,
-			EndCol:   function.EndCol,
-			Severity: Hint,
-		})
 	}
 
 	// // Validate definitions

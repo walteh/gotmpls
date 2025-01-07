@@ -48,34 +48,25 @@ func mockTemplateInfo() *parser.TemplateInfo {
 				EndCol:  22,
 			},
 		},
-		Functions: []parser.FunctionLocation{
+		Functions: []parser.VariableLocation{
 			{
-				Name:      "GetName",
-				Line:      5,
-				Column:    9,
-				EndLine:   5,
-				EndCol:    16,
-				Arguments: []string{},
+				Name:            "GetName",
+				Line:            5,
+				Column:          9,
+				EndLine:         5,
+				EndCol:          16,
+				MethodArguments: []types.Type{},
 			},
 		},
-		// Definitions: []parser.DefinitionInfo{
-		// 	{
-		// 		Name:     "Name",
-		// 		Line:     7,
-		// 		Column:   1,
-		// 		EndLine:  9,
-		// 		EndCol:   7,
-		// 		NodeType: "definition",
-		// 	},
-		// },
 	}
 }
 
 // mockTypeValidator creates a mock type validator for testing
 type mockTypeValidator struct {
-	typeInfo  *pkg_types.TypeInfo
-	fieldInfo *pkg_types.FieldInfo
-	shouldErr bool
+	typeInfo   *pkg_types.TypeInfo
+	fieldInfo  *pkg_types.FieldInfo
+	methodInfo *pkg_types.MethodInfo
+	shouldErr  bool
 }
 
 func (m *mockTypeValidator) ValidateType(ctx context.Context, typePath string, registry *ast.TypeRegistry) (*pkg_types.TypeInfo, error) {
@@ -98,42 +89,30 @@ func (m *mockTypeValidator) ValidateField(ctx context.Context, typeInfo *pkg_typ
 	return m.fieldInfo, nil
 }
 
-var _ pkg_types.Validator = &mockTypeValidator{}
-
 func (m *mockTypeValidator) ValidateMethod(ctx context.Context, methodName string) (*pkg_types.MethodInfo, error) {
 	if m.shouldErr {
 		return nil, errors.Errorf("mock error validating method")
 	}
-	if methodName == "NonExistent" {
+	if m.methodInfo == nil {
 		return nil, errors.Errorf("method %s not found", methodName)
 	}
-	// // Return method info based on the mock type info
-	// if typeInfo != nil && typeInfo.Methods != nil {
-	// 	if method, ok := typeInfo.Methods[methodName]; ok {
-	// 		return method, nil
-	// 	}
-	// }
-	// Default method info if not found in type info
-	return &pkg_types.MethodInfo{
-		Name:       methodName,
-		Parameters: []types.Type{},
-		Results:    []types.Type{types.Typ[types.String]},
-	}, nil
+	return m.methodInfo, nil
 }
+
+var _ pkg_types.Validator = &mockTypeValidator{}
 
 func TestDefaultGenerator_Generate(t *testing.T) {
 	tests := []struct {
 		name          string
-		templateInfo  *parser.TemplateInfo
+		info          *parser.TemplateInfo
 		typeValidator pkg_types.Validator
-		wantErrCount  int
-		wantWarnCount int
 		registry      *ast.TypeRegistry
+		want          *Diagnostics
+		wantErr       bool
 	}{
 		{
-			name:         "valid template",
-			templateInfo: mockTemplateInfo(),
-			registry:     mockRegistry(),
+			name: "valid template info",
+			info: mockTemplateInfo(),
 			typeValidator: &mockTypeValidator{
 				typeInfo: &pkg_types.TypeInfo{
 					Name: "Person",
@@ -142,66 +121,112 @@ func TestDefaultGenerator_Generate(t *testing.T) {
 							Name: "Name",
 							Type: types.Typ[types.String],
 						},
-						"Address": {
-							Name: "Address",
-							Type: types.NewStruct([]*types.Var{
-								types.NewField(0, nil, "Street", types.Typ[types.String], false),
-							}, nil),
+						"Address.Street": {
+							Name: "Address.Street",
+							Type: types.Typ[types.String],
 						},
 					},
-					// Methods: map[string]*pkg_types.MethodInfo{
-					// 	"GetName": {
-					// 		Name:       "GetName",
-					// 		Parameters: []types.Type{},
-					// 		Results:    []types.Type{types.Typ[types.String]},
-					// 	},
-					// },
 				},
 				fieldInfo: &pkg_types.FieldInfo{
 					Name: "Name",
 					Type: types.Typ[types.String],
 				},
+				methodInfo: &pkg_types.MethodInfo{
+					Name:       "GetName",
+					Parameters: []types.Type{},
+					Results:    []types.Type{types.Typ[types.String]},
+				},
 			},
-			wantErrCount:  0,
-			wantWarnCount: 5,
-		},
-		{
-			name:         "missing type hint",
-			templateInfo: &parser.TemplateInfo{},
-			typeValidator: &mockTypeValidator{
-				shouldErr: true,
-			},
-			wantErrCount:  0,
-			wantWarnCount: 1,
-		},
-		{
-			name: "invalid type hint",
-			templateInfo: &parser.TemplateInfo{
-				TypeHints: []parser.TypeHint{
+			registry: mockRegistry(),
+			want: &Diagnostics{
+				Errors:   []Diagnostic{},
+				Warnings: []Diagnostic{},
+				Hints: []Diagnostic{
 					{
-						TypePath: "invalid.Type",
-						Line:     1,
-						Column:   12,
+						Message:  "Type: string",
+						Line:     3,
+						Column:   9,
+						EndLine:  3,
+						EndCol:   13,
+						Severity: Hint,
+					},
+					{
+						Message:  "Type: string",
+						Line:     4,
+						Column:   9,
+						EndLine:  4,
+						EndCol:   22,
+						Severity: Hint,
+					},
+					{
+						Message:  "Returns: string",
+						Line:     5,
+						Column:   9,
+						EndLine:  5,
+						EndCol:   16,
+						Severity: Hint,
 					},
 				},
 			},
+			wantErr: false,
+		},
+		{
+			name: "invalid type hint",
+			info: mockTemplateInfo(),
 			typeValidator: &mockTypeValidator{
 				shouldErr: true,
 			},
-			wantErrCount:  1,
-			wantWarnCount: 0,
+			registry: mockRegistry(),
+			want: &Diagnostics{
+				Errors: []Diagnostic{
+					{
+						Message:  "Invalid type hint: mock error validating type",
+						Line:     1,
+						Column:   12,
+						EndLine:  1,
+						EndCol:   43,
+						Severity: Error,
+					},
+				},
+				Warnings: []Diagnostic{},
+			},
+			wantErr: false,
+		},
+		{
+			name: "no type hint",
+			info: &parser.TemplateInfo{
+				Filename:  "test.tmpl",
+				TypeHints: []parser.TypeHint{},
+			},
+			typeValidator: &mockTypeValidator{},
+			registry:      mockRegistry(),
+			want: &Diagnostics{
+				Errors: []Diagnostic{},
+				Warnings: []Diagnostic{
+					{
+						Message:  "No type hint found in template",
+						Line:     1,
+						Column:   1,
+						EndLine:  1,
+						EndCol:   1,
+						Severity: Warning,
+					},
+				},
+			},
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewDefaultGenerator()
-			diagnostics, err := g.Generate(context.Background(), tt.templateInfo, tt.typeValidator, tt.registry)
+			got, err := g.Generate(context.Background(), tt.info, tt.typeValidator, tt.registry)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
 			require.NoError(t, err)
-			require.NotNil(t, diagnostics)
-
-			assert.Len(t, diagnostics.Errors, tt.wantErrCount, "unexpected number of errors")
-			assert.Len(t, diagnostics.Warnings, tt.wantWarnCount, "unexpected number of warnings")
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
