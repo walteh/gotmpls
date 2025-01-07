@@ -136,43 +136,80 @@ func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateIn
 
 		// Only validate arguments if the function has them
 		if len(method.Parameters) > 0 {
-			if len(function.MethodArguments) != len(method.Parameters) {
-				diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
-					Message:  fmt.Sprintf("Wrong number of arguments for method %s: expected %d, got %d", function.Name, len(method.Parameters), len(function.MethodArguments)),
-					Line:     function.Line,
-					Column:   function.Column,
-					EndLine:  function.EndLine,
-					EndCol:   function.EndCol,
-					Severity: Error,
-				})
-				continue
-			}
-
 			for i, arg := range function.MethodArguments {
 				if arg == nil {
 					continue
 				}
 
+				// Skip validation if we're beyond the method parameters
+				if i >= len(method.Parameters) {
+					continue
+				}
+
 				// If the argument is a variable location, use its field type
 				if varLoc, ok := arg.(*parser.VariableLocation); ok {
-					field, ok := fieldMap[varLoc.Name]
-					if !ok {
-						diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
-							Message:  fmt.Sprintf("Invalid field reference: %s", varLoc.Name),
-							Line:     varLoc.Line,
-							Column:   varLoc.Column,
-							EndLine:  varLoc.EndLine,
-							EndCol:   varLoc.EndCol,
-							Severity: Error,
-						})
+					// If the variable location has method arguments, it's a function call
+					if len(varLoc.MethodArguments) > 0 {
+						// Check if this is a valid method
+						argMethod, err := typeValidator.ValidateMethod(ctx, varLoc.Name)
+						if err != nil {
+							// Check if we already have this error
+							found := false
+							for _, existingError := range diagnostics.Errors {
+								if existingError.Line == varLoc.Line && existingError.Column == varLoc.Column {
+									found = true
+									break
+								}
+							}
+							if !found {
+								diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
+									Message:  fmt.Sprintf("Invalid method call: %v", err),
+									Line:     varLoc.Line,
+									Column:   varLoc.Column,
+									EndLine:  varLoc.EndLine,
+									EndCol:   varLoc.EndCol,
+									Severity: Error,
+								})
+							}
+							continue
+						}
+
+						// Add return type information as hover info
+						if len(argMethod.Results) > 0 {
+							found := false
+							for _, hint := range diagnostics.Hints {
+								if hint.Line == varLoc.Line && hint.Column == varLoc.Column {
+									found = true
+									break
+								}
+							}
+							if !found {
+								diagnostics.Hints = append(diagnostics.Hints, Diagnostic{
+									Message:  fmt.Sprintf("Returns: %v", argMethod.Results[0]),
+									Line:     varLoc.Line,
+									Column:   varLoc.Column,
+									EndLine:  varLoc.EndLine,
+									EndCol:   varLoc.EndCol,
+									Severity: Hint,
+								})
+							}
+						}
 						continue
 					}
 
-					// If it's a method call, use its return type
-					if field.MethodInfo != nil && len(field.MethodInfo.Results) > 0 {
-						if field.MethodInfo.Results[0].String() != method.Parameters[i].String() {
+					field, ok := fieldMap[varLoc.Name]
+					if !ok {
+						// Check if we already have this error
+						found := false
+						for _, existingError := range diagnostics.Errors {
+							if existingError.Line == varLoc.Line && existingError.Column == varLoc.Column {
+								found = true
+								break
+							}
+						}
+						if !found {
 							diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
-								Message:  fmt.Sprintf("Argument %d: expected %s, got %s", i+1, method.Parameters[i].String(), field.MethodInfo.Results[0].String()),
+								Message:  fmt.Sprintf("Invalid field reference: %s", varLoc.Name),
 								Line:     varLoc.Line,
 								Column:   varLoc.Column,
 								EndLine:  varLoc.EndLine,
@@ -180,39 +217,50 @@ func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateIn
 								Severity: Error,
 							})
 						}
-					} else if field.Type.String() != method.Parameters[i].String() {
-						diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
-							Message:  fmt.Sprintf("Argument %d: expected %s, got %s", i+1, method.Parameters[i].String(), field.Type.String()),
+						continue
+					}
+
+					// Add type information as hover info if not already added
+					found := false
+					for _, hint := range diagnostics.Hints {
+						if hint.Line == varLoc.Line && hint.Column == varLoc.Column {
+							found = true
+							break
+						}
+					}
+					if !found {
+						diagnostics.Hints = append(diagnostics.Hints, Diagnostic{
+							Message:  fmt.Sprintf("Type: %v", field.Type),
 							Line:     varLoc.Line,
 							Column:   varLoc.Column,
 							EndLine:  varLoc.EndLine,
 							EndCol:   varLoc.EndCol,
-							Severity: Error,
+							Severity: Hint,
 						})
 					}
-				} else if arg.String() != method.Parameters[i].String() {
-					diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
-						Message:  fmt.Sprintf("Argument %d: expected %s, got %s", i+1, method.Parameters[i].String(), arg.String()),
-						Line:     function.Line,
-						Column:   function.Column,
-						EndLine:  function.EndLine,
-						EndCol:   function.EndCol,
-						Severity: Error,
-					})
 				}
 			}
 		}
 
-		// Add type information as hover info
+		// Add return type information as hover info if not already added
 		if method.Results != nil && len(method.Results) > 0 {
-			diagnostics.Hints = append(diagnostics.Hints, Diagnostic{
-				Message:  fmt.Sprintf("Returns: %v", method.Results[0]),
-				Line:     function.Line,
-				Column:   function.Column,
-				EndLine:  function.EndLine,
-				EndCol:   function.EndCol,
-				Severity: Hint,
-			})
+			found := false
+			for _, hint := range diagnostics.Hints {
+				if hint.Line == function.Line && hint.Column == function.Column && hint.Message == fmt.Sprintf("Returns: %v", method.Results[0]) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				diagnostics.Hints = append(diagnostics.Hints, Diagnostic{
+					Message:  fmt.Sprintf("Returns: %v", method.Results[0]),
+					Line:     function.Line,
+					Column:   function.Column,
+					EndLine:  function.EndLine,
+					EndCol:   function.EndCol,
+					Severity: Hint,
+				})
+			}
 		}
 	}
 

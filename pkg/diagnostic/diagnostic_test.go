@@ -63,28 +63,22 @@ func mockTemplateInfo() *parser.TemplateInfo {
 
 // mockTypeValidator creates a mock type validator for testing
 type mockTypeValidator struct {
+	shouldErr  bool
 	typeInfo   *pkg_types.TypeInfo
 	fieldInfo  *pkg_types.FieldInfo
 	methodInfo *pkg_types.MethodInfo
-	shouldErr  bool
 }
 
 func (m *mockTypeValidator) ValidateType(ctx context.Context, typePath string, registry *ast.TypeRegistry) (*pkg_types.TypeInfo, error) {
 	if m.shouldErr {
 		return nil, errors.Errorf("mock error validating type")
 	}
-	if m.typeInfo == nil {
-		return nil, errors.Errorf("type %s not found", typePath)
-	}
 	return m.typeInfo, nil
 }
 
-func (m *mockTypeValidator) ValidateField(ctx context.Context, typeInfo *pkg_types.TypeInfo, fieldPath string) (*pkg_types.FieldInfo, error) {
+func (m *mockTypeValidator) ValidateField(ctx context.Context, typeInfo *pkg_types.TypeInfo, fieldName string) (*pkg_types.FieldInfo, error) {
 	if m.shouldErr {
 		return nil, errors.Errorf("mock error validating field")
-	}
-	if m.fieldInfo == nil {
-		return nil, errors.Errorf("field %s not found", fieldPath)
 	}
 	return m.fieldInfo, nil
 }
@@ -93,10 +87,28 @@ func (m *mockTypeValidator) ValidateMethod(ctx context.Context, methodName strin
 	if m.shouldErr {
 		return nil, errors.Errorf("mock error validating method")
 	}
-	if m.methodInfo == nil {
+	switch methodName {
+	case "upper":
+		return &pkg_types.MethodInfo{
+			Name:       "upper",
+			Parameters: []types.Type{types.NewInterface(nil, nil)},
+			Results:    []types.Type{types.Typ[types.String]},
+		}, nil
+	case "printf":
+		return &pkg_types.MethodInfo{
+			Name:       "printf",
+			Parameters: []types.Type{types.Typ[types.String], types.NewInterface(nil, nil)},
+			Results:    []types.Type{types.Typ[types.String]},
+		}, nil
+	case "GetName":
+		return &pkg_types.MethodInfo{
+			Name:       "GetName",
+			Parameters: []types.Type{},
+			Results:    []types.Type{types.Typ[types.String]},
+		}, nil
+	default:
 		return nil, errors.Errorf("method %s not found", methodName)
 	}
-	return m.methodInfo, nil
 }
 
 var _ pkg_types.Validator = &mockTypeValidator{}
@@ -210,6 +222,125 @@ func TestDefaultGenerator_Generate(t *testing.T) {
 						EndLine:  1,
 						EndCol:   1,
 						Severity: Warning,
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "pipe operations with function arguments",
+			info: func() *parser.TemplateInfo {
+				getJobVar := &parser.VariableLocation{
+					Name:    "GetJob",
+					Line:    15,
+					Column:  8,
+					EndLine: 15,
+					EndCol:  14,
+				}
+				printfFunc := &parser.VariableLocation{
+					Name:    "printf",
+					Line:    16,
+					Column:  9,
+					EndLine: 16,
+					EndCol:  15,
+					MethodArguments: []types.Type{
+						types.Typ[types.String],
+						getJobVar,
+					},
+				}
+				return &parser.TemplateInfo{
+					Filename: "test.tmpl",
+					TypeHints: []parser.TypeHint{
+						{
+							TypePath: "github.com/example/types.Person",
+							Line:     1,
+							Column:   12,
+						},
+					},
+					Variables: []parser.VariableLocation{
+						*getJobVar,
+					},
+					Functions: []parser.VariableLocation{
+						{
+							Name:    "upper",
+							Line:    15,
+							Column:  17,
+							EndLine: 15,
+							EndCol:  22,
+							MethodArguments: []types.Type{
+								getJobVar,
+							},
+						},
+						*printfFunc,
+						{
+							Name:    "upper",
+							Line:    16,
+							Column:  30,
+							EndLine: 16,
+							EndCol:  35,
+							MethodArguments: []types.Type{
+								printfFunc,
+							},
+						},
+					},
+				}
+			}(),
+			typeValidator: &mockTypeValidator{
+				typeInfo: &pkg_types.TypeInfo{
+					Name: "Person",
+					Fields: map[string]*pkg_types.FieldInfo{
+						"GetJob": {
+							Name: "GetJob",
+							Type: types.Typ[types.String],
+						},
+					},
+				},
+				fieldInfo: &pkg_types.FieldInfo{
+					Name: "GetJob",
+					Type: types.Typ[types.String],
+				},
+				methodInfo: &pkg_types.MethodInfo{
+					Name:       "upper",
+					Parameters: []types.Type{types.NewInterface(nil, nil)},
+					Results:    []types.Type{types.Typ[types.String]},
+				},
+			},
+			registry: mockRegistry(),
+			want: &Diagnostics{
+				Errors:   []Diagnostic{},
+				Warnings: []Diagnostic{},
+				Hints: []Diagnostic{
+					{
+						Message:  "Type: string",
+						Line:     15,
+						Column:   8,
+						EndLine:  15,
+						EndCol:   14,
+						Severity: Hint,
+					},
+					{
+						Message:  "Returns: string",
+						Line:     15,
+						Column:   17,
+						EndLine:  15,
+						EndCol:   22,
+						Severity: Hint,
+					},
+					{
+						Message:  "Returns: string",
+						Line:     16,
+						Column:   9,
+						EndLine:  16,
+						EndCol:   15,
+						Severity: Hint,
+					},
+					{
+						Message:  "Returns: string",
+						Line:     16,
+						Column:   30,
+						EndLine:  16,
+						EndCol:   35,
+						Severity: Hint,
 					},
 				},
 			},

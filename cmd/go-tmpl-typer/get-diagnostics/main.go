@@ -44,6 +44,7 @@ func NewGetDiagnosticsCommand() *cobra.Command {
 }
 
 func (me *Handler) Run(ctx context.Context) error {
+
 	// 1. Create a new template parser, type validator, and package analyzer
 	templateParser := parser.NewDefaultTemplateParser()
 	typeValidator := types.NewDefaultValidator()
@@ -78,11 +79,13 @@ func (me *Handler) Run(ctx context.Context) error {
 	// 4. Parse each template file and collect diagnostics
 	var allDiagnostics []*diagnostic.Diagnostics
 	for _, templateFile := range templateFiles {
+
 		// Read the template file
 		content, err := os.ReadFile(templateFile)
 		if err != nil {
 			return errors.Errorf("failed to read template file %s: %w", templateFile, err)
 		}
+		// first just do a plain ole make sure the template file is valid
 
 		// Parse the template
 		info, err := templateParser.Parse(ctx, content, templateFile)
@@ -91,7 +94,7 @@ func (me *Handler) Run(ctx context.Context) error {
 			allDiagnostics = append(allDiagnostics, &diagnostic.Diagnostics{
 				Errors: []diagnostic.Diagnostic{
 					{
-						Message:  err.Error(),
+						Message:  "template parse error: " + err.Error(),
 						Line:     1,
 						Column:   1,
 						EndLine:  1,
