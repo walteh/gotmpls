@@ -1,0 +1,47 @@
+{
+	"folders": [
+		{
+			"path": "../",
+		},
+		{
+			"path": "../code-extension"
+		}
+	],
+	"settings": {
+		"editor.formatOnSave": true,
+		"editor.formatOnSaveMode": "file",
+		"go.testFlags": [
+			"-count=1",
+			"-timeout=90s"
+		],
+		"gopls": {
+			"ui.semanticTokens": true
+		},
+		"files.associations": {
+			"*.retab": "hcl"
+		},
+		"material-icon-theme.folders.associations": {
+			"chain": "contract"
+		},
+		"emeraldwalk.runonsave": {
+			"commands": [
+				{
+					"match": "\\.retab$",
+					"cmd": "./tools/bin/task retab-gen"
+				},
+				{
+					"match": "\\.proto$",
+					"cmd": "go run ./cmd/retab wfmt --file=${file} --proto"
+				},
+				{
+					"match": "\\.proto$",
+					"cmd": "./tools/bin/task  buf-gen"
+				},
+				{
+					"match": "\\./pkg/format/*.go\\./pkg/lang/*.go$",
+					"cmd": "./tools/bin/task  mockery-gen"
+				}
+			]
+		}
+	}
+}

@@ -1,0 +1,57 @@
+{
+    "name": "retab-vscode",
+    "displayName": "retab",
+    "description": "tabs-first formatter for Proto, HCL, Terraform, and Dart files",
+    "version": "0.0.8",
+    "publisher": "walteh",
+    "icon": "icon.png",
+    "engines": {
+        "vscode": "^1.74.0"
+    },
+    "categories": [
+        "Formatters"
+    ],
+    "activationEvents": [
+        "onLanguage:proto",
+        "onLanguage:hcl",
+        "onLanguage:terraform",
+        "onLanguage:dart"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "configuration": {
+            "title": "retab",
+            "properties": {
+                "retab.executable": {
+                    "type": "string",
+                    "default": "retab",
+                    "description": "Path to the retab executable. Can be absolute or relative to workspace root (e.g., './bin/retab' or '/usr/local/bin/retab'). 'retab' will use the retab executable from PATH."
+                }
+            }
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "bun run build",
+        "build": "bun build ./src/extension.ts --outdir ./out --target node --external vscode --format cjs",
+        "watch": "bun build ./src/extension.ts --outdir ./out --target node --watch --external vscode --format cjs",
+        "package": "bunx vsce package",
+        "publish": "bunx vsce publish"
+    },
+    "devDependencies": {
+        "@types/node": "^16.18.34",
+        "@types/vscode": "^1.74.0",
+        "@vscode/vsce": "latest",
+        "bun-types": "latest"
+    },
+    "trustedDependencies": [
+        "bun-types"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/walteh/retab"
+    },
+    "bugs": {
+        "url": "https://github.com/walteh/retab/issues"
+    },
+    "homepage": "https://github.com/walteh/retab"
+}
