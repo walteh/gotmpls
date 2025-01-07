@@ -60,7 +60,12 @@ func (v *DefaultValidator) ValidateType(ctx context.Context, typePath string, re
 
 	pkg, ok := registry.Types[pkgPath]
 	if !ok {
-		return nil, errors.Errorf("package %s not found in registry", pkgPath)
+		known := ""
+		for k := range registry.Types {
+			known += k + " 	"
+
+		}
+		return nil, errors.Errorf("package %s not found in registry\n\nKnown packages:\n%s", pkgPath, known)
 	}
 
 	scope := pkg.Scope()

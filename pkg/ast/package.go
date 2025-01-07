@@ -2,114 +2,51 @@ package ast
 
 import (
 	"context"
-	"go/ast"
-	"go/token"
-	"go/types"
-	"path/filepath"
 
 	"gitlab.com/tozd/go/errors"
 	"golang.org/x/tools/go/packages"
 )
 
-// GoPackageInfo holds information about a Go package
-type GoPackageInfo struct {
-	// Package is the loaded Go package
-	Package *types.Package
-	// TypesInfo contains type information for the package
-	TypesInfo *types.Info
-	// Files contains the AST for each file in the package
-	Files []*ast.File
+// DefaultPackageAnalyzer is the default implementation of PackageAnalyzer
+type DefaultPackageAnalyzer struct{}
+
+// NewDefaultPackageAnalyzer creates a new DefaultPackageAnalyzer
+func NewDefaultPackageAnalyzer() *DefaultPackageAnalyzer {
+	return &DefaultPackageAnalyzer{}
 }
 
-// PackageLoader handles loading and parsing Go packages
-type PackageLoader interface {
-	// LoadPackage loads a package by its import path
-	LoadPackage(ctx context.Context, importPath string) (*GoPackageInfo, error)
-	// ResolveType resolves a type by its full path (e.g., "pkg/path.TypeName")
-	ResolveType(ctx context.Context, typePath string) (types.Type, error)
-}
+// AnalyzePackage implements PackageAnalyzer
+func (a *DefaultPackageAnalyzer) AnalyzePackage(ctx context.Context, packageDir string) (*TypeRegistry, error) {
+	// Create a new type registry
+	registry := NewTypeRegistry()
 
-// DefaultPackageLoader is the default implementation of PackageLoader
-type DefaultPackageLoader struct {
-	// fset is the file set used for parsing
-	fset *token.FileSet
-	// cache holds loaded packages
-	cache map[string]*GoPackageInfo
-}
-
-// NewDefaultPackageLoader creates a new DefaultPackageLoader
-func NewDefaultPackageLoader() *DefaultPackageLoader {
-	return &DefaultPackageLoader{
-		fset:  token.NewFileSet(),
-		cache: make(map[string]*GoPackageInfo),
-	}
-}
-
-// LoadPackage implements PackageLoader
-func (l *DefaultPackageLoader) LoadPackage(ctx context.Context, importPath string) (*GoPackageInfo, error) {
-	// Check cache first
-	if pkg, ok := l.cache[importPath]; ok {
-		return pkg, nil
-	}
-
-	// Configure package loading
-	cfg := &packages.Config{
-		Mode:    packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo,
-		Context: ctx,
+	// Configure the package loader
+	config := &packages.Config{
+		Mode: packages.NeedTypes | packages.NeedImports | packages.NeedDeps,
+		Dir:  packageDir,
 	}
 
 	// Load the package
-	pkgs, err := packages.Load(cfg, importPath)
+	pkgs, err := packages.Load(config, "./...")
 	if err != nil {
-		return nil, errors.Errorf("failed to load package %s: %w", importPath, err)
+		return nil, errors.Errorf("failed to load package: %w", err)
 	}
+
 	if len(pkgs) == 0 {
-		return nil, errors.Errorf("no packages found for import path %s", importPath)
-	}
-	if len(pkgs[0].Errors) > 0 {
-		return nil, errors.Errorf("errors loading package %s: %v", importPath, pkgs[0].Errors)
+		return nil, errors.Errorf("no packages found in %s", packageDir)
 	}
 
-	// Create package info
-	info := &GoPackageInfo{
-		Package:   pkgs[0].Types,
-		TypesInfo: pkgs[0].TypesInfo,
-		Files:     pkgs[0].Syntax,
+	// for _, pkg := range pkgs {
+	// 	// registry.Types[pkg.PkgPath] = pkg.Types
+	// 	pp.Println(pkg)
+	// }
+
+	// Process each package
+	for _, pkg := range pkgs {
+		if pkg.Types != nil {
+			registry.Types[pkg.ID] = pkg.Types
+		}
 	}
 
-	// Cache the result
-	l.cache[importPath] = info
-
-	return info, nil
-}
-
-// ResolveType implements PackageLoader
-func (l *DefaultPackageLoader) ResolveType(ctx context.Context, typePath string) (types.Type, error) {
-	// Split package path and type name
-	dir, typeName := filepath.Split(typePath)
-	if dir == "" || typeName == "" {
-		return nil, errors.Errorf("invalid type path: %s", typePath)
-	}
-
-	// Remove trailing slash from dir
-	dir = filepath.Clean(dir)
-
-	// Load the package
-	pkgInfo, err := l.LoadPackage(ctx, dir)
-	if err != nil {
-		return nil, err
-	}
-
-	// Look up the type
-	obj := pkgInfo.Package.Scope().Lookup(typeName)
-	if obj == nil {
-		return nil, errors.Errorf("type %s not found in package %s", typeName, dir)
-	}
-
-	typeObj, ok := obj.(*types.TypeName)
-	if !ok {
-		return nil, errors.Errorf("%s is not a type", typePath)
-	}
-
-	return typeObj.Type(), nil
+	return registry, nil
 }

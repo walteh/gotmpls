@@ -201,3 +201,34 @@ func TestGetLineAndColumn(t *testing.T) {
 		})
 	}
 }
+
+func TestSample1(t *testing.T) {
+	data := `{{- /*gotype: github.com/walteh/go-tmpl-types-vscode/examples/types.Person */ -}}
+{{- define "header" -}}
+# Person Information
+{{- end -}}
+
+{{template "header"}}
+
+Name: {{.Names}}
+Age: {{.Age}}
+Address:
+  Street: {{.Address.Street}}
+  City: {{.Address.City}}
+
+{{if .HasJob}}
+Job: {{.GetJob | upper}}
+{{end}} `
+
+	p := parser.NewDefaultTemplateParser()
+	info, err := p.Parse(context.Background(), []byte(data), "test.tmpl")
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(info.TypeHints))
+	require.Equal(t, "github.com/walteh/go-tmpl-types-vscode/examples/types.Person", info.TypeHints[0].TypePath)
+	require.Equal(t, 1, len(info.Definitions))
+	require.Equal(t, "header", info.Definitions[0].Name)
+	require.Equal(t, 2, len(info.Variables))
+	require.Equal(t, "Names", info.Variables[0].Name)
+	require.Equal(t, "Age", info.Variables[1].Name)
+}

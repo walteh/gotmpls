@@ -1,12 +1,17 @@
 package get_diagnostics
 
-// `hclFmt` command recursively looks for hcl files in the directory tree starting at workingDir, and formats them
-// based on the language style guides provided by Hashicorp. This is done using the official hcl2 library.
-
 import (
 	"context"
+	"os"
+	"path/filepath"
 
+	"github.com/k0kubun/pp/v3"
 	"github.com/spf13/cobra"
+	"github.com/walteh/go-tmpl-typer/pkg/ast"
+	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
+	"github.com/walteh/go-tmpl-typer/pkg/parser"
+	"github.com/walteh/go-tmpl-typer/pkg/types"
+	"gitlab.com/tozd/go/errors"
 )
 
 type Handler struct {
@@ -37,17 +42,103 @@ func NewGetDiagnosticsCommand() *cobra.Command {
 }
 
 func (me *Handler) Run(ctx context.Context) error {
+	// 1. Create a new template parser, type validator, and package analyzer
+	templateParser := parser.NewDefaultTemplateParser()
+	typeValidator := types.NewDefaultValidator()
+	packageAnalyzer := ast.NewDefaultPackageAnalyzer()
 
-	// 1. parse the ast of the package dir
+	// 2. Analyze the package to get type information
+	registry, err := packageAnalyzer.AnalyzePackage(ctx, me.packageDir)
+	if err != nil {
+		return errors.Errorf("failed to analyze package: %w", err)
+	}
 
-	// 2. get any template files in the package dir
+	// 3. Find all template files in the package directory
+	var templateFiles []string
+	err = filepath.Walk(me.packageDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			for _, ext := range me.templateFileExtensions {
+				if filepath.Ext(path) == ext {
+					templateFiles = append(templateFiles, path)
+					break
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return errors.Errorf("failed to walk package directory: %w", err)
+	}
 
-	// 3. parse the template files, retaining the locations of the variables and functions used
+	// 4. Parse each template file and collect diagnostics
+	var allDiagnostics []*diagnostic.Diagnostics
+	for _, templateFile := range templateFiles {
+		// Read the template file
+		content, err := os.ReadFile(templateFile)
+		if err != nil {
+			return errors.Errorf("failed to read template file %s: %w", templateFile, err)
+		}
 
-	// 4. get the types from the template files - should be in a comment that looks like {{- /*gotype: github.com/walteh/minute-api/proto/cmd/protoc-gen-cdk/generator.BuilderConfig */ -}}
+		// Parse the template
+		info, err := templateParser.Parse(ctx, content, templateFile)
+		if err != nil {
+			// Add a diagnostic for the parse error
+			allDiagnostics = append(allDiagnostics, &diagnostic.Diagnostics{
+				Errors: []diagnostic.Diagnostic{
+					{
+						Message:  err.Error(),
+						Line:     1,
+						Column:   1,
+						EndLine:  1,
+						EndCol:   1,
+						Severity: diagnostic.Error,
+					},
+				},
+			})
+			continue
+		}
 
-	// 5. generate the diagnostics (POC 1: don't validate the types)
-	// - POC 2: validate the types
+		// Create a diagnostic generator
+		generator := diagnostic.NewDefaultGenerator()
+
+		pp.Println(info)
+
+		// Generate diagnostics for this template, using the registry for type validation
+		diagnostics, err := generator.Generate(ctx, info, typeValidator, registry)
+		if err != nil {
+			return errors.Errorf("failed to generate diagnostics for %s: %w", templateFile, err)
+		}
+
+		allDiagnostics = append(allDiagnostics, diagnostics)
+	}
+
+	// 5. Format and output the diagnostics
+	switch me.format {
+	case "vscode":
+		formatter := diagnostic.NewVSCodeFormatter()
+		for _, d := range allDiagnostics {
+			output, err := formatter.Format(d)
+			if err != nil {
+				return errors.Errorf("failed to format diagnostics: %w", err)
+			}
+			if output != nil {
+				os.Stdout.Write(output)
+			}
+		}
+	default:
+		// For other formats, just print the diagnostics
+		for _, d := range allDiagnostics {
+			for _, err := range d.Errors {
+				println(err.Message)
+			}
+			for _, warn := range d.Warnings {
+				println(warn.Message)
+			}
+		}
+	}
 
 	return nil
 }

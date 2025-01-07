@@ -2,6 +2,7 @@ package diagnostic
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -14,7 +15,7 @@ import (
 // Generator is responsible for generating diagnostics from template information
 type Generator interface {
 	// Generate generates diagnostics from template information
-	Generate(ctx context.Context, info *parser.TemplateInfo, typeValidator types.Validator) (*Diagnostics, error)
+	Generate(ctx context.Context, info *parser.TemplateInfo, typeValidator types.Validator, registry *ast.TypeRegistry) (*Diagnostics, error)
 }
 
 // Diagnostics represents diagnostic information that can be formatted in different ways
@@ -51,7 +52,7 @@ func NewDefaultGenerator() *DefaultGenerator {
 }
 
 // Generate implements Generator
-func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateInfo, typeValidator types.Validator) (*Diagnostics, error) {
+func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateInfo, typeValidator types.Validator, registry *ast.TypeRegistry) (*Diagnostics, error) {
 	if info == nil {
 		return nil, errors.Errorf("template info is nil")
 	}
@@ -75,7 +76,7 @@ func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateIn
 	}
 
 	// Get type information for the hinted type
-	typeInfo, err := typeValidator.ValidateType(ctx, info.TypeHints[0].TypePath, ast.NewTypeRegistry())
+	typeInfo, err := typeValidator.ValidateType(ctx, info.TypeHints[0].TypePath, registry)
 	if err != nil {
 		diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
 			Message:  fmt.Sprintf("Invalid type hint: %v", err),
@@ -222,7 +223,84 @@ func (f *VSCodeFormatter) Format(diagnostics *Diagnostics) ([]byte, error) {
 		return nil, errors.Errorf("diagnostics is nil")
 	}
 
-	// TODO: Implement VSCode diagnostic format
-	// This will depend on the VSCode extension API requirements
-	return nil, errors.Errorf("not implemented")
+	// VSCode expects diagnostics in this format:
+	// {
+	//   "severity": 1, // Error = 1, Warning = 2, Information = 3
+	//   "message": "message text",
+	//   "range": {
+	//     "start": { "line": 1, "character": 1 },
+	//     "end": { "line": 1, "character": 1 }
+	//   }
+	// }
+
+	type VSCodeRange struct {
+		Start struct {
+			Line      int `json:"line"`
+			Character int `json:"character"`
+		} `json:"start"`
+		End struct {
+			Line      int `json:"line"`
+			Character int `json:"character"`
+		} `json:"end"`
+	}
+
+	type VSCodeDiagnostic struct {
+		Severity int         `json:"severity"`
+		Message  string      `json:"message"`
+		Range    VSCodeRange `json:"range"`
+	}
+
+	var result []VSCodeDiagnostic
+
+	// Convert errors
+	for _, err := range diagnostics.Errors {
+		vd := VSCodeDiagnostic{
+			Severity: 1, // Error
+			Message:  err.Message,
+			Range: VSCodeRange{
+				Start: struct {
+					Line      int `json:"line"`
+					Character int `json:"character"`
+				}{
+					Line:      err.Line - 1,   // VSCode is 0-based
+					Character: err.Column - 1, // VSCode is 0-based
+				},
+				End: struct {
+					Line      int `json:"line"`
+					Character int `json:"character"`
+				}{
+					Line:      err.EndLine - 1, // VSCode is 0-based
+					Character: err.EndCol - 1,  // VSCode is 0-based
+				},
+			},
+		}
+		result = append(result, vd)
+	}
+
+	// Convert warnings
+	for _, warn := range diagnostics.Warnings {
+		vd := VSCodeDiagnostic{
+			Severity: 2, // Warning
+			Message:  warn.Message,
+			Range: VSCodeRange{
+				Start: struct {
+					Line      int `json:"line"`
+					Character int `json:"character"`
+				}{
+					Line:      warn.Line - 1,   // VSCode is 0-based
+					Character: warn.Column - 1, // VSCode is 0-based
+				},
+				End: struct {
+					Line      int `json:"line"`
+					Character int `json:"character"`
+				}{
+					Line:      warn.EndLine - 1, // VSCode is 0-based
+					Character: warn.EndCol - 1,  // VSCode is 0-based
+				},
+			},
+		}
+		result = append(result, vd)
+	}
+
+	return json.Marshal(result)
 }

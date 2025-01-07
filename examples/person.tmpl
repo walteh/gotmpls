@@ -1,0 +1,16 @@
+{{- /*gotype: github.com/walteh/go-tmpl-types-vscode/examples/types.Person */ -}}
+{{- define "header" -}}
+# Person Information
+{{- end -}}
+
+{{template "header"}}
+
+Name: {{.Names}}
+Age: {{.Age}}
+Address:
+  Street: {{.Address.Street}}
+  City: {{.Address.City}}
+
+{{if .HasJob}}
+Job: {{.GetJob | upper}}
+{{end}} 
