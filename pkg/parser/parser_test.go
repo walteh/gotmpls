@@ -24,34 +24,37 @@ func TestTemplateParser_Parse(t *testing.T) {
 {{define "main"}}
 Hello {{.Name}}! You are {{.Age}} years old.
 {{end}}`,
-			want: &parser.TemplateInfo{
-				Filename: "test.tmpl",
-				TypeHints: []parser.TypeHint{
-					{
-						TypePath: "github.com/example/types.Config",
-						Line:     1,
-						Column:   12,
+			want: func() *parser.TemplateInfo {
+				nameVar := parser.VariableLocation{
+					Name:    "Name",
+					Line:    3,
+					Column:  9,
+					EndLine: 3,
+					EndCol:  13,
+				}
+				ageVar := parser.VariableLocation{
+					Name:    "Age",
+					Line:    3,
+					Column:  28,
+					EndLine: 3,
+					EndCol:  31,
+				}
+				return &parser.TemplateInfo{
+					Filename: "test.tmpl",
+					TypeHints: []parser.TypeHint{
+						{
+							TypePath: "github.com/example/types.Config",
+							Line:     1,
+							Column:   12,
+						},
 					},
-				},
-				Variables: []parser.VariableLocation{
-					{
-						Name:    "Name",
-						Line:    3,
-						Column:  9,
-						EndLine: 3,
-						EndCol:  13,
+					Variables: []parser.VariableLocation{
+						nameVar,
+						ageVar,
 					},
-					{
-						Name:    "Age",
-						Line:    3,
-						Column:  28,
-						EndLine: 3,
-						EndCol:  31,
-					},
-				},
-				Functions: []parser.VariableLocation{},
-				// Definitions: []parser.DefinitionInfo{},
-			},
+					Functions: []parser.VariableLocation{},
+				}
+			}(),
 			wantErr: false,
 		},
 		{
@@ -68,6 +71,17 @@ Hello {{.Name}}! You are {{.Age}} years old.
 					EndLine: 3,
 					EndCol:  25,
 				}
+				printfFunc := parser.VariableLocation{
+					Name:    "printf",
+					Line:    3,
+					Column:  3,
+					EndLine: 3,
+					EndCol:  9,
+					MethodArguments: []types.Type{
+						types.Typ[types.String],
+						&variable,
+					},
+				}
 				want := &parser.TemplateInfo{
 					Filename: "test.tmpl",
 					TypeHints: []parser.TypeHint{
@@ -81,23 +95,16 @@ Hello {{.Name}}! You are {{.Age}} years old.
 						variable,
 					},
 					Functions: []parser.VariableLocation{
+						printfFunc,
 						{
-							Name:    "printf",
+							Name:    "upper",
 							Line:    3,
-							Column:  3,
+							Column:  28,
 							EndLine: 3,
-							EndCol:  9,
+							EndCol:  33,
 							MethodArguments: []types.Type{
-								types.Typ[types.String],
+								&printfFunc,
 							},
-						},
-						{
-							Name:            "upper",
-							Line:            3,
-							Column:          28,
-							EndLine:         3,
-							EndCol:          33,
-							MethodArguments: []types.Type{&variable},
 						},
 					},
 				}
@@ -119,27 +126,40 @@ Hello {{.Name}}! You are {{.Age}} years old.
 			template: `JobZ: {{printf "%s" .GetJob | upper}}`,
 			want: func() *parser.TemplateInfo {
 				variable := parser.VariableLocation{
-					Name:            "GetJob",
-					Line:            1,
-					Column:          24,
-					EndLine:         1,
-					EndCol:          30,
-					MethodArguments: []types.Type{},
+					Name:    "GetJob",
+					Line:    1,
+					Column:  21,
+					EndLine: 1,
+					EndCol:  27,
+				}
+				printfFunc := parser.VariableLocation{
+					Name:    "printf",
+					Line:    1,
+					Column:  9,
+					EndLine: 1,
+					EndCol:  15,
+					MethodArguments: []types.Type{
+						types.Typ[types.String],
+						&variable,
+					},
 				}
 				want := &parser.TemplateInfo{
 					Filename: "test.tmpl",
 					Variables: []parser.VariableLocation{
 						variable,
 					},
-				}
-				want.Functions = []parser.VariableLocation{
-					{
-						Name:            "upper",
-						Line:            1,
-						Column:          31,
-						EndLine:         1,
-						EndCol:          35,
-						MethodArguments: []types.Type{&variable},
+					Functions: []parser.VariableLocation{
+						printfFunc,
+						{
+							Name:    "upper",
+							Line:    1,
+							Column:  30,
+							EndLine: 1,
+							EndCol:  35,
+							MethodArguments: []types.Type{
+								&printfFunc,
+							},
+						},
 					},
 				}
 				return want
@@ -268,4 +288,8 @@ Job: {{.GetJob | upper}}
 	// Check functions
 	require.Equal(t, 1, len(info.Functions))
 	require.Equal(t, "upper", info.Functions[0].Name)
+	require.Equal(t, 1, len(info.Functions[0].MethodArguments))
+	varArg, ok := info.Functions[0].MethodArguments[0].(*parser.VariableLocation)
+	require.True(t, ok)
+	require.Equal(t, "GetJob", varArg.Name)
 }

@@ -68,19 +68,29 @@ func GetLineAndColumn(text string, pos parse.Pos) (line, col int) {
 func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filename string) (*TemplateInfo, error) {
 	contentStr := string(content)
 
-	// First, extract type hints
-	matches := typeHintRegex.FindSubmatch(content)
-	if len(matches) < 2 {
-		return nil, errors.Errorf("no type hint found in template %s", filename)
+	info := &TemplateInfo{
+		Filename:  filename,
+		Variables: make([]VariableLocation, 0),
+		Functions: make([]VariableLocation, 0),
 	}
 
-	typePath := strings.TrimSpace(string(matches[1]))
-	line, col := 1, 12 // Type hint is always on the first line, column is fixed at 12 (after "/*gotype: ")
+	// Extract type hints if present
+	matches := typeHintRegex.FindSubmatch(content)
+	if len(matches) >= 2 {
+		typePath := strings.TrimSpace(string(matches[1]))
+		line, col := 1, 12 // Type hint is always on the first line, column is fixed at 12 (after "/*gotype: ")
+		info.TypeHints = []TypeHint{
+			{
+				TypePath: typePath,
+				Line:     line,
+				Column:   col,
+			},
+		}
+	}
 
 	// Create a template with all necessary functions to avoid parsing errors
 	tmpl := template.New(filename).Funcs(template.FuncMap{
-		"printf": func(format string, args ...interface{}) string { return "" },
-		"upper":  strings.ToUpper,
+		"upper": strings.ToUpper,
 	})
 
 	// Parse the template
@@ -89,21 +99,34 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 		return nil, errors.Errorf("failed to parse template: %w", err)
 	}
 
-	info := &TemplateInfo{
-		Filename: filename,
-		TypeHints: []TypeHint{
-			{
-				TypePath: typePath,
-				Line:     line,
-				Column:   col,
-			},
-		},
-		Variables: make([]VariableLocation, 0),
-		Functions: make([]VariableLocation, 0),
-	}
+	// Track seen variables to avoid duplicates but maintain references
+	seenVars := make(map[string]*VariableLocation)
 
-	// Keep track of seen functions to avoid duplicates
-	seenFunctions := make(map[string]bool)
+	// Helper function to create a variable location
+	createVarLocation := func(field *parse.FieldNode) *VariableLocation {
+		line, col := GetLineAndColumn(contentStr, field.Position())
+		endLine, endCol := GetLineAndColumn(contentStr, field.Position()+parse.Pos(len(field.String())-1))
+		fullName := ""
+		for _, ident := range field.Ident {
+			fullName += ident + "."
+		}
+		fullName = strings.TrimSuffix(fullName, ".")
+
+		if existing, ok := seenVars[fullName]; ok {
+			return existing
+		}
+
+		item := &VariableLocation{
+			Name:    fullName,
+			Line:    line,
+			Column:  col,
+			EndLine: endLine,
+			EndCol:  endCol,
+		}
+		seenVars[fullName] = item
+		info.Variables = append(info.Variables, *item)
+		return item
+	}
 
 	// Walk the AST and collect variables and functions
 	var walk func(node parse.Node) error
@@ -114,11 +137,28 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 
 		switch n := node.(type) {
 		case *parse.ActionNode:
+			if n.Pipe != nil {
+				// Only handle variables that are direct references (not part of a pipe operation)
+				if len(n.Pipe.Cmds) == 1 && len(n.Pipe.Cmds[0].Args) == 1 {
+					if field, ok := n.Pipe.Cmds[0].Args[0].(*parse.FieldNode); ok {
+						createVarLocation(field)
+					}
+				}
+			}
 			if err := walk(n.Pipe); err != nil {
 				return err
 			}
 		case *parse.IfNode:
 			// Handle if condition
+			if n.Pipe != nil {
+				for _, cmd := range n.Pipe.Cmds {
+					for _, arg := range cmd.Args {
+						if field, ok := arg.(*parse.FieldNode); ok {
+							createVarLocation(field)
+						}
+					}
+				}
+			}
 			if err := walk(n.Pipe); err != nil {
 				return err
 			}
@@ -142,96 +182,53 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 			}
 		case *parse.PipeNode:
 			if n != nil {
-				if len(n.Cmds) > 0 {
-					// the result of the first command is the argument to the next command
-				}
-				args := make([]types.Type, 0)
-				for _, cmd := range n.Cmds {
-					for i, arg := range cmd.Args {
-						if i == 0 {
-							continue
+				var lastResult types.Type
+
+				for i, cmd := range n.Cmds {
+					args := make([]types.Type, 0)
+
+					// If this isn't the first command in the pipe, add the result of the previous command as first arg
+					if i > 0 && lastResult != nil {
+						args = append(args, lastResult)
+					} else {
+						// Process all arguments except the function name
+						for j, arg := range cmd.Args {
+							if j == 0 {
+								// Skip the function name itself
+								continue
+							}
+							switch v := arg.(type) {
+							case *parse.FieldNode:
+								item := createVarLocation(v)
+								args = append(args, item)
+								lastResult = item
+							case *parse.StringNode:
+								args = append(args, types.Typ[types.String])
+							}
 						}
-						switch v := arg.(type) {
-						case *parse.FieldNode:
-							// Variable reference
-							line, col := GetLineAndColumn(contentStr, v.Position())
-							endLine, endCol := GetLineAndColumn(contentStr, v.Position()+parse.Pos(len(v.String())-1))
-							fullName := ""
-							// Add each part of the field path as a separate variable
-							for _, ident := range v.Ident {
-								fullName += ident + "."
-							}
-							fullName = strings.TrimSuffix(fullName, ".")
+					}
+
+					// Process the function itself
+					if len(cmd.Args) > 0 {
+						if fn, ok := cmd.Args[0].(*parse.IdentifierNode); ok {
+							line, col := GetLineAndColumn(contentStr, fn.Position())
+							endLine, endCol := GetLineAndColumn(contentStr, fn.Position()+parse.Pos(len(fn.String())))
 
 							item := VariableLocation{
-								Name:    fullName,
-								Line:    line,
-								Column:  col,
-								EndLine: endLine,
-								EndCol:  endCol,
-							}
-							// For nested fields, we want to include the full path up to this point
-							// e.g., for .Address.Street, we want both "Address" and "Street"
-							info.Variables = append(info.Variables, item)
-
-							args = append(args, &item)
-
-						case *parse.IdentifierNode:
-							// if !seenFunctions[v.String()] {
-							line, col := GetLineAndColumn(contentStr, v.Position())
-							// For function calls, we want to include the entire function name
-							endLine, endCol := GetLineAndColumn(contentStr, v.Position()+parse.Pos(len(v.String())))
-							item := VariableLocation{
-								Name:            v.Ident,
+								Name:            fn.Ident,
 								Line:            line,
 								Column:          col,
 								EndLine:         endLine,
 								EndCol:          endCol,
-								MethodArguments: []types.Type{},
+								MethodArguments: args,
 							}
 							info.Functions = append(info.Functions, item)
-							seenFunctions[v.String()] = true
-
-							args = append(args, &item)
+							lastResult = &item
+						} else if field, ok := cmd.Args[0].(*parse.FieldNode); ok {
+							// Handle field nodes that are part of a pipe operation
+							item := createVarLocation(field)
+							lastResult = item
 						}
-
-						// }
-					}
-
-					// now process the
-					root := n.Cmds[0]
-					switch v := root.Args[0].(type) {
-					case *parse.FieldNode:
-						line, col := GetLineAndColumn(contentStr, v.Position())
-						endLine, endCol := GetLineAndColumn(contentStr, v.Position()+parse.Pos(len(v.String())-1))
-						fullName := ""
-						// Add each part of the field path as a separate variable
-						for _, ident := range v.Ident {
-							fullName += ident + "."
-						}
-						fullName = strings.TrimSuffix(fullName, ".")
-
-						item := VariableLocation{
-							Name:            fullName,
-							Line:            line,
-							Column:          col,
-							EndLine:         endLine,
-							EndCol:          endCol,
-							MethodArguments: args,
-						}
-						info.Variables = append(info.Functions, item)
-					case *parse.IdentifierNode:
-						line, col := GetLineAndColumn(contentStr, v.Position())
-						endLine, endCol := GetLineAndColumn(contentStr, v.Position()+parse.Pos(len(v.String())-1))
-						item := VariableLocation{
-							Name:            v.Ident,
-							Line:            line,
-							Column:          col,
-							EndLine:         endLine,
-							EndCol:          endCol,
-							MethodArguments: args,
-						}
-						info.Functions = append(info.Functions, item)
 					}
 				}
 			}
