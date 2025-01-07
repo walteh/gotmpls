@@ -22,6 +22,7 @@ import (
 type Person struct {
 	Name string
 	Age  int
+	Role string
 }
 
 func (p *Person) GetName() string {
@@ -413,4 +414,212 @@ Adult Status: JANE IS NOT AN ADULT
 
 `
 	assert.Equal(t, wantChild, childBuf.String())
+}
+
+type Address struct {
+	Street string
+	City   string
+	State  string
+	Zip    string
+}
+
+type Company struct {
+	Name      string
+	Industry  string
+	Employees []Person
+	Address   Address
+}
+
+func (c *Company) GetIndustryCode() string {
+	return strings.ToUpper(c.Industry[:3])
+}
+
+func (c *Company) GetEmployeeCount() int {
+	return len(c.Employees)
+}
+
+func (c *Company) GetSeniorEmployees() []Person {
+	var seniors []Person
+	for _, emp := range c.Employees {
+		if emp.Age > 40 {
+			seniors = append(seniors, emp)
+		}
+	}
+	return seniors
+}
+
+func TestComplexTemplate(t *testing.T) {
+	// Create a temporary directory
+	tmpDir, err := os.MkdirTemp("", "complex-tmpl-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	// Create types directory and package
+	typesDir := filepath.Join(tmpDir, "types")
+	err = os.MkdirAll(typesDir, 0755)
+	require.NoError(t, err)
+
+	// Create go.mod
+	goModContent := []byte(`module test
+
+go 1.21
+`)
+	err = os.WriteFile(filepath.Join(tmpDir, "go.mod"), goModContent, 0644)
+	require.NoError(t, err)
+
+	// Create company.go
+	companyContent := []byte(`package types
+
+type Address struct {
+	Street string
+	City   string
+	State  string
+	Zip    string
+}
+
+type Person struct {
+	Name string
+	Age  int
+	Role string
+}
+
+type Company struct {
+	Name      string
+	Industry  string
+	Employees []Person
+	Address   Address
+}
+
+func (c *Company) GetIndustryCode() string {
+	return strings.ToUpper(c.Industry[:3])
+}
+
+func (c *Company) GetEmployeeCount() int {
+	return len(c.Employees)
+}
+
+func (c *Company) GetSeniorEmployees() []Person {
+	var seniors []Person
+	for _, emp := range c.Employees {
+		if emp.Age > 40 {
+			seniors = append(seniors, emp)
+		}
+	}
+	return seniors
+}
+`)
+	err = os.WriteFile(filepath.Join(typesDir, "company.go"), companyContent, 0644)
+	require.NoError(t, err)
+
+	// Create the main template
+	mainTemplate := `{{- /*gotype: test/types.Company */ -}}
+{{- define "header" -}}
+{{.Name}} - Industry Code: {{.GetIndustryCode}}
+{{- end -}}
+
+{{- define "address" -}}
+Location: {{.Address.Street}}, {{.Address.City}}, {{.Address.State}} {{.Address.Zip}}
+{{- end -}}
+
+{{template "header" .}}
+{{template "address" .}}
+
+Company Statistics:
+------------------
+Total Employees: {{.GetEmployeeCount}}
+{{with $seniors := .GetSeniorEmployees}}Senior Staff (40+): {{len $seniors}}{{end}}
+
+Department Breakdown:
+-------------------
+Engineering Team:
+{{- range .Employees -}}
+{{- if eq .Role "Engineering"}}
+- {{.Name}} ({{.Age}}) - {{.Role}}
+{{- end -}}
+{{- end}}
+
+Design Team:
+{{- range .Employees -}}
+{{- if eq .Role "Design"}}
+- {{.Name}} ({{.Age}}) - {{.Role}}
+{{- end -}}
+{{- end}}
+
+Management Team:
+{{- range .Employees -}}
+{{- if eq .Role "Management"}}
+- {{.Name}} ({{.Age}}) - {{.Role}}
+{{- end -}}
+{{- end}}
+
+Summary:
+-------
+{{if gt .GetEmployeeCount 5}}** Large Company Alert **
+{{printf "Please ensure all %d employees have completed their training." .GetEmployeeCount}}{{end}}`
+
+	err = os.WriteFile(filepath.Join(tmpDir, "company.tmpl"), []byte(mainTemplate), 0644)
+	require.NoError(t, err)
+
+	// Test diagnostics
+	ctx := context.Background()
+	got, err := getDiagnostics(ctx, filepath.Join(tmpDir, "company.tmpl"))
+	require.NoError(t, err)
+	assert.Empty(t, got.Errors)
+	assert.Empty(t, got.Warnings)
+
+	// Test template execution
+	tmpl, err := template.New("company").Parse(mainTemplate)
+	require.NoError(t, err)
+
+	company := &Company{
+		Name:     "Tech Innovators",
+		Industry: "Software Development",
+		Address: Address{
+			Street: "123 Innovation Way",
+			City:   "Silicon Valley",
+			State:  "CA",
+			Zip:    "94025",
+		},
+		Employees: []Person{
+			{Name: "Alice Smith", Age: 45, Role: "Engineering"},
+			{Name: "Bob Johnson", Age: 32, Role: "Engineering"},
+			{Name: "Carol White", Age: 28, Role: "Design"},
+			{Name: "Dave Brown", Age: 52, Role: "Management"},
+			{Name: "Eve Wilson", Age: 35, Role: "Design"},
+			{Name: "Frank Davis", Age: 41, Role: "Engineering"},
+		},
+	}
+
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, company)
+	require.NoError(t, err)
+
+	want := `Tech Innovators - Industry Code: SOF
+Location: 123 Innovation Way, Silicon Valley, CA 94025
+
+Company Statistics:
+------------------
+Total Employees: 6
+Senior Staff (40+): 3
+
+Department Breakdown:
+-------------------
+Engineering Team:
+- Alice Smith (45) - Engineering
+- Bob Johnson (32) - Engineering
+- Frank Davis (41) - Engineering
+
+Design Team:
+- Carol White (28) - Design
+- Eve Wilson (35) - Design
+
+Management Team:
+- Dave Brown (52) - Management
+
+Summary:
+-------
+** Large Company Alert **
+Please ensure all 6 employees have completed their training.`
+
+	assert.Equal(t, want, buf.String())
 }
