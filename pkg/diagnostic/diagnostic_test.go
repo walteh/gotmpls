@@ -1,4 +1,4 @@
-package diagnostic
+package diagnostic_test
 
 import (
 	"context"
@@ -6,8 +6,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"github.com/walteh/go-tmpl-typer/gen/mockery"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
+	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
 	pkg_types "github.com/walteh/go-tmpl-typer/pkg/types"
 	"gitlab.com/tozd/go/errors"
@@ -61,57 +64,65 @@ func mockTemplateInfo() *parser.TemplateInfo {
 	}
 }
 
-// mockTypeValidator creates a mock type validator for testing
-type mockTypeValidator struct {
-	shouldErr  bool
-	typeInfo   *pkg_types.TypeInfo
-	fieldInfo  *pkg_types.FieldInfo
-	methodInfo *pkg_types.MethodInfo
-}
+func setupMockValidator(t *testing.T, shouldErr bool, typeInfo *pkg_types.TypeInfo, fieldInfo *pkg_types.FieldInfo, methodInfo *pkg_types.MethodInfo) *mockery.MockValidator_types {
+	mockVal := mockery.NewMockValidator_types(t)
 
-func (m *mockTypeValidator) ValidateType(ctx context.Context, typePath string, registry *ast.TypeRegistry) (*pkg_types.TypeInfo, error) {
-	if m.shouldErr {
-		return nil, errors.Errorf("mock error validating type")
-	}
-	return m.typeInfo, nil
-}
+	// GetRootMethods is called in multiple places, so we'll set it up first
+	mockVal.EXPECT().GetRootMethods().Return(map[string]*pkg_types.MethodInfo{}).Maybe()
 
-func (m *mockTypeValidator) ValidateField(ctx context.Context, typeInfo *pkg_types.TypeInfo, fieldName string) (*pkg_types.FieldInfo, error) {
-	if m.shouldErr {
-		return nil, errors.Errorf("mock error validating field")
-	}
-	return m.fieldInfo, nil
-}
+	if shouldErr {
+		mockVal.EXPECT().ValidateType(mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.Errorf("mock error validating type")).Once()
+		mockVal.EXPECT().ValidateField(mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.Errorf("mock error validating field")).Maybe()
+		mockVal.EXPECT().ValidateMethod(mock.Anything, mock.Anything).Return(nil, errors.Errorf("mock error validating method")).Maybe()
+	} else if typeInfo != nil && len(typeInfo.Fields) > 0 && typeInfo.Fields["GetJob"] != nil {
+		// This is the pipe operations test case
+		mockVal.EXPECT().ValidateType(mock.Anything, mock.Anything, mock.Anything).Return(typeInfo, nil).Once()
+		mockVal.EXPECT().ValidateField(mock.Anything, mock.Anything, "GetJob").Return(fieldInfo, nil).Once()
 
-func (m *mockTypeValidator) ValidateMethod(ctx context.Context, methodName string) (*pkg_types.MethodInfo, error) {
-	if m.shouldErr {
-		return nil, errors.Errorf("mock error validating method")
-	}
-	switch methodName {
-	case "upper":
-		return &pkg_types.MethodInfo{
+		// Method validations for pipe operations
+		// First upper call with GetJob argument
+		mockVal.EXPECT().ValidateMethod(mock.Anything, "upper").Return(&pkg_types.MethodInfo{
 			Name:       "upper",
 			Parameters: []types.Type{types.NewInterface(nil, nil)},
 			Results:    []types.Type{types.Typ[types.String]},
-		}, nil
-	case "printf":
-		return &pkg_types.MethodInfo{
+		}, nil).Once()
+
+		// printf call with GetJob argument
+		mockVal.EXPECT().ValidateMethod(mock.Anything, "printf").Return(&pkg_types.MethodInfo{
 			Name:       "printf",
 			Parameters: []types.Type{types.Typ[types.String], types.NewInterface(nil, nil)},
 			Results:    []types.Type{types.Typ[types.String]},
-		}, nil
-	case "GetName":
-		return &pkg_types.MethodInfo{
-			Name:       "GetName",
+		}, nil).Once()
+
+		// Second upper call with printf result argument
+		mockVal.EXPECT().ValidateMethod(mock.Anything, "upper").Return(&pkg_types.MethodInfo{
+			Name:       "upper",
+			Parameters: []types.Type{types.NewInterface(nil, nil)},
+			Results:    []types.Type{types.Typ[types.String]},
+		}, nil).Once()
+
+		// Additional ValidateMethod calls for argument validation
+		mockVal.EXPECT().ValidateMethod(mock.Anything, "GetJob").Return(&pkg_types.MethodInfo{
+			Name:       "GetJob",
 			Parameters: []types.Type{},
 			Results:    []types.Type{types.Typ[types.String]},
-		}, nil
-	default:
-		return nil, errors.Errorf("method %s not found", methodName)
-	}
-}
+		}, nil).Maybe()
 
-var _ pkg_types.Validator = &mockTypeValidator{}
+		mockVal.EXPECT().ValidateMethod(mock.Anything, "printf").Return(&pkg_types.MethodInfo{
+			Name:       "printf",
+			Parameters: []types.Type{types.Typ[types.String], types.NewInterface(nil, nil)},
+			Results:    []types.Type{types.Typ[types.String]},
+		}, nil).Maybe()
+	} else if typeInfo != nil {
+		// This is the regular test case
+		mockVal.EXPECT().ValidateType(mock.Anything, mock.Anything, mock.Anything).Return(typeInfo, nil).Once()
+		mockVal.EXPECT().ValidateField(mock.Anything, mock.Anything, "Name").Return(fieldInfo, nil).Once()
+		mockVal.EXPECT().ValidateField(mock.Anything, mock.Anything, "Address.Street").Return(fieldInfo, nil).Once()
+		mockVal.EXPECT().ValidateMethod(mock.Anything, "GetName").Return(methodInfo, nil).Once()
+	}
+
+	return mockVal
+}
 
 func TestDefaultGenerator_Generate(t *testing.T) {
 	tests := []struct {
@@ -119,48 +130,44 @@ func TestDefaultGenerator_Generate(t *testing.T) {
 		info          *parser.TemplateInfo
 		typeValidator pkg_types.Validator
 		registry      *ast.TypeRegistry
-		want          *Diagnostics
+		want          *diagnostic.Diagnostics
 		wantErr       bool
 	}{
 		{
 			name: "valid template info",
 			info: mockTemplateInfo(),
-			typeValidator: &mockTypeValidator{
-				typeInfo: &pkg_types.TypeInfo{
-					Name: "Person",
-					Fields: map[string]*pkg_types.FieldInfo{
-						"Name": {
-							Name: "Name",
-							Type: types.Typ[types.String],
-						},
-						"Address.Street": {
-							Name: "Address.Street",
-							Type: types.Typ[types.String],
-						},
+			typeValidator: setupMockValidator(t, false, &pkg_types.TypeInfo{
+				Name: "Person",
+				Fields: map[string]*pkg_types.FieldInfo{
+					"Name": {
+						Name: "Name",
+						Type: types.Typ[types.String],
+					},
+					"Address.Street": {
+						Name: "Address.Street",
+						Type: types.Typ[types.String],
 					},
 				},
-				fieldInfo: &pkg_types.FieldInfo{
-					Name: "Name",
-					Type: types.Typ[types.String],
-				},
-				methodInfo: &pkg_types.MethodInfo{
-					Name:       "GetName",
-					Parameters: []types.Type{},
-					Results:    []types.Type{types.Typ[types.String]},
-				},
-			},
+			}, &pkg_types.FieldInfo{
+				Name: "Name",
+				Type: types.Typ[types.String],
+			}, &pkg_types.MethodInfo{
+				Name:       "GetName",
+				Parameters: []types.Type{},
+				Results:    []types.Type{types.Typ[types.String]},
+			}),
 			registry: mockRegistry(),
-			want: &Diagnostics{
-				Errors:   []Diagnostic{},
-				Warnings: []Diagnostic{},
-				Hints: []Diagnostic{
+			want: &diagnostic.Diagnostics{
+				Errors:   []diagnostic.Diagnostic{},
+				Warnings: []diagnostic.Diagnostic{},
+				Hints: []diagnostic.Diagnostic{
 					{
 						Message:  "Type: string",
 						Line:     3,
 						Column:   9,
 						EndLine:  3,
 						EndCol:   13,
-						Severity: Hint,
+						Severity: diagnostic.Hint,
 					},
 					{
 						Message:  "Type: string",
@@ -168,7 +175,7 @@ func TestDefaultGenerator_Generate(t *testing.T) {
 						Column:   9,
 						EndLine:  4,
 						EndCol:   22,
-						Severity: Hint,
+						Severity: diagnostic.Hint,
 					},
 					{
 						Message:  "Returns: string",
@@ -176,31 +183,29 @@ func TestDefaultGenerator_Generate(t *testing.T) {
 						Column:   9,
 						EndLine:  5,
 						EndCol:   16,
-						Severity: Hint,
+						Severity: diagnostic.Hint,
 					},
 				},
 			},
 			wantErr: false,
 		},
 		{
-			name: "invalid type hint",
-			info: mockTemplateInfo(),
-			typeValidator: &mockTypeValidator{
-				shouldErr: true,
-			},
-			registry: mockRegistry(),
-			want: &Diagnostics{
-				Errors: []Diagnostic{
+			name:          "invalid type hint",
+			info:          mockTemplateInfo(),
+			typeValidator: setupMockValidator(t, true, nil, nil, nil),
+			registry:      mockRegistry(),
+			want: &diagnostic.Diagnostics{
+				Errors: []diagnostic.Diagnostic{
 					{
 						Message:  "Invalid type hint: mock error validating type",
 						Line:     1,
 						Column:   12,
 						EndLine:  1,
 						EndCol:   43,
-						Severity: Error,
+						Severity: diagnostic.Error,
 					},
 				},
-				Warnings: []Diagnostic{},
+				Warnings: []diagnostic.Diagnostic{},
 			},
 			wantErr: false,
 		},
@@ -210,18 +215,18 @@ func TestDefaultGenerator_Generate(t *testing.T) {
 				Filename:  "test.tmpl",
 				TypeHints: []parser.TypeHint{},
 			},
-			typeValidator: &mockTypeValidator{},
+			typeValidator: setupMockValidator(t, false, nil, nil, nil),
 			registry:      mockRegistry(),
-			want: &Diagnostics{
-				Errors: []Diagnostic{},
-				Warnings: []Diagnostic{
+			want: &diagnostic.Diagnostics{
+				Errors: []diagnostic.Diagnostic{},
+				Warnings: []diagnostic.Diagnostic{
 					{
 						Message:  "No type hint found in template",
 						Line:     1,
 						Column:   1,
 						EndLine:  1,
 						EndCol:   1,
-						Severity: Warning,
+						Severity: diagnostic.Warning,
 					},
 				},
 			},
@@ -285,38 +290,34 @@ func TestDefaultGenerator_Generate(t *testing.T) {
 					},
 				}
 			}(),
-			typeValidator: &mockTypeValidator{
-				typeInfo: &pkg_types.TypeInfo{
-					Name: "Person",
-					Fields: map[string]*pkg_types.FieldInfo{
-						"GetJob": {
-							Name: "GetJob",
-							Type: types.Typ[types.String],
-						},
+			typeValidator: setupMockValidator(t, false, &pkg_types.TypeInfo{
+				Name: "Person",
+				Fields: map[string]*pkg_types.FieldInfo{
+					"GetJob": {
+						Name: "GetJob",
+						Type: types.Typ[types.String],
 					},
 				},
-				fieldInfo: &pkg_types.FieldInfo{
-					Name: "GetJob",
-					Type: types.Typ[types.String],
-				},
-				methodInfo: &pkg_types.MethodInfo{
-					Name:       "upper",
-					Parameters: []types.Type{types.NewInterface(nil, nil)},
-					Results:    []types.Type{types.Typ[types.String]},
-				},
-			},
+			}, &pkg_types.FieldInfo{
+				Name: "GetJob",
+				Type: types.Typ[types.String],
+			}, &pkg_types.MethodInfo{
+				Name:       "upper",
+				Parameters: []types.Type{types.NewInterface(nil, nil)},
+				Results:    []types.Type{types.Typ[types.String]},
+			}),
 			registry: mockRegistry(),
-			want: &Diagnostics{
-				Errors:   []Diagnostic{},
-				Warnings: []Diagnostic{},
-				Hints: []Diagnostic{
+			want: &diagnostic.Diagnostics{
+				Errors:   []diagnostic.Diagnostic{},
+				Warnings: []diagnostic.Diagnostic{},
+				Hints: []diagnostic.Diagnostic{
 					{
 						Message:  "Type: string",
 						Line:     15,
 						Column:   8,
 						EndLine:  15,
 						EndCol:   14,
-						Severity: Hint,
+						Severity: diagnostic.Hint,
 					},
 					{
 						Message:  "Returns: string",
@@ -324,7 +325,7 @@ func TestDefaultGenerator_Generate(t *testing.T) {
 						Column:   17,
 						EndLine:  15,
 						EndCol:   22,
-						Severity: Hint,
+						Severity: diagnostic.Hint,
 					},
 					{
 						Message:  "Returns: string",
@@ -332,7 +333,7 @@ func TestDefaultGenerator_Generate(t *testing.T) {
 						Column:   9,
 						EndLine:  16,
 						EndCol:   15,
-						Severity: Hint,
+						Severity: diagnostic.Hint,
 					},
 					{
 						Message:  "Returns: string",
@@ -340,7 +341,7 @@ func TestDefaultGenerator_Generate(t *testing.T) {
 						Column:   30,
 						EndLine:  16,
 						EndCol:   35,
-						Severity: Hint,
+						Severity: diagnostic.Hint,
 					},
 				},
 			},
@@ -350,7 +351,7 @@ func TestDefaultGenerator_Generate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			g := NewDefaultGenerator()
+			g := diagnostic.NewDefaultGenerator()
 			got, err := g.Generate(context.Background(), tt.info, tt.typeValidator, tt.registry)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -363,31 +364,31 @@ func TestDefaultGenerator_Generate(t *testing.T) {
 }
 
 func TestVSCodeFormatter_Format(t *testing.T) {
-	f := NewVSCodeFormatter()
-	diagnostics := &Diagnostics{
-		Errors: []Diagnostic{
+	f := diagnostic.NewVSCodeFormatter()
+	diagnostics := &diagnostic.Diagnostics{
+		Errors: []diagnostic.Diagnostic{
 			{
 				Message:  "Test error",
 				Line:     1,
 				Column:   1,
 				EndLine:  1,
 				EndCol:   10,
-				Severity: Error,
+				Severity: diagnostic.Error,
 			},
 		},
-		Warnings: []Diagnostic{
+		Warnings: []diagnostic.Diagnostic{
 			{
 				Message:  "Test warning",
 				Line:     2,
 				Column:   1,
 				EndLine:  2,
 				EndCol:   10,
-				Severity: Warning,
+				Severity: diagnostic.Warning,
 			},
 		},
 	}
 
-	_, err := f.Format(diagnostics)
-	assert.NoError(t, err) // Currently returns "not implemented"
-	// assert.Contains(t, err.Error(), "not implemented")
+	formatted, err := f.Format(diagnostics)
+	require.NoError(t, err)
+	require.NotEmpty(t, formatted)
 }

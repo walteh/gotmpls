@@ -14,3 +14,4 @@ utilize "github.com/k0kubun/pp/v3" pp.Printf to print out the structure of varia
 
 golang mocks:
 always use interfaces and then add them to .mockery.yaml which will generate the mocks in ./gen/mockery by calling "task generate" in the root of the project
+always use .EXPECT() to set up expectations for mocks
