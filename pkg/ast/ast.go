@@ -3,6 +3,7 @@ package ast
 import (
 	"context"
 	"go/types"
+	"strings"
 
 	"gitlab.com/tozd/go/errors"
 )
@@ -144,8 +145,8 @@ type PackageAnalyzer interface {
 	AnalyzePackage(ctx context.Context, packageDir string) (*TypeRegistry, error)
 	// GetPackage returns a package by name
 	GetPackage(ctx context.Context, packageName string) (*types.Package, error)
-	// GetTypes returns all known types
-	GetTypes() map[string]*types.Package
+	// GetTypes returns all types in a package
+	GetTypes(ctx context.Context, pkgPath string) (map[string]types.Object, error)
 }
 
 // TypeRegistry implements PackageAnalyzer
@@ -157,15 +158,44 @@ type TypeRegistry struct {
 }
 
 func (r *TypeRegistry) GetPackage(ctx context.Context, packageName string) (*types.Package, error) {
-	pkg, ok := r.Types[packageName]
-	if !ok {
-		return nil, errors.Errorf("package %s not found", packageName)
+	// First try exact match
+	if pkg, ok := r.Types[packageName]; ok {
+		return pkg, nil
 	}
-	return pkg, nil
+
+	// Try to find a package that ends with the requested name
+	for pkgPath, pkg := range r.Types {
+		if pkg.Name() == packageName {
+			return pkg, nil
+		}
+		// Check if the package path ends with the requested name
+		if pkgPath == packageName || strings.HasSuffix(pkgPath, "/"+packageName) {
+			return pkg, nil
+		}
+	}
+
+	return nil, errors.Errorf("package %s not found", packageName)
 }
 
-func (r *TypeRegistry) GetTypes() map[string]*types.Package {
-	return r.Types
+// AddPackage adds a package to the registry
+func (r *TypeRegistry) AddPackage(pkg *types.Package) {
+	r.Types[pkg.Path()] = pkg
+}
+
+// GetTypes retrieves all types from a package
+func (r *TypeRegistry) GetTypes(ctx context.Context, pkgPath string) (map[string]types.Object, error) {
+	pkg, err := r.GetPackage(ctx, pkgPath)
+	if err != nil {
+		return nil, err
+	}
+
+	types := make(map[string]types.Object)
+	scope := pkg.Scope()
+	for _, name := range scope.Names() {
+		types[name] = scope.Lookup(name)
+	}
+
+	return types, nil
 }
 
 // NewTypeRegistry creates a new TypeRegistry
@@ -177,8 +207,19 @@ func NewTypeRegistry() *TypeRegistry {
 
 // TypeExists checks if a type exists in the registry
 func (p *TypeRegistry) TypeExists(typePath string) bool {
-	_, exists := p.Types[typePath]
-	return exists
+	// First try exact match
+	if _, exists := p.Types[typePath]; exists {
+		return true
+	}
+
+	// Try to find a package that ends with the requested name
+	for pkgPath := range p.Types {
+		if pkgPath == typePath || strings.HasSuffix(pkgPath, "/"+typePath) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (r *TypeRegistry) AnalyzePackage(ctx context.Context, packageDir string) (*TypeRegistry, error) {

@@ -3,13 +3,14 @@ package ast
 import (
 	"context"
 	"go/types"
+	"os"
 	"path/filepath"
 
 	"gitlab.com/tozd/go/errors"
 	"golang.org/x/tools/go/packages"
 )
 
-// DefaultPackageAnalyzer is the default implementation of PackageAnalyzer
+// DefaultPackageAnalyzer implements PackageAnalyzer
 type DefaultPackageAnalyzer struct {
 	registry *TypeRegistry
 }
@@ -22,51 +23,43 @@ func NewDefaultPackageAnalyzer() *DefaultPackageAnalyzer {
 }
 
 // AnalyzePackage implements PackageAnalyzer
-func (a *DefaultPackageAnalyzer) AnalyzePackage(ctx context.Context, packageDir string) (*TypeRegistry, error) {
-	// Convert to absolute path
-	absPath, err := filepath.Abs(packageDir)
-	if err != nil {
-		return nil, errors.Errorf("failed to get absolute path: %w", err)
+func (a *DefaultPackageAnalyzer) AnalyzePackage(ctx context.Context, dir string) (*TypeRegistry, error) {
+	// Check if go.mod exists
+	if _, err := os.Stat(filepath.Join(dir, "go.mod")); err != nil {
+		return nil, errors.Errorf("no packages found in directory: %s (missing go.mod)", dir)
 	}
 
-	// Configure the package loader
-	config := &packages.Config{
-		Mode: packages.NeedTypes | packages.NeedImports | packages.NeedDeps,
-		Dir:  absPath,
+	cfg := &packages.Config{
+		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedModule,
+		Dir:  dir,
 	}
 
-	// Load the package
-	pkgs, err := packages.Load(config, filepath.Join(absPath, "..."))
+	pkgs, err := packages.Load(cfg, "./...")
 	if err != nil {
-		return nil, errors.Errorf("failed to load package: %w", err)
+		return nil, errors.Errorf("failed to load package: err: %v", err)
 	}
 
 	if len(pkgs) == 0 {
-		return nil, errors.Errorf("no packages found in %s", absPath)
+		return nil, errors.Errorf("no packages found in directory: %s", dir)
 	}
 
-	// Process each package
 	for _, pkg := range pkgs {
-		if pkg.Types != nil {
-			a.registry.Types[pkg.ID] = pkg.Types
+		if pkg.Types == nil {
+			continue
 		}
+
+		a.registry.AddPackage(pkg.Types)
 	}
 
 	return a.registry, nil
 }
 
 // GetPackage implements PackageAnalyzer
-func (a *DefaultPackageAnalyzer) GetPackage(ctx context.Context, packageName string) (*types.Package, error) {
-	if a.registry == nil {
-		return nil, errors.Errorf("no packages analyzed yet")
-	}
-	return a.registry.GetPackage(ctx, packageName)
+func (a *DefaultPackageAnalyzer) GetPackage(ctx context.Context, pkgPath string) (*types.Package, error) {
+	return a.registry.GetPackage(ctx, pkgPath)
 }
 
 // GetTypes implements PackageAnalyzer
-func (a *DefaultPackageAnalyzer) GetTypes() map[string]*types.Package {
-	if a.registry == nil {
-		return make(map[string]*types.Package)
-	}
-	return a.registry.GetTypes()
+func (a *DefaultPackageAnalyzer) GetTypes(ctx context.Context, pkgPath string) (map[string]types.Object, error) {
+	return a.registry.GetTypes(ctx, pkgPath)
 }

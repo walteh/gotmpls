@@ -44,9 +44,9 @@ func TestProvider_GetCompletions(t *testing.T) {
 
 	// Setup mock registry
 	mockRegistry.EXPECT().GetPackage(mock.Anything, mock.Anything).Return(&types.Package{}, nil)
-	mockRegistry.EXPECT().GetTypes().Return(map[string]*types.Package{
-		"example": types.NewPackage("example", "example"),
-	})
+	mockRegistry.EXPECT().GetTypes(mock.Anything, mock.Anything).Return(map[string]types.Object{
+		"Person": types.NewTypeName(0, types.NewPackage("example", "example"), "Person", types.NewStruct(nil, nil)),
+	}, nil)
 
 	// Create a new provider with the mocks
 	provider := completion.NewProvider(mockValidator, mockRegistry)

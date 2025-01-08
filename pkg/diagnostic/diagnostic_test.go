@@ -17,11 +17,10 @@ import (
 )
 
 func mockRegistry() *ast.TypeRegistry {
-	return &ast.TypeRegistry{
-		Types: map[string]*types.Package{
-			"github.com/example/types": types.NewPackage("github.com/example/types", "types"),
-		},
-	}
+	registry := ast.NewTypeRegistry()
+	pkg := types.NewPackage("github.com/example/types", "types")
+	registry.AddPackage(pkg)
+	return registry
 }
 
 // mockTemplateInfo creates a mock template info for testing

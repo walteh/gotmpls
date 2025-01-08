@@ -143,24 +143,34 @@ func (_c *MockPackageAnalyzer_ast_GetPackage_Call) RunAndReturn(run func(context
 	return _c
 }
 
-// GetTypes provides a mock function with no fields
-func (_m *MockPackageAnalyzer_ast) GetTypes() map[string]*types.Package {
-	ret := _m.Called()
+// GetTypes provides a mock function with given fields: ctx, pkgPath
+func (_m *MockPackageAnalyzer_ast) GetTypes(ctx context.Context, pkgPath string) (map[string]types.Object, error) {
+	ret := _m.Called(ctx, pkgPath)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetTypes")
 	}
 
-	var r0 map[string]*types.Package
-	if rf, ok := ret.Get(0).(func() map[string]*types.Package); ok {
-		r0 = rf()
+	var r0 map[string]types.Object
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (map[string]types.Object, error)); ok {
+		return rf(ctx, pkgPath)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) map[string]types.Object); ok {
+		r0 = rf(ctx, pkgPath)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[string]*types.Package)
+			r0 = ret.Get(0).(map[string]types.Object)
 		}
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, pkgPath)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // MockPackageAnalyzer_ast_GetTypes_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetTypes'
@@ -169,23 +179,25 @@ type MockPackageAnalyzer_ast_GetTypes_Call struct {
 }
 
 // GetTypes is a helper method to define mock.On call
-func (_e *MockPackageAnalyzer_ast_Expecter) GetTypes() *MockPackageAnalyzer_ast_GetTypes_Call {
-	return &MockPackageAnalyzer_ast_GetTypes_Call{Call: _e.mock.On("GetTypes")}
+//   - ctx context.Context
+//   - pkgPath string
+func (_e *MockPackageAnalyzer_ast_Expecter) GetTypes(ctx interface{}, pkgPath interface{}) *MockPackageAnalyzer_ast_GetTypes_Call {
+	return &MockPackageAnalyzer_ast_GetTypes_Call{Call: _e.mock.On("GetTypes", ctx, pkgPath)}
 }
 
-func (_c *MockPackageAnalyzer_ast_GetTypes_Call) Run(run func()) *MockPackageAnalyzer_ast_GetTypes_Call {
+func (_c *MockPackageAnalyzer_ast_GetTypes_Call) Run(run func(ctx context.Context, pkgPath string)) *MockPackageAnalyzer_ast_GetTypes_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		run(args[0].(context.Context), args[1].(string))
 	})
 	return _c
 }
 
-func (_c *MockPackageAnalyzer_ast_GetTypes_Call) Return(_a0 map[string]*types.Package) *MockPackageAnalyzer_ast_GetTypes_Call {
-	_c.Call.Return(_a0)
+func (_c *MockPackageAnalyzer_ast_GetTypes_Call) Return(_a0 map[string]types.Object, _a1 error) *MockPackageAnalyzer_ast_GetTypes_Call {
+	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockPackageAnalyzer_ast_GetTypes_Call) RunAndReturn(run func() map[string]*types.Package) *MockPackageAnalyzer_ast_GetTypes_Call {
+func (_c *MockPackageAnalyzer_ast_GetTypes_Call) RunAndReturn(run func(context.Context, string) (map[string]types.Object, error)) *MockPackageAnalyzer_ast_GetTypes_Call {
 	_c.Call.Return(run)
 	return _c
 }
