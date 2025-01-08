@@ -2,39 +2,35 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"runtime/debug"
 
 	"github.com/spf13/cobra"
-	getcompletionscmd "github.com/walteh/go-tmpl-typer/cmd/go-tmpl-typer/get-completions"
-	getdiagnosticscmd "github.com/walteh/go-tmpl-typer/cmd/go-tmpl-typer/get-diagnostics"
+	get_completions "github.com/walteh/go-tmpl-typer/cmd/go-tmpl-typer/get-completions"
+	get_diagnostics "github.com/walteh/go-tmpl-typer/cmd/go-tmpl-typer/get-diagnostics"
+	serve_lsp "github.com/walteh/go-tmpl-typer/cmd/go-tmpl-typer/serve-lsp"
+	"gitlab.com/tozd/go/errors"
 )
 
 func main() {
-	ctx := context.Background()
-
-	cmd := &cobra.Command{
-		Use: "go-tmpl-typer",
-	}
-
-	cmd.AddCommand(getdiagnosticscmd.NewGetDiagnosticsCommand())
-	cmd.AddCommand(getcompletionscmd.NewGetCompletionsCommand())
-
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		cmd.Version = "unknown"
-	} else {
-		cmd.Version = info.Main.Version
-	}
-
-	cmd.InitDefaultVersionFlag()
-
-	// cmd.SilenceErrors = true
-	cmd.SilenceUsage = true
-
-	if err := cmd.ExecuteContext(ctx); err != nil {
-		fmt.Println(err)
+	if err := run(); err != nil {
+		println(err.Error())
 		os.Exit(1)
 	}
+}
+
+func run() error {
+	rootCmd := &cobra.Command{
+		Use:   "go-tmpl-typer",
+		Short: "A tool for type checking go templates",
+	}
+
+	rootCmd.AddCommand(get_completions.NewGetCompletionsCommand())
+	rootCmd.AddCommand(get_diagnostics.NewGetDiagnosticsCommand())
+	rootCmd.AddCommand(serve_lsp.NewServeLSPCommand())
+
+	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
+		return errors.Errorf("failed to execute command: %w", err)
+	}
+
+	return nil
 }

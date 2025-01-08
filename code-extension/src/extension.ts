@@ -1,226 +1,143 @@
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
+import * as path from 'path';
+import * as fs from 'fs';
+import {
+	LanguageClient,
+	LanguageClientOptions,
+	ServerOptions,
+	TransportKind
+} from 'vscode-languageclient/node';
 
-let diagnosticCollection: vscode.DiagnosticCollection;
+let client: LanguageClient;
 
 export function activate(context: vscode.ExtensionContext) {
-	console.log('Go Template Type Checker is now active');
+	const outputChannel = vscode.window.createOutputChannel('Go Template Type Checker');
+	outputChannel.show();
+	outputChannel.appendLine('Go Template Type Checker is now active');
 
-	// Create diagnostic collection
-	diagnosticCollection = vscode.languages.createDiagnosticCollection('go-template');
-	context.subscriptions.push(diagnosticCollection);
-
-	// Register handlers
-	context.subscriptions.push(
-		vscode.workspace.onDidOpenTextDocument(runDiagnostics),
-		vscode.workspace.onDidSaveTextDocument(runDiagnostics),
-		vscode.workspace.onDidChangeTextDocument((e) => {
-			// Debounce diagnostics on change
-			const document = e.document;
-			if (document.languageId === 'go-template') {
-				if (diagnosticsTimeout) {
-					clearTimeout(diagnosticsTimeout);
-				}
-				diagnosticsTimeout = setTimeout(() => runDiagnostics(document), 500);
-			}
-		})
-	);
-
-	// Register hover provider
-	context.subscriptions.push(
-		vscode.languages.registerHoverProvider('go-template', {
-			provideHover(document, position, token) {
-				return getHoverInfo(document, position);
-			}
-		})
-	);
-
-	// Register completion provider
-	context.subscriptions.push(
-		vscode.languages.registerCompletionItemProvider('go-template', {
-			async provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) {
-				return getCompletions(document, position);
-			}
-		})
-	);
-
-	// Run diagnostics on all open documents
-	vscode.workspace.textDocuments.forEach(runDiagnostics);
-}
-
-let diagnosticsTimeout: NodeJS.Timeout | undefined;
-
-async function runDiagnostics(document: vscode.TextDocument) {
-	if (document.languageId !== 'go-template') {
+	const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+	if (!workspaceFolder) {
+		outputChannel.appendLine('No workspace folder found');
 		return;
 	}
 
-	const config = vscode.workspace.getConfiguration('goTemplateTypes');
-	const executable = config.get<string>('executable') || 'go-tmpl-typer';
+	outputChannel.appendLine(`Workspace folder: ${workspaceFolder.uri.fsPath}`);
 
-	const diagnostics: vscode.Diagnostic[] = [];
+	// Find the executable
+	findExecutable('go-tmpl-typer', workspaceFolder.uri.fsPath)
+		.then(executable => {
+			outputChannel.appendLine(`Found executable: ${executable}`);
 
-	try {
-		const process = spawn(executable, ['get-diagnostics'], {
-			cwd: vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath
-		});
-
-		let stdout = '';
-		let stderr = '';
-
-		process.stdout.on('data', (data) => {
-			stdout += data;
-		});
-
-		process.stderr.on('data', (data) => {
-			stderr += data;
-		});
-
-		await new Promise<void>((resolve, reject) => {
-			process.on('close', (code) => {
-				if (code === 0) {
-					try {
-						const results = JSON.parse(stdout);
-						for (const diag of results) {
-							const range = new vscode.Range(
-								diag.start.line - 1,
-								diag.start.character - 1,
-								diag.end.line - 1,
-								diag.end.character - 1
-							);
-							const diagnostic = new vscode.Diagnostic(
-								range,
-								diag.message,
-								diag.severity === 'error' 
-									? vscode.DiagnosticSeverity.Error 
-									: vscode.DiagnosticSeverity.Warning
-							);
-							diagnostics.push(diagnostic);
-						}
-						resolve();
-					} catch (err) {
-						reject(new Error('Failed to parse diagnostics output'));
+			// Server options
+			const serverOptions: ServerOptions = {
+				command: executable,
+				args: ['serve-lsp', '--debug'],
+				options: {
+					cwd: workspaceFolder.uri.fsPath,
+					env: {
+						...process.env,
+						GOTMPL_DEBUG: "1",
 					}
-				} else {
-					reject(new Error(`Process exited with code ${code}: ${stderr}`));
 				}
-			});
-		});
-	} catch (err: any) {
-		console.error('Error running diagnostics:', err);
-		// Show error in output channel or status bar
-		vscode.window.showErrorMessage(`Error running template type checker: ${err.message}`);
-	}
+			};
 
-	diagnosticCollection.set(document.uri, diagnostics);
+			outputChannel.appendLine(`Starting language server with command: ${serverOptions.command} ${serverOptions.args?.join(' ')}`);
+
+			// Client options
+			const clientOptions: LanguageClientOptions = {
+				documentSelector: [{ scheme: 'file', language: 'go-template' }],
+				synchronize: {
+					fileEvents: vscode.workspace.createFileSystemWatcher('**/*.tmpl')
+				},
+				outputChannel: outputChannel,
+				traceOutputChannel: outputChannel,
+				middleware: {
+					handleDiagnostics: (uri, diagnostics, next) => {
+						outputChannel.appendLine(`Received ${diagnostics.length} diagnostics for ${uri.fsPath}`);
+						next(uri, diagnostics);
+					},
+					provideHover: async (document, position, token, next) => {
+						outputChannel.appendLine(`Hover requested at ${document.uri.fsPath}:${position.line}:${position.character}`);
+						const result = await next(document, position, token);
+						outputChannel.appendLine(`Hover result: ${JSON.stringify(result)}`);
+						return result;
+					},
+					provideCompletionItem: async (document, position, context, token, next) => {
+						outputChannel.appendLine(`Completion requested at ${document.uri.fsPath}:${position.line}:${position.character}`);
+						const result = await next(document, position, context, token);
+						outputChannel.appendLine(`Completion result: ${JSON.stringify(result)}`);
+						return result;
+					}
+				}
+			};
+
+			// Create and start the client
+			client = new LanguageClient(
+				'goTemplateTypeChecker',
+				'Go Template Type Checker',
+				serverOptions,
+				clientOptions
+			);
+
+			// Start the client
+			client.start().then(() => {
+				outputChannel.appendLine('Language server started');
+			}).catch(err => {
+				outputChannel.appendLine(`Error starting language server: ${err.message}`);
+				outputChannel.appendLine(err.stack || '');
+			});
+
+			// Log client state changes
+			client.onDidChangeState(event => {
+				outputChannel.appendLine(`Client state changed from ${event.oldState} to ${event.newState}`);
+			});
+		})
+		.catch(err => {
+			outputChannel.appendLine(`Error finding executable: ${err.message}`);
+			outputChannel.appendLine(err.stack || '');
+			vscode.window.showErrorMessage(`Error starting template type checker: ${err.message}`);
+		});
 }
 
-async function getCompletions(document: vscode.TextDocument, position: vscode.Position): Promise<vscode.CompletionList | undefined> {
+async function findExecutable(name: string, workspaceFolder: string | undefined): Promise<string> {
 	const config = vscode.workspace.getConfiguration('goTemplateTypes');
-	const executable = config.get<string>('executable') || 'go-tmpl-typer';
+	let executable = config.get<string>('executable') || name;
 
-	try {
-		const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath;
-		const process = spawn(executable, [
-			'get-completions',
-			workspaceFolder || '.',
-			document.uri.fsPath,
-			(position.line + 1).toString(),
-			(position.character + 1).toString()
-		], {
-			cwd: workspaceFolder
-		});
+	// If it's an absolute path, verify it exists
+	if (path.isAbsolute(executable)) {
+		if (fs.existsSync(executable)) {
+			return executable;
+		}
+		throw new Error(`Executable not found at configured path: ${executable}`);
+	}
 
-		let stdout = '';
-		let stderr = '';
+	// If it's a relative path and we have a workspace folder, check relative to that
+	if (workspaceFolder && !executable.startsWith('./') && !executable.startsWith('../')) {
+		const workspacePath = path.join(workspaceFolder, executable);
+		if (fs.existsSync(workspacePath)) {
+			return workspacePath;
+		}
+	}
 
-		process.stdout.on('data', (data) => {
-			stdout += data;
-		});
+	// Check if it's in PATH
+	const envPath = process.env.PATH || '';
+	const pathSeparator = process.platform === 'win32' ? ';' : ':';
+	const pathDirs = envPath.split(pathSeparator);
 
-		process.stderr.on('data', (data) => {
-			stderr += data;
-		});
+	for (const dir of pathDirs) {
+		const fullPath = path.join(dir, executable);
+		if (fs.existsSync(fullPath)) {
+			return fullPath;
+		}
+	}
 
-		const completionItems = await new Promise<vscode.CompletionItem[]>((resolve, reject) => {
-			process.on('close', (code) => {
-				if (code === 0) {
-					try {
-						const results = JSON.parse(stdout);
-						const items = results.map((item: any) => {
-							const completionItem = new vscode.CompletionItem(item.label);
-							completionItem.kind = getCompletionKind(item.kind);
-							if (item.detail) completionItem.detail = item.detail;
-							if (item.documentation) completionItem.documentation = item.documentation;
-							if (item.sortText) completionItem.sortText = item.sortText;
-							if (item.filterText) completionItem.filterText = item.filterText;
-							if (item.insertText) completionItem.insertText = new vscode.SnippetString(item.insertText);
-							if (item.textEdit) {
-								completionItem.textEdit = new vscode.TextEdit(
-									new vscode.Range(
-										item.textEdit.range.start.line,
-										item.textEdit.range.start.character,
-										item.textEdit.range.end.line,
-										item.textEdit.range.end.character
-									),
-									item.textEdit.newText
-								);
-							}
-							return completionItem;
-						});
-						resolve(items);
-					} catch (err) {
-						reject(new Error('Failed to parse completions output'));
-					}
-				} else {
-					reject(new Error(`Process exited with code ${code}: ${stderr}`));
-				}
-			});
-		});
+	throw new Error(`Executable '${name}' not found in PATH. Please install it with 'go install github.com/walteh/go-tmpl-typer/cmd/go-tmpl-typer@latest'`);
+}
 
-		return new vscode.CompletionList(completionItems, false);
-	} catch (err: any) {
-		console.error('Error getting completions:', err);
+export function deactivate(): Thenable<void> | undefined {
+	if (!client) {
 		return undefined;
 	}
-}
-
-function getCompletionKind(kind: string): vscode.CompletionItemKind {
-	switch (kind) {
-		case 'keyword':
-			return vscode.CompletionItemKind.Keyword;
-		case 'function':
-			return vscode.CompletionItemKind.Function;
-		case 'variable':
-			return vscode.CompletionItemKind.Variable;
-		case 'field':
-			return vscode.CompletionItemKind.Field;
-		case 'method':
-			return vscode.CompletionItemKind.Method;
-		default:
-			return vscode.CompletionItemKind.Text;
-	}
-}
-
-async function getHoverInfo(document: vscode.TextDocument, position: vscode.Position): Promise<vscode.Hover | undefined> {
-	// TODO: Implement hover info once the Go executable supports it
-	// For now, we'll return the type information from diagnostics if available
-	const diagnostics = diagnosticCollection.get(document.uri);
-	if (!diagnostics) {
-		return undefined;
-	}
-
-	// Find any diagnostics that overlap with the current position
-	const diagnostic = diagnostics.find(d => d.range.contains(position));
-	if (diagnostic) {
-		return new vscode.Hover(diagnostic.message);
-	}
-
-	return undefined;
-}
-
-export function deactivate() {
-	if (diagnosticCollection) {
-		diagnosticCollection.dispose();
-	}
+	return client.stop();
 } 

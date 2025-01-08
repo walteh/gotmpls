@@ -1,54 +1,90 @@
 {
-    "name": "go-tmpl-types-vscode",
-    "displayName": "Go Template Type Checker",
-    "description": "Type checking and diagnostics for Go text/template files",
-    "version": "0.0.1",
-    "publisher": "walteh",
-    "icon": "icon.png",
-    "engines": {
-        "vscode": "^1.74.0"
-    },
-    "categories": [
-        "Programming Languages",
-        "Linters"
-    ],
-    "activationEvents": [
-        "onLanguage:go-template"
-    ],
-    "main": "./out/extension.js",
-    "contributes": {
-        "languages": [
-            {
-                "id": "go-template",
-                "extensions": [".tmpl", ".tpl", ".gotmpl", ".gohtml"],
-                "aliases": ["Go Template", "go-template"]
-            }
-        ],
-        "configuration": {
-            "title": "Go Template Type Checker",
-            "properties": {
-                "goTemplateTypes.executable": {
-                    "type": "string",
-                    "default": "go-tmpl-typer",
-                    "description": "Path to the go-tmpl-typer executable. Can be absolute or relative to workspace root."
-                }
-            }
-        }
-    },
-    "scripts": {
-        "vscode:prepublish": "bun run build",
-        "build": "bun build ./src/extension.ts --outdir ./out --target node --external vscode --format cjs",
-        "watch": "bun build ./src/extension.ts --outdir ./out --target node --watch --external vscode --format cjs",
-        "package": "bunx vsce package",
-        "publish": "bunx vsce publish"
-    },
-    "devDependencies": {
-        "@types/node": "^16.18.34",
-        "@types/vscode": "^1.74.0",
-        "@vscode/vsce": "latest",
-        "bun-types": "latest"
-    },
-    "trustedDependencies": [
-        "bun-types"
-    ]
+	"name": "go-tmpl-types-vscode",
+	"displayName": "Go Template Type Checker",
+	"description": "Type checking and diagnostics for Go text/template files",
+	"version": "0.0.1",
+	"publisher": "walteh",
+	"icon": "icon.png",
+	"engines": {
+		"vscode": "^1.74.0"
+	},
+	"categories": [
+		"Programming Languages",
+		"Linters"
+	],
+	"activationEvents": [
+		"onLanguage:go-template"
+	],
+	"main": "./out/extension.js",
+	"contributes": {
+		"languages": [
+			{
+				"id": "go-template",
+				"extensions": [
+					".tmpl",
+					".tpl",
+					".gotmpl",
+					".gohtml"
+				],
+				"aliases": [
+					"Go Template",
+					"go-template"
+				]
+			}
+		],
+		"configuration": {
+			"title": "Go Template Type Checker",
+			"properties": {
+				"goTemplateTypes.executable": {
+					"type": "string",
+					"default": "go-tmpl-typer",
+					"description": "Path to the go-tmpl-typer executable. Can be absolute or relative to workspace root."
+				},
+				"goTemplateTypes.trace.server": {
+					"type": "string",
+					"enum": [
+						"off",
+						"messages",
+						"verbose"
+					],
+					"default": "off",
+					"description": "Traces the communication between VS Code and the language server."
+				},
+				"goTemplateTypes.diagnostics.enable": {
+					"type": "boolean",
+					"default": true,
+					"description": "Enable/disable diagnostics."
+				},
+				"goTemplateTypes.hover.enable": {
+					"type": "boolean",
+					"default": true,
+					"description": "Enable/disable hover information."
+				},
+				"goTemplateTypes.completion.enable": {
+					"type": "boolean",
+					"default": true,
+					"description": "Enable/disable completion suggestions."
+				}
+			}
+		}
+	},
+	"scripts": {
+		"vscode:prepublish": "bun run build",
+		"build": "bun build ./src/extension.ts --outdir ./out --target node --external vscode --format cjs",
+		"watch": "bun build ./src/extension.ts --outdir ./out --target node --watch --external vscode --format cjs",
+		"package": "bunx vsce package",
+		"publish": "bunx vsce publish",
+		"dev": "cursor --debug run-extension"
+	},
+	"devDependencies": {
+		"@types/node": "^16.18.34",
+		"@types/vscode": "^1.96.0",
+		"@vscode/vsce": "latest",
+		"bun-types": "latest",
+		"vscode-languageclient": "^9.0.1"
+	},
+	"trustedDependencies": [
+		"bun-types"
+	],
+	"dependencies": {}
 }

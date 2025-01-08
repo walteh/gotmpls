@@ -15,6 +15,10 @@ tasks:
     test:
         cmd: go test ./...
 
+    install-executables:
+        cmds:
+          - go install ./cmd/go-tmpl-typer
+
     package-extension:
         dir: code-extension
         cmds:
@@ -24,3 +28,13 @@ tasks:
           - bun run package
           - mv ./retab-*.vsix ~/Downloads
           - open https://marketplace.visualstudio.com/manage/publishers/walteh
+
+    rebuild-extension:
+        deps:
+          - install-executables
+        dir: code-extension
+        cmds:
+          - rm -rf node_modules
+          - rm -rf out
+          - bun install
+          - bun run build
