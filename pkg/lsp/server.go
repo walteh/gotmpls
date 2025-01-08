@@ -355,6 +355,7 @@ func (s *Server) validateDocument(ctx context.Context, uri string, content strin
 			Message:  fmt.Sprintf("invalid document path: %v", err),
 		}})
 	}
+	s.debugf("document path: %s", docPath)
 
 	// Parse the template
 	info, err := s.parser.Parse(ctx, []byte(content), docPath)
@@ -372,8 +373,27 @@ func (s *Server) validateDocument(ctx context.Context, uri string, content strin
 
 	s.debugf("parsed template info: %+v", info)
 
+	// Use the template file's directory for package analysis
+	templateDir := filepath.Dir(docPath)
+	s.debugf("analyzing package in directory: %s", templateDir)
+
+	// Check if go.mod exists
+	modPath := filepath.Join(templateDir, "go.mod")
+	if _, err := os.Stat(modPath); err != nil {
+		s.debugf("go.mod not found at %s: %v", modPath, err)
+		return nil, s.publishDiagnostics(ctx, uri, []Diagnostic{{
+			Range: Range{
+				Start: Position{Line: 0, Character: 0},
+				End:   Position{Line: 0, Character: 0},
+			},
+			Severity: 1, // Error
+			Message:  fmt.Sprintf("no go.mod found in directory: %s", templateDir),
+		}})
+	}
+	s.debugf("found go.mod at %s", modPath)
+
 	// Analyze the package to get type information
-	registry, err := s.analyzer.AnalyzePackage(ctx, s.workspace)
+	registry, err := s.analyzer.AnalyzePackage(ctx, templateDir)
 	if err != nil {
 		s.debugf("package analysis error: %v", err)
 		return nil, s.publishDiagnostics(ctx, uri, []Diagnostic{{
