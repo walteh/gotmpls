@@ -43,63 +43,143 @@ func NewServer(parser parser.TemplateParser, validator types.Validator, analyzer
 func (s *Server) Start(ctx context.Context, in io.ReadCloser, out io.WriteCloser) error {
 	// Create a buffered stream with VSCode codec for proper LSP message formatting
 	stream := jsonrpc2.NewBufferedStream(NewReadWriteCloser(in, out), jsonrpc2.VSCodeObjectCodec{})
-	s.conn = jsonrpc2.NewConn(ctx, stream, s)
-	<-ctx.Done()
-	return ctx.Err()
+	conn := jsonrpc2.NewConn(ctx, stream, s)
+	s.conn = conn
+
+	// Wait for either the connection to be closed or the context to be done
+	select {
+	case <-conn.DisconnectNotify():
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
 	if s.debug {
 		s.debugf("received request: %s", req.Method)
+		if req.Params != nil {
+			s.debugf("request params: %s", string(*req.Params))
+		}
 	}
-
-	var result interface{}
-	var err error
 
 	switch req.Method {
 	case "initialize":
-		result, err = s.handleInitialize(ctx, req)
+		s.debugf("handling initialize request")
+		result, err := s.handleInitialize(ctx, req)
+		if err != nil {
+			s.debugf("error handling initialize request: %v", err)
+			if err := conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    jsonrpc2.CodeInternalError,
+				Message: err.Error(),
+			}); err != nil {
+				s.debugf("error sending initialize error reply: %v", err)
+			}
+			return
+		}
+		s.debugf("sending initialize response: %+v", result)
+		if err := conn.Reply(ctx, req.ID, result); err != nil {
+			s.debugf("error sending initialize reply: %v", err)
+		}
+		return
 	case "initialized":
-		result, err = nil, nil
+		// No response needed for initialized notification
+		return
 	case "shutdown":
-		result, err = nil, nil
+		if err := conn.Reply(ctx, req.ID, nil); err != nil {
+			s.debugf("error sending shutdown reply: %v", err)
+		}
+		return
 	case "exit":
-		result, err = nil, nil
+		// No response needed for exit notification
+		return
 	case "textDocument/didOpen":
-		result, err = s.handleTextDocumentDidOpen(ctx, req)
+		result, err := s.handleTextDocumentDidOpen(ctx, req)
+		if err != nil {
+			s.debugf("error handling didOpen: %v", err)
+			return
+		}
+		if !req.Notif && result != nil {
+			if err := conn.Reply(ctx, req.ID, result); err != nil {
+				s.debugf("error sending didOpen reply: %v", err)
+			}
+		}
+		return
 	case "textDocument/didChange":
-		result, err = s.handleTextDocumentDidChange(ctx, req)
+		result, err := s.handleTextDocumentDidChange(ctx, req)
+		if err != nil {
+			s.debugf("error handling didChange: %v", err)
+			return
+		}
+		if !req.Notif && result != nil {
+			if err := conn.Reply(ctx, req.ID, result); err != nil {
+				s.debugf("error sending didChange reply: %v", err)
+			}
+		}
+		return
 	case "textDocument/didClose":
-		result, err = s.handleTextDocumentDidClose(ctx, req)
+		result, err := s.handleTextDocumentDidClose(ctx, req)
+		if err != nil {
+			s.debugf("error handling didClose: %v", err)
+			return
+		}
+		if !req.Notif && result != nil {
+			if err := conn.Reply(ctx, req.ID, result); err != nil {
+				s.debugf("error sending didClose reply: %v", err)
+			}
+		}
+		return
 	case "textDocument/hover":
-		result, err = s.handleTextDocumentHover(ctx, req)
+		result, err := s.handleTextDocumentHover(ctx, req)
+		if err != nil {
+			s.debugf("error handling hover: %v", err)
+			if err := conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    jsonrpc2.CodeInternalError,
+				Message: err.Error(),
+			}); err != nil {
+				s.debugf("error sending hover error reply: %v", err)
+			}
+			return
+		}
+		if err := conn.Reply(ctx, req.ID, result); err != nil {
+			s.debugf("error sending hover reply: %v", err)
+		}
+		return
 	case "textDocument/completion":
-		result, err = s.handleTextDocumentCompletion(ctx, req)
+		result, err := s.handleTextDocumentCompletion(ctx, req)
+		if err != nil {
+			s.debugf("error handling completion: %v", err)
+			if err := conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+				Code:    jsonrpc2.CodeInternalError,
+				Message: err.Error(),
+			}); err != nil {
+				s.debugf("error sending completion error reply: %v", err)
+			}
+			return
+		}
+		if err := conn.Reply(ctx, req.ID, result); err != nil {
+			s.debugf("error sending completion reply: %v", err)
+		}
+		return
+	case "$/setTrace":
+		// Ignore trace requests
+		return
+	case "$/cancelRequest":
+		// Ignore cancellation requests
+		return
+	case "workspace/didChangeConfiguration":
+		// Ignore configuration changes for now
+		return
 	default:
 		if s.debug {
 			s.debugf("unhandled method: %s", req.Method)
 		}
-		result, err = nil, nil
-	}
-
-	if err != nil {
 		if !req.Notif {
-			errResp := &jsonrpc2.Error{
-				Code:    jsonrpc2.CodeInternalError,
-				Message: err.Error(),
-			}
-
-			if err := conn.ReplyWithError(ctx, req.ID, errResp); err != nil {
-				s.debugf("error sending error reply: %v", err)
+			if err := conn.Reply(ctx, req.ID, nil); err != nil {
+				s.debugf("error sending default reply: %v", err)
 			}
 		}
 		return
-	}
-
-	if !req.Notif && result != nil {
-		if err := conn.Reply(ctx, req.ID, result); err != nil {
-			s.debugf("error sending reply: %v", err)
-		}
 	}
 }
 
@@ -240,8 +320,21 @@ func (s *Server) handleTextDocumentCompletion(ctx context.Context, req *jsonrpc2
 }
 
 func (s *Server) debugf(format string, args ...interface{}) {
-	if s.debug {
-		fmt.Fprintf(os.Stderr, format+"\n", args...)
+	if !s.debug {
+		return
+	}
+
+	msg := fmt.Sprintf(format, args...)
+
+	if s.conn != nil {
+		params := &LogMessageParams{
+			Type:    Info,
+			Message: msg,
+		}
+		// Use the connection's notification method directly
+		_ = s.conn.Notify(context.Background(), "window/logMessage", params)
+	} else {
+		fmt.Fprintf(os.Stderr, "Debug: %s\n", msg)
 	}
 }
 
@@ -337,9 +430,16 @@ func (s *Server) validateDocument(ctx context.Context, uri string, content strin
 
 	s.debugf("publishing %d diagnostics for %s", len(lspDiagnostics), uri)
 	for _, d := range lspDiagnostics {
-		severity := "error"
-		if d.Severity == 2 {
+		severity := "unknown"
+		switch d.Severity {
+		case 1:
+			severity = "error"
+		case 2:
 			severity = "warning"
+		case 3:
+			severity = "information"
+		case 4:
+			severity = "hint"
 		}
 		s.debugf("  - %s at %v: %s", severity, d.Range, d.Message)
 	}
@@ -352,25 +452,84 @@ func (s *Server) validateDocument(ctx context.Context, uri string, content strin
 }
 
 func (s *Server) publishDiagnostics(ctx context.Context, uri string, diagnostics []Diagnostic) error {
-	s.debugf("publishing diagnostics: %v", diagnostics)
-
-	params := PublishDiagnosticsParams{
+	params := &PublishDiagnosticsParams{
 		URI:         uri,
 		Diagnostics: diagnostics,
 	}
 
-	// Marshal the notification to ensure proper Content-Length header
-	notif := &jsonrpc2.Request{
-		Method: "textDocument/publishDiagnostics",
-		Notif:  true,
+	if s.debug {
+		s.debugf("publishing %d diagnostics for %s", len(diagnostics), uri)
+		for _, d := range diagnostics {
+			severity := "unknown"
+			switch d.Severity {
+			case 1:
+				severity = "error"
+			case 2:
+				severity = "warning"
+			case 3:
+				severity = "information"
+			case 4:
+				severity = "hint"
+			}
+			s.debugf("  - %s at %v: %s", severity, d.Range, d.Message)
+		}
 	}
 
-	// Marshal params to RawMessage
-	paramsBytes, err := json.Marshal(params)
-	if err != nil {
-		return errors.Errorf("failed to marshal diagnostic params: %w", err)
-	}
-	notif.Params = (*json.RawMessage)(&paramsBytes)
+	return s.conn.Notify(ctx, "textDocument/publishDiagnostics", params)
+}
 
-	return s.conn.Notify(ctx, notif.Method, notif.Params)
+// MessageType represents the type of a message
+type MessageType int
+
+const (
+	Error   MessageType = 1
+	Warning MessageType = 2
+	Info    MessageType = 3
+	Log     MessageType = 4
+)
+
+func (mt MessageType) String() string {
+	switch mt {
+	case Error:
+		return "error"
+	case Warning:
+		return "warning"
+	case Info:
+		return "info"
+	case Log:
+		return "log"
+	default:
+		return "unknown"
+	}
+}
+
+// LogMessageParams represents the parameters for a window/logMessage notification
+type LogMessageParams struct {
+	Type    MessageType `json:"type"`
+	Message string      `json:"message"`
+}
+
+// DiagnosticSeverity represents the severity of a diagnostic
+type DiagnosticSeverity int
+
+const (
+	SeverityError       DiagnosticSeverity = 1
+	SeverityWarning     DiagnosticSeverity = 2
+	SeverityInformation DiagnosticSeverity = 3
+	SeverityHint        DiagnosticSeverity = 4
+)
+
+func (ds DiagnosticSeverity) String() string {
+	switch ds {
+	case SeverityError:
+		return "error"
+	case SeverityWarning:
+		return "warning"
+	case SeverityInformation:
+		return "information"
+	case SeverityHint:
+		return "hint"
+	default:
+		return "unknown"
+	}
 }

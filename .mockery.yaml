@@ -21,7 +21,6 @@ packages:
     github.com/walteh/go-tmpl-typer/pkg/diagnostic:
         interfaces:
             Generator: {}
-            Formatter: {}
     github.com/walteh/go-tmpl-typer/pkg/finder:
         interfaces:
             TemplateFinder: {}

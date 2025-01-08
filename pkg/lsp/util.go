@@ -52,7 +52,11 @@ func (rwc *ReadWriteCloser) Write(p []byte) (int, error) {
 	if err != nil {
 		return n, err
 	}
-	return n, rwc.writer.Flush()
+	err = rwc.writer.Flush()
+	if err != nil {
+		return n, err
+	}
+	return n, nil
 }
 
 // Close closes both the reader and writer
