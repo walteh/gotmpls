@@ -181,12 +181,12 @@ func NewDefaultValidator() *DefaultValidator {
 // ValidateType implements Validator
 func (v *DefaultValidator) ValidateType(ctx context.Context, typePath string, registry ast.PackageAnalyzer) (*TypeInfo, error) {
 	// Split the type path into package and type name
-	parts := strings.Split(typePath, ".")
-	if len(parts) != 2 {
+	lastDot := strings.LastIndex(typePath, ".")
+	if lastDot == -1 {
 		return nil, errors.Errorf("invalid type path: %s", typePath)
 	}
 
-	pkgName, typeName := parts[0], parts[1]
+	pkgName, typeName := typePath[:lastDot], typePath[lastDot+1:]
 
 	// Get the package from the registry
 	pkg, err := registry.GetPackage(ctx, pkgName)
@@ -224,6 +224,32 @@ func (v *DefaultValidator) ValidateType(ctx context.Context, typePath string, re
 		typeInfo.Fields[field.Name()] = &FieldInfo{
 			Name: field.Name(),
 			Type: field.Type(),
+		}
+	}
+
+	// Add methods to the type info
+	for i := 0; i < namedType.NumMethods(); i++ {
+		method := namedType.Method(i)
+		sig := method.Type().(*types.Signature)
+
+		methodInfo := &MethodInfo{
+			Name:       method.Name(),
+			Parameters: make([]types.Type, sig.Params().Len()),
+			Results:    make([]types.Type, sig.Results().Len()),
+		}
+
+		for j := 0; j < sig.Params().Len(); j++ {
+			methodInfo.Parameters[j] = sig.Params().At(j).Type()
+		}
+
+		for j := 0; j < sig.Results().Len(); j++ {
+			methodInfo.Results[j] = sig.Results().At(j).Type()
+		}
+
+		typeInfo.Fields[method.Name()] = &FieldInfo{
+			Name:       method.Name(),
+			Type:       method.Type(),
+			MethodInfo: methodInfo,
 		}
 	}
 
