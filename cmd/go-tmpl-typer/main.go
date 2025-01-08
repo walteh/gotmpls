@@ -7,6 +7,7 @@ import (
 	"runtime/debug"
 
 	"github.com/spf13/cobra"
+	getcompletionscmd "github.com/walteh/go-tmpl-typer/cmd/go-tmpl-typer/get-completions"
 	getdiagnosticscmd "github.com/walteh/go-tmpl-typer/cmd/go-tmpl-typer/get-diagnostics"
 )
 
@@ -18,6 +19,8 @@ func main() {
 	}
 
 	cmd.AddCommand(getdiagnosticscmd.NewGetDiagnosticsCommand())
+	cmd.AddCommand(getcompletionscmd.NewGetCompletionsCommand())
+
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		cmd.Version = "unknown"

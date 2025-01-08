@@ -1,31 +1,36 @@
 {
-    "name": "retab-vscode",
-    "displayName": "retab",
-    "description": "tabs-first formatter for Proto, HCL, Terraform, and Dart files",
-    "version": "0.0.8",
+    "name": "go-tmpl-types-vscode",
+    "displayName": "Go Template Type Checker",
+    "description": "Type checking and diagnostics for Go text/template files",
+    "version": "0.0.1",
     "publisher": "walteh",
     "icon": "icon.png",
     "engines": {
         "vscode": "^1.74.0"
     },
     "categories": [
-        "Formatters"
+        "Programming Languages",
+        "Linters"
     ],
     "activationEvents": [
-        "onLanguage:proto",
-        "onLanguage:hcl",
-        "onLanguage:terraform",
-        "onLanguage:dart"
+        "onLanguage:go-template"
     ],
     "main": "./out/extension.js",
     "contributes": {
+        "languages": [
+            {
+                "id": "go-template",
+                "extensions": [".tmpl", ".tpl", ".gotmpl", ".gohtml"],
+                "aliases": ["Go Template", "go-template"]
+            }
+        ],
         "configuration": {
-            "title": "retab",
+            "title": "Go Template Type Checker",
             "properties": {
-                "retab.executable": {
+                "goTemplateTypes.executable": {
                     "type": "string",
-                    "default": "retab",
-                    "description": "Path to the retab executable. Can be absolute or relative to workspace root (e.g., './bin/retab' or '/usr/local/bin/retab'). 'retab' will use the retab executable from PATH."
+                    "default": "go-tmpl-typer",
+                    "description": "Path to the go-tmpl-typer executable. Can be absolute or relative to workspace root."
                 }
             }
         }
@@ -45,13 +50,5 @@
     },
     "trustedDependencies": [
         "bun-types"
-    ],
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/walteh/retab"
-    },
-    "bugs": {
-        "url": "https://github.com/walteh/retab/issues"
-    },
-    "homepage": "https://github.com/walteh/retab"
+    ]
 }

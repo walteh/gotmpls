@@ -1,103 +1,226 @@
 import * as vscode from 'vscode';
-import { exec, spawn } from 'child_process';
-import { promisify } from 'util';
-import * as path from 'path';
+import { spawn } from 'child_process';
 
-const execAsync = promisify(exec);
+let diagnosticCollection: vscode.DiagnosticCollection;
 
-// Create output channel
-const outputChannel = vscode.window.createOutputChannel("retab");
+export function activate(context: vscode.ExtensionContext) {
+	console.log('Go Template Type Checker is now active');
 
-function resolveRetabPath(configuredPath: string | undefined): string {
-	// If no path configured or it's the default "retab", use 'retab' from PATH
-	if (!configuredPath || configuredPath === "" || configuredPath === "retab") {
-		return 'retab';
-	}
+	// Create diagnostic collection
+	diagnosticCollection = vscode.languages.createDiagnosticCollection('go-template');
+	context.subscriptions.push(diagnosticCollection);
 
-	// If it's an absolute path, use it as is
-	if (path.isAbsolute(configuredPath)) {
-		return configuredPath;
-	}
+	// Register handlers
+	context.subscriptions.push(
+		vscode.workspace.onDidOpenTextDocument(runDiagnostics),
+		vscode.workspace.onDidSaveTextDocument(runDiagnostics),
+		vscode.workspace.onDidChangeTextDocument((e) => {
+			// Debounce diagnostics on change
+			const document = e.document;
+			if (document.languageId === 'go-template') {
+				if (diagnosticsTimeout) {
+					clearTimeout(diagnosticsTimeout);
+				}
+				diagnosticsTimeout = setTimeout(() => runDiagnostics(document), 500);
+			}
+		})
+	);
 
-	// Get the workspace folder
-	const workspaceFolders = vscode.workspace.workspaceFolders;
-	if (!workspaceFolders || workspaceFolders.length === 0) {
-		return configuredPath;
-	}
+	// Register hover provider
+	context.subscriptions.push(
+		vscode.languages.registerHoverProvider('go-template', {
+			provideHover(document, position, token) {
+				return getHoverInfo(document, position);
+			}
+		})
+	);
 
-	// Resolve relative to the first workspace folder
-	return path.resolve(workspaceFolders[0].uri.fsPath, configuredPath);
+	// Register completion provider
+	context.subscriptions.push(
+		vscode.languages.registerCompletionItemProvider('go-template', {
+			async provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) {
+				return getCompletions(document, position);
+			}
+		})
+	);
+
+	// Run diagnostics on all open documents
+	vscode.workspace.textDocuments.forEach(runDiagnostics);
 }
 
-async function formatWithStdin(retabPath: string, content: string, filePath: string): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const child = spawn(retabPath, ['fmt', '--stdin', filePath]);
+let diagnosticsTimeout: NodeJS.Timeout | undefined;
+
+async function runDiagnostics(document: vscode.TextDocument) {
+	if (document.languageId !== 'go-template') {
+		return;
+	}
+
+	const config = vscode.workspace.getConfiguration('goTemplateTypes');
+	const executable = config.get<string>('executable') || 'go-tmpl-typer';
+
+	const diagnostics: vscode.Diagnostic[] = [];
+
+	try {
+		const process = spawn(executable, ['get-diagnostics'], {
+			cwd: vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath
+		});
+
 		let stdout = '';
 		let stderr = '';
 
-		child.stdout.on('data', (data) => {
+		process.stdout.on('data', (data) => {
 			stdout += data;
 		});
 
-		child.stderr.on('data', (data) => {
+		process.stderr.on('data', (data) => {
 			stderr += data;
 		});
 
-		child.on('error', (err) => {
-			reject(new Error(`Failed to spawn retab: ${err.message}`));
+		await new Promise<void>((resolve, reject) => {
+			process.on('close', (code) => {
+				if (code === 0) {
+					try {
+						const results = JSON.parse(stdout);
+						for (const diag of results) {
+							const range = new vscode.Range(
+								diag.start.line - 1,
+								diag.start.character - 1,
+								diag.end.line - 1,
+								diag.end.character - 1
+							);
+							const diagnostic = new vscode.Diagnostic(
+								range,
+								diag.message,
+								diag.severity === 'error' 
+									? vscode.DiagnosticSeverity.Error 
+									: vscode.DiagnosticSeverity.Warning
+							);
+							diagnostics.push(diagnostic);
+						}
+						resolve();
+					} catch (err) {
+						reject(new Error('Failed to parse diagnostics output'));
+					}
+				} else {
+					reject(new Error(`Process exited with code ${code}: ${stderr}`));
+				}
+			});
 		});
+	} catch (err: any) {
+		console.error('Error running diagnostics:', err);
+		// Show error in output channel or status bar
+		vscode.window.showErrorMessage(`Error running template type checker: ${err.message}`);
+	}
 
-		child.on('close', (code) => {
-			if (code !== 0) {
-				reject(new Error(`retab failed with code ${code}: ${stderr}`));
-			} else {
-				resolve(stdout);
-			}
-		});
-
-		// Write the content to stdin and close it
-		child.stdin.write(content);
-		child.stdin.end();
-	});
+	diagnosticCollection.set(document.uri, diagnostics);
 }
 
-export function activate(context: vscode.ExtensionContext) {
-	outputChannel.appendLine("Retab formatter activated");
+async function getCompletions(document: vscode.TextDocument, position: vscode.Position): Promise<vscode.CompletionList | undefined> {
+	const config = vscode.workspace.getConfiguration('goTemplateTypes');
+	const executable = config.get<string>('executable') || 'go-tmpl-typer';
 
-	// Register formatter for all supported languages
-	let disposable = vscode.languages.registerDocumentFormattingEditProvider(
-		['proto', 'proto3', 'hcl', 'hcl2', 'terraform', 'tf', 'tfvars', 'dart'],
-		{
-			async provideDocumentFormattingEdits(document: vscode.TextDocument): Promise<vscode.TextEdit[]> {
-				try {
-					// Get the configured retab path
-					const config = vscode.workspace.getConfiguration('retab');
-					const configuredPath = config.get<string>('executable');
-					const retabPath = resolveRetabPath(configuredPath);
+	try {
+		const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath;
+		const process = spawn(executable, [
+			'get-completions',
+			workspaceFolder || '.',
+			document.uri.fsPath,
+			(position.line + 1).toString(),
+			(position.character + 1).toString()
+		], {
+			cwd: workspaceFolder
+		});
 
-					// Get the document content
-					const content = document.getText();
+		let stdout = '';
+		let stderr = '';
 
-					// Format using stdin
-					const formatted = await formatWithStdin(retabPath, content, document.fileName);
+		process.stdout.on('data', (data) => {
+			stdout += data;
+		});
 
-					// Return the edit
-					return [vscode.TextEdit.replace(
-						new vscode.Range(0, 0, document.lineCount, 0),
-						formatted
-					)];
-				} catch (err) {
-					// Log error to output channel instead of showing to user
-					outputChannel.appendLine(`Error formatting ${document.fileName}: ${err}`);
-					return [];
+		process.stderr.on('data', (data) => {
+			stderr += data;
+		});
+
+		const completionItems = await new Promise<vscode.CompletionItem[]>((resolve, reject) => {
+			process.on('close', (code) => {
+				if (code === 0) {
+					try {
+						const results = JSON.parse(stdout);
+						const items = results.map((item: any) => {
+							const completionItem = new vscode.CompletionItem(item.label);
+							completionItem.kind = getCompletionKind(item.kind);
+							if (item.detail) completionItem.detail = item.detail;
+							if (item.documentation) completionItem.documentation = item.documentation;
+							if (item.sortText) completionItem.sortText = item.sortText;
+							if (item.filterText) completionItem.filterText = item.filterText;
+							if (item.insertText) completionItem.insertText = new vscode.SnippetString(item.insertText);
+							if (item.textEdit) {
+								completionItem.textEdit = new vscode.TextEdit(
+									new vscode.Range(
+										item.textEdit.range.start.line,
+										item.textEdit.range.start.character,
+										item.textEdit.range.end.line,
+										item.textEdit.range.end.character
+									),
+									item.textEdit.newText
+								);
+							}
+							return completionItem;
+						});
+						resolve(items);
+					} catch (err) {
+						reject(new Error('Failed to parse completions output'));
+					}
+				} else {
+					reject(new Error(`Process exited with code ${code}: ${stderr}`));
 				}
-			}
-		}
-	);
+			});
+		});
 
-	context.subscriptions.push(disposable);
+		return new vscode.CompletionList(completionItems, false);
+	} catch (err: any) {
+		console.error('Error getting completions:', err);
+		return undefined;
+	}
+}
+
+function getCompletionKind(kind: string): vscode.CompletionItemKind {
+	switch (kind) {
+		case 'keyword':
+			return vscode.CompletionItemKind.Keyword;
+		case 'function':
+			return vscode.CompletionItemKind.Function;
+		case 'variable':
+			return vscode.CompletionItemKind.Variable;
+		case 'field':
+			return vscode.CompletionItemKind.Field;
+		case 'method':
+			return vscode.CompletionItemKind.Method;
+		default:
+			return vscode.CompletionItemKind.Text;
+	}
+}
+
+async function getHoverInfo(document: vscode.TextDocument, position: vscode.Position): Promise<vscode.Hover | undefined> {
+	// TODO: Implement hover info once the Go executable supports it
+	// For now, we'll return the type information from diagnostics if available
+	const diagnostics = diagnosticCollection.get(document.uri);
+	if (!diagnostics) {
+		return undefined;
+	}
+
+	// Find any diagnostics that overlap with the current position
+	const diagnostic = diagnostics.find(d => d.range.contains(position));
+	if (diagnostic) {
+		return new vscode.Hover(diagnostic.message);
+	}
+
+	return undefined;
 }
 
 export function deactivate() {
-	outputChannel.dispose();
+	if (diagnosticCollection) {
+		diagnosticCollection.dispose();
+	}
 } 
