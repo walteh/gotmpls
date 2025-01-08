@@ -2,6 +2,7 @@ package ast
 
 import (
 	"context"
+	"fmt"
 	"go/types"
 	"strings"
 
@@ -158,22 +159,29 @@ type TypeRegistry struct {
 }
 
 func (r *TypeRegistry) GetPackage(ctx context.Context, packageName string) (*types.Package, error) {
+	fmt.Printf("looking for package: %s\n", packageName)
+	fmt.Printf("available packages: %v\n", r.Types)
+
 	// First try exact match
 	if pkg, ok := r.Types[packageName]; ok {
+		fmt.Printf("found exact match for package: %s\n", packageName)
 		return pkg, nil
 	}
 
 	// Try to find a package that ends with the requested name
 	for pkgPath, pkg := range r.Types {
 		if pkg.Name() == packageName {
+			fmt.Printf("found package by name: %s (path: %s)\n", packageName, pkgPath)
 			return pkg, nil
 		}
 		// Check if the package path ends with the requested name
 		if pkgPath == packageName || strings.HasSuffix(pkgPath, "/"+packageName) {
+			fmt.Printf("found package by path suffix: %s (path: %s)\n", packageName, pkgPath)
 			return pkg, nil
 		}
 	}
 
+	fmt.Printf("package not found: %s\n", packageName)
 	return nil, errors.Errorf("package %s not found", packageName)
 }
 

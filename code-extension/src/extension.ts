@@ -38,6 +38,9 @@ export function activate(context: vscode.ExtensionContext) {
 					env: {
 						...process.env,
 						GOTMPL_DEBUG: "1",
+						GOPATH: process.env.GOPATH || path.join(process.env.HOME || '', 'go'),
+						GOMODCACHE: process.env.GOMODCACHE || path.join(process.env.HOME || '', 'go', 'pkg', 'mod'),
+						GO111MODULE: "on",
 					}
 				}
 			};
@@ -48,8 +51,10 @@ export function activate(context: vscode.ExtensionContext) {
 			const clientOptions: LanguageClientOptions = {
 				documentSelector: [{ scheme: 'file', language: 'go-template' }],
 				synchronize: {
-					fileEvents: vscode.workspace.createFileSystemWatcher('**/*.tmpl')
+					fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{tmpl,go}'),
+					configurationSection: 'goTemplateTypes'
 				},
+				workspaceFolder: workspaceFolder,
 				outputChannel: outputChannel,
 				traceOutputChannel: outputChannel,
 				middleware: {
