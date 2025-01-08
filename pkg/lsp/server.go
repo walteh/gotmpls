@@ -41,6 +41,7 @@ func NewServer(parser parser.TemplateParser, validator types.Validator, analyzer
 }
 
 func (s *Server) Start(ctx context.Context, in io.ReadCloser, out io.WriteCloser) error {
+	// Create a buffered stream with VSCode codec for proper LSP message formatting
 	stream := jsonrpc2.NewBufferedStream(NewReadWriteCloser(in, out), jsonrpc2.VSCodeObjectCodec{})
 	s.conn = jsonrpc2.NewConn(ctx, stream, s)
 	<-ctx.Done()
@@ -83,17 +84,19 @@ func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.
 
 	if err != nil {
 		if !req.Notif {
-			if err := conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+			errResp := &jsonrpc2.Error{
 				Code:    jsonrpc2.CodeInternalError,
 				Message: err.Error(),
-			}); err != nil {
+			}
+
+			if err := conn.ReplyWithError(ctx, req.ID, errResp); err != nil {
 				s.debugf("error sending error reply: %v", err)
 			}
 		}
 		return
 	}
 
-	if !req.Notif {
+	if !req.Notif && result != nil {
 		if err := conn.Reply(ctx, req.ID, result); err != nil {
 			s.debugf("error sending reply: %v", err)
 		}
@@ -351,8 +354,23 @@ func (s *Server) validateDocument(ctx context.Context, uri string, content strin
 func (s *Server) publishDiagnostics(ctx context.Context, uri string, diagnostics []Diagnostic) error {
 	s.debugf("publishing diagnostics: %v", diagnostics)
 
-	return s.conn.Notify(ctx, "textDocument/publishDiagnostics", PublishDiagnosticsParams{
+	params := PublishDiagnosticsParams{
 		URI:         uri,
 		Diagnostics: diagnostics,
-	})
+	}
+
+	// Marshal the notification to ensure proper Content-Length header
+	notif := &jsonrpc2.Request{
+		Method: "textDocument/publishDiagnostics",
+		Notif:  true,
+	}
+
+	// Marshal params to RawMessage
+	paramsBytes, err := json.Marshal(params)
+	if err != nil {
+		return errors.Errorf("failed to marshal diagnostic params: %w", err)
+	}
+	notif.Params = (*json.RawMessage)(&paramsBytes)
+
+	return s.conn.Notify(ctx, notif.Method, notif.Params)
 }
