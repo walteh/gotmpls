@@ -6,7 +6,8 @@ import {
 	LanguageClient,
 	LanguageClientOptions,
 	ServerOptions,
-	TransportKind
+	TransportKind,
+	RevealOutputChannelOn
 } from 'vscode-languageclient/node';
 
 let client: LanguageClient;
@@ -31,21 +32,52 @@ export function activate(context: vscode.ExtensionContext) {
 
 			// Server options
 			const serverOptions: ServerOptions = {
-				command: executable,
-				args: ['serve-lsp', '--debug'],
-				options: {
-					cwd: workspaceFolder.uri.fsPath,
-					env: {
-						...process.env,
-						GOTMPL_DEBUG: "1",
-						GOPATH: process.env.GOPATH || path.join(process.env.HOME || '', 'go'),
-						GOMODCACHE: process.env.GOMODCACHE || path.join(process.env.HOME || '', 'go', 'pkg', 'mod'),
-						GO111MODULE: "on",
+				run: {
+					command: executable,
+					args: ['serve-lsp'],
+					options: {
+						cwd: workspaceFolder.uri.fsPath,
+						env: {
+							...process.env,
+							GOTMPL_DEBUG: "1",
+							GOPATH: process.env.GOPATH || path.join(process.env.HOME || '', 'go'),
+							GOMODCACHE: process.env.GOMODCACHE || path.join(process.env.HOME || '', 'go', 'pkg', 'mod'),
+							GO111MODULE: "on",
+						}
+					}
+				},
+				debug: {
+					command: executable,
+					args: ['serve-lsp', '--debug'],
+					options: {
+						cwd: workspaceFolder.uri.fsPath,
+						env: {
+							...process.env,
+							GOTMPL_DEBUG: "1",
+							GOPATH: process.env.GOPATH || path.join(process.env.HOME || '', 'go'),
+							GOMODCACHE: process.env.GOMODCACHE || path.join(process.env.HOME || '', 'go', 'pkg', 'mod'),
+							GO111MODULE: "on",
+						}
 					}
 				}
 			};
 
-			outputChannel.appendLine(`Starting language server with command: ${serverOptions.command} ${serverOptions.args?.join(' ')}`);
+			outputChannel.appendLine(`Starting language server with command: ${executable} serve-lsp`);
+
+			// Create a wrapper for stderr to capture debug output
+			const serverProcess = spawn(executable, ['serve-lsp'], {
+				cwd: workspaceFolder.uri.fsPath,
+				env: {
+					...process.env,
+					GOTMPL_DEBUG: "1",
+					GOPATH: process.env.GOPATH || path.join(process.env.HOME || '', 'go'),
+					GOMODCACHE: process.env.GOMODCACHE || path.join(process.env.HOME || '', 'go', 'pkg', 'mod'),
+					GO111MODULE: "on",
+				}
+			});
+			serverProcess.stderr.on('data', (data) => {
+				outputChannel.appendLine(`[Server Debug] ${data}`);
+			});
 
 			// Client options
 			const clientOptions: LanguageClientOptions = {
@@ -57,22 +89,10 @@ export function activate(context: vscode.ExtensionContext) {
 				workspaceFolder: workspaceFolder,
 				outputChannel: outputChannel,
 				traceOutputChannel: outputChannel,
-				middleware: {
-					handleDiagnostics: (uri, diagnostics, next) => {
-						outputChannel.appendLine(`Received ${diagnostics.length} diagnostics for ${uri.fsPath}`);
-						next(uri, diagnostics);
-					},
-					provideHover: async (document, position, token, next) => {
-						outputChannel.appendLine(`Hover requested at ${document.uri.fsPath}:${position.line}:${position.character}`);
-						const result = await next(document, position, token);
-						outputChannel.appendLine(`Hover result: ${JSON.stringify(result)}`);
-						return result;
-					},
-					provideCompletionItem: async (document, position, context, token, next) => {
-						outputChannel.appendLine(`Completion requested at ${document.uri.fsPath}:${position.line}:${position.character}`);
-						const result = await next(document, position, context, token);
-						outputChannel.appendLine(`Completion result: ${JSON.stringify(result)}`);
-						return result;
+				revealOutputChannelOn: RevealOutputChannelOn.Never,
+				initializationOptions: {
+					trace: {
+						server: vscode.workspace.getConfiguration('goTemplateTypes').get('trace.server')
 					}
 				}
 			};
@@ -85,18 +105,42 @@ export function activate(context: vscode.ExtensionContext) {
 				clientOptions
 			);
 
+			// Register additional error handlers
+			client.onDidChangeState(event => {
+				outputChannel.appendLine(`Client state changed from ${event.oldState} to ${event.newState}`);
+			});
+
+			client.onNotification('window/logMessage', (params: any) => {
+				switch (params.type) {
+					case 1: // Error
+						outputChannel.appendLine(`[Error] ${params.message}`);
+						break;
+					case 2: // Warning
+						outputChannel.appendLine(`[Warning] ${params.message}`);
+						break;
+					case 3: // Info
+						outputChannel.appendLine(`[Info] ${params.message}`);
+						break;
+					case 4: // Log
+						outputChannel.appendLine(`[Log] ${params.message}`);
+						break;
+				}
+			});
+
 			// Start the client
-			client.start().then(() => {
-				outputChannel.appendLine('Language server started');
-			}).catch(err => {
+			client.start().catch(err => {
 				outputChannel.appendLine(`Error starting language server: ${err.message}`);
 				outputChannel.appendLine(err.stack || '');
 			});
 
-			// Log client state changes
-			client.onDidChangeState(event => {
-				outputChannel.appendLine(`Client state changed from ${event.oldState} to ${event.newState}`);
+			// Register the client for cleanup
+			context.subscriptions.push({
+				dispose: () => {
+					client?.stop();
+				}
 			});
+
+			outputChannel.appendLine('Language server started');
 		})
 		.catch(err => {
 			outputChannel.appendLine(`Error finding executable: ${err.message}`);
