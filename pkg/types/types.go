@@ -33,11 +33,13 @@ type MethodInfo struct {
 // Validator is responsible for validating types in templates
 type Validator interface {
 	// ValidateType validates a type against package information
-	ValidateType(ctx context.Context, typePath string, registry *ast.TypeRegistry) (*TypeInfo, error)
+	ValidateType(ctx context.Context, typePath string, registry ast.PackageAnalyzer) (*TypeInfo, error)
 	// ValidateField validates a field access on a type
 	ValidateField(ctx context.Context, typeInfo *TypeInfo, fieldPath string) (*FieldInfo, error)
 	// ValidateMethod validates a method call on a type
 	ValidateMethod(ctx context.Context, methodName string) (*MethodInfo, error)
+	// GetRootMethods returns the map of root methods
+	GetRootMethods() map[string]*MethodInfo
 }
 
 // DefaultValidator is the default implementation of Validator
@@ -177,83 +179,55 @@ func NewDefaultValidator() *DefaultValidator {
 }
 
 // ValidateType implements Validator
-func (v *DefaultValidator) ValidateType(ctx context.Context, typePath string, registry *ast.TypeRegistry) (*TypeInfo, error) {
-	// Split the type path into package path and type name
-	lastDot := strings.LastIndex(typePath, ".")
-	if lastDot == -1 {
-		return nil, errors.Errorf("invalid type path %s: must be in format package.Type", typePath)
+func (v *DefaultValidator) ValidateType(ctx context.Context, typePath string, registry ast.PackageAnalyzer) (*TypeInfo, error) {
+	// Split the type path into package and type name
+	parts := strings.Split(typePath, ".")
+	if len(parts) != 2 {
+		return nil, errors.Errorf("invalid type path: %s", typePath)
 	}
 
-	pkgPath := typePath[:lastDot]
-	typeName := typePath[lastDot+1:]
+	pkgName, typeName := parts[0], parts[1]
 
-	pkg, ok := registry.Types[pkgPath]
-	if !ok {
-		known := ""
-		for k := range registry.Types {
-			known += k + " 	"
-		}
-		return nil, errors.Errorf("package %s not found in registry\n\nKnown packages:\n%s", pkgPath, known)
+	// Get the package from the registry
+	pkg, err := registry.GetPackage(ctx, pkgName)
+	if err != nil {
+		return nil, errors.Errorf("package not found in registry: %w", err)
 	}
 
-	scope := pkg.Scope()
-	obj := scope.Lookup(typeName)
+	// Find the type in the package scope
+	obj := pkg.Scope().Lookup(typeName)
 	if obj == nil {
-		return nil, errors.Errorf("type %s not found in package %s", typeName, pkgPath)
+		return nil, errors.Errorf("type %s not found in package %s", typeName, pkgName)
 	}
 
-	named, ok := obj.Type().(*types.Named)
+	// Get the type information
+	namedType, ok := obj.Type().(*types.Named)
 	if !ok {
 		return nil, errors.Errorf("type %s is not a named type", typeName)
 	}
 
-	structType, ok := named.Underlying().(*types.Struct)
+	// Get the underlying struct type
+	structType, ok := namedType.Underlying().(*types.Struct)
 	if !ok {
 		return nil, errors.Errorf("type %s is not a struct type", typeName)
 	}
 
-	info := &TypeInfo{
+	// Create TypeInfo with fields
+	typeInfo := &TypeInfo{
 		Name:   typeName,
 		Fields: make(map[string]*FieldInfo),
-		// Methods: make(map[string]*MethodInfo),
 	}
 
-	// Get fields
+	// Add fields to the type info
 	for i := 0; i < structType.NumFields(); i++ {
 		field := structType.Field(i)
-		info.Fields[field.Name()] = &FieldInfo{
+		typeInfo.Fields[field.Name()] = &FieldInfo{
 			Name: field.Name(),
 			Type: field.Type(),
 		}
 	}
 
-	// Get methods
-	for i := 0; i < named.NumMethods(); i++ {
-		method := named.Method(i)
-		sig := method.Type().(*types.Signature)
-
-		methodInfo := &MethodInfo{
-			Name:       method.Name(),
-			Parameters: make([]types.Type, sig.Params().Len()),
-			Results:    make([]types.Type, sig.Results().Len()),
-		}
-
-		for j := 0; j < sig.Params().Len(); j++ {
-			methodInfo.Parameters[j] = sig.Params().At(j).Type()
-		}
-
-		for j := 0; j < sig.Results().Len(); j++ {
-			methodInfo.Results[j] = sig.Results().At(j).Type()
-		}
-
-		info.Fields[method.Name()] = &FieldInfo{
-			Name:       method.Name(),
-			Type:       method.Type(),
-			MethodInfo: methodInfo,
-		}
-	}
-
-	return info, nil
+	return typeInfo, nil
 }
 
 // ValidateField implements Validator
@@ -374,4 +348,8 @@ func (v *DefaultValidator) ValidateMethod(ctx context.Context, methodName string
 		return nil, errors.Errorf("method %s not known", methodName)
 	}
 	return method, nil
+}
+
+func (v *DefaultValidator) GetRootMethods() map[string]*MethodInfo {
+	return v.RootMethods
 }

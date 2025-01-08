@@ -3,6 +3,8 @@ package ast
 import (
 	"context"
 	"go/types"
+
+	"gitlab.com/tozd/go/errors"
 )
 
 // Node represents a template AST node
@@ -136,18 +138,34 @@ func (n *FunctionNode) Position() (start, end Position) {
 	return
 }
 
-// PackageAnalyzer is responsible for analyzing Go packages and extracting type information
+// PackageAnalyzer is responsible for analyzing Go packages
 type PackageAnalyzer interface {
 	// AnalyzePackage analyzes a Go package and returns type information
 	AnalyzePackage(ctx context.Context, packageDir string) (*TypeRegistry, error)
+	// GetPackage returns a package by name
+	GetPackage(ctx context.Context, packageName string) (*types.Package, error)
+	// GetTypes returns all known types
+	GetTypes() map[string]*types.Package
 }
 
-// TypeRegistry contains a registry of Go types found in packages
+// TypeRegistry implements PackageAnalyzer
 type TypeRegistry struct {
 	// Types maps fully qualified type paths to their package information
 	Types map[string]*types.Package
 	// Error encountered during type resolution, if any
 	Err error
+}
+
+func (r *TypeRegistry) GetPackage(ctx context.Context, packageName string) (*types.Package, error) {
+	pkg, ok := r.Types[packageName]
+	if !ok {
+		return nil, errors.Errorf("package %s not found", packageName)
+	}
+	return pkg, nil
+}
+
+func (r *TypeRegistry) GetTypes() map[string]*types.Package {
+	return r.Types
 }
 
 // NewTypeRegistry creates a new TypeRegistry
@@ -161,4 +179,9 @@ func NewTypeRegistry() *TypeRegistry {
 func (p *TypeRegistry) TypeExists(typePath string) bool {
 	_, exists := p.Types[typePath]
 	return exists
+}
+
+func (r *TypeRegistry) AnalyzePackage(ctx context.Context, packageDir string) (*TypeRegistry, error) {
+	// For now, just return the registry itself since we're not doing actual package analysis
+	return r, nil
 }
