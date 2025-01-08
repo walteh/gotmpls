@@ -3,7 +3,12 @@ package lsp
 import (
 	"bufio"
 	"io"
+	"net/url"
+	"path/filepath"
+	"strings"
 	"sync"
+
+	"gitlab.com/tozd/go/errors"
 )
 
 // ReadWriteCloser combines an io.ReadCloser and io.WriteCloser into a single io.ReadWriteCloser
@@ -64,4 +69,33 @@ func (rwc *ReadWriteCloser) Close() error {
 	rwc.mu.Lock()
 	defer rwc.mu.Unlock()
 	return rwc.closer.Close()
+}
+
+// uriToPath converts a URI to a filesystem path
+func uriToPath(uri string) (string, error) {
+	if !strings.HasPrefix(uri, "file://") {
+		return "", errors.Errorf("unsupported URI scheme: %s", uri)
+	}
+
+	// Parse the URI
+	u, err := url.Parse(uri)
+	if err != nil {
+		return "", errors.Errorf("failed to parse URI: %w", err)
+	}
+
+	// Convert the path to a filesystem path
+	path := u.Path
+	if path == "" {
+		return "", errors.Errorf("empty path in URI: %s", uri)
+	}
+
+	// On Windows, remove the leading slash
+	if len(path) >= 3 && path[0] == '/' && path[2] == ':' {
+		path = path[1:]
+	}
+
+	// Clean the path
+	path = filepath.Clean(path)
+
+	return path, nil
 }

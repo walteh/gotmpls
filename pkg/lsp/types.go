@@ -3,6 +3,62 @@ package lsp
 // LSP types based on the specification
 // https://microsoft.github.io/language-server-protocol/specifications/specification-current/
 
+// MessageType represents the type of a message
+type MessageType int
+
+const (
+	Error   MessageType = 1
+	Warning MessageType = 2
+	Info    MessageType = 3
+	Log     MessageType = 4
+)
+
+func (mt MessageType) String() string {
+	switch mt {
+	case Error:
+		return "error"
+	case Warning:
+		return "warning"
+	case Info:
+		return "info"
+	case Log:
+		return "log"
+	default:
+		return "unknown"
+	}
+}
+
+// LogMessageParams represents the parameters for a window/logMessage notification
+type LogMessageParams struct {
+	Type    MessageType `json:"type"`
+	Message string      `json:"message"`
+}
+
+// DiagnosticSeverity represents the severity of a diagnostic
+type DiagnosticSeverity int
+
+const (
+	SeverityError       DiagnosticSeverity = 1
+	SeverityWarning     DiagnosticSeverity = 2
+	SeverityInformation DiagnosticSeverity = 3
+	SeverityHint        DiagnosticSeverity = 4
+)
+
+func (ds DiagnosticSeverity) String() string {
+	switch ds {
+	case SeverityError:
+		return "error"
+	case SeverityWarning:
+		return "warning"
+	case SeverityInformation:
+		return "information"
+	case SeverityHint:
+		return "hint"
+	default:
+		return "unknown"
+	}
+}
+
 type InitializeParams struct {
 	ProcessID             int         `json:"processId,omitempty"`
 	RootURI               string      `json:"rootUri"`

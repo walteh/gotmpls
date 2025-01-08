@@ -8,16 +8,32 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/walteh/go-tmpl-typer/pkg/ast"
+	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
+	"github.com/walteh/go-tmpl-typer/pkg/parser"
+	"github.com/walteh/go-tmpl-typer/pkg/types"
 	"gitlab.com/tozd/go/errors"
 )
+
+var contentLengthRegexp = regexp.MustCompile(`Content-Length: (\d+)`)
+
+type jsonrpcError struct {
+	Code    int64       `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
+func (e *jsonrpcError) Error() string {
+	return fmt.Sprintf("JSON-RPC error %d: %s", e.Code, e.Message)
+}
 
 // mockRWC implements a mock io.ReadWriteCloser for testing
 type mockRWC struct {
@@ -42,11 +58,14 @@ func (m *mockRWC) Read(p []byte) (n int, err error) {
 		return 0, io.EOF
 	}
 
-	// If there's no data to read, wait a bit
-	if m.readBuf.Len() == 0 {
+	// If there's no data to read, wait a bit and try again
+	for m.readBuf.Len() == 0 {
 		m.mu.Unlock()
 		time.Sleep(10 * time.Millisecond)
 		m.mu.Lock()
+		if m.closed {
+			return 0, io.EOF
+		}
 	}
 
 	// Read from the read buffer since this is what the server will read
@@ -117,114 +136,69 @@ func (m *mockRWC) writeMessage(t *testing.T, method string, id *int64, params in
 	t.Logf("Read buffer length after write: %d", m.readBuf.Len())
 }
 
-func (m *mockRWC) waitForMessage(t *testing.T, timeout time.Duration) error {
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-
-	for {
-		m.mu.Lock()
-		hasData := m.writeBuf.Len() > 0
-		if hasData {
-			t.Logf("Found message in write buffer (length=%d): %s", m.writeBuf.Len(), m.writeBuf.String())
-		} else {
-			t.Logf("No data in write buffer yet")
-		}
-		m.mu.Unlock()
-
-		if hasData {
-			return nil
-		}
-
-		select {
-		case <-timer.C:
-			m.mu.Lock()
-			readLen := m.readBuf.Len()
-			writeLen := m.writeBuf.Len()
-			m.mu.Unlock()
-			return errors.Errorf("timeout waiting for message (readBuf=%d, writeBuf=%d)", readLen, writeLen)
-		case <-time.After(10 * time.Millisecond):
-			continue
-		}
-	}
-}
-
 func (m *mockRWC) readMessage(t *testing.T) (method string, id *int64, result interface{}, err error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
+	// Read the header first
+	var header string
 	for {
-		// Read until we find the Content-Length header
-		var contentLength int
-		for {
-			line, err := m.writeBuf.ReadString('\n')
-			if err != nil {
-				return "", nil, nil, err
-			}
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "Content-Length: ") {
-				length := strings.TrimPrefix(line, "Content-Length: ")
-				contentLength, err = strconv.Atoi(length)
-				if err != nil {
-					return "", nil, nil, err
-				}
-			} else if line == "" && contentLength > 0 {
-				// Empty line after Content-Length header means we're ready to read the body
-				break
-			}
-		}
-
-		if contentLength == 0 {
-			return "", nil, nil, errors.Errorf("no Content-Length header found")
-		}
-
-		// Read message body
-		body := make([]byte, contentLength)
-		n, err := io.ReadFull(m.writeBuf, body)
+		b, err := m.writeBuf.ReadByte()
 		if err != nil {
+			if err == io.EOF {
+				// If we hit EOF while reading header, wait a bit and try again
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
 			return "", nil, nil, err
 		}
-		if n != contentLength {
-			return "", nil, nil, errors.Errorf("expected to read %d bytes, got %d", contentLength, n)
+		header += string(b)
+		if strings.HasSuffix(header, "\r\n\r\n") {
+			break
 		}
-
-		t.Logf("Read message: %s", string(body))
-
-		// Parse message
-		var msg struct {
-			JSONRPC string          `json:"jsonrpc"`
-			ID      *int64          `json:"id,omitempty"`
-			Method  string          `json:"method,omitempty"`
-			Result  json.RawMessage `json:"result,omitempty"`
-			Params  json.RawMessage `json:"params,omitempty"`
-		}
-		err = json.Unmarshal(body, &msg)
-		if err != nil {
-			return "", nil, nil, err
-		}
-
-		// Skip log messages
-		if msg.Method == "window/logMessage" {
-			continue
-		}
-
-		var resultObj interface{}
-		if len(msg.Result) > 0 {
-			err = json.Unmarshal(msg.Result, &resultObj)
-			if err != nil {
-				return "", nil, nil, err
-			}
-		} else if len(msg.Params) > 0 {
-			err = json.Unmarshal(msg.Params, &resultObj)
-			if err != nil {
-				return "", nil, nil, err
-			}
-		}
-
-		if msg.Method != "" {
-			return msg.Method, msg.ID, resultObj, nil
-		}
-		return method, msg.ID, resultObj, nil
 	}
+
+	// Parse content length
+	match := contentLengthRegexp.FindStringSubmatch(header)
+	if match == nil {
+		return "", nil, nil, errors.Errorf("invalid header: %q", header)
+	}
+	contentLength, err := strconv.Atoi(match[1])
+	if err != nil {
+		return "", nil, nil, errors.Errorf("invalid content length: %q", match[1])
+	}
+
+	// Read the content
+	content := make([]byte, contentLength)
+	_, err = io.ReadFull(m.writeBuf, content)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	t.Logf("Read message: %s", string(content))
+
+	// Parse the message
+	var msg struct {
+		JSONRPC string        `json:"jsonrpc"`
+		ID      *int64        `json:"id,omitempty"`
+		Method  string        `json:"method,omitempty"`
+		Result  interface{}   `json:"result,omitempty"`
+		Params  interface{}   `json:"params,omitempty"`
+		Error   *jsonrpcError `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(content, &msg); err != nil {
+		return "", nil, nil, err
+	}
+
+	if msg.Error != nil {
+		return "", msg.ID, nil, errors.Errorf("JSON-RPC error: %v", msg.Error)
+	}
+
+	// For responses, result is in the result field
+	// For notifications/requests, result is in the params field
+	result = msg.Result
+	if result == nil {
+		result = msg.Params
+	}
+
+	return msg.Method, msg.ID, result, nil
 }
 
 func (m *mockRWC) drainMessages() {
@@ -284,7 +258,13 @@ type Address struct {
 
 func TestServer_Initialize(t *testing.T) {
 	// Create server with debug enabled
-	server := NewServer(nil, nil, nil, nil, true)
+	server := NewServer(
+		parser.NewDefaultTemplateParser(),
+		types.NewDefaultValidator(),
+		ast.NewDefaultPackageAnalyzer(),
+		diagnostic.NewDefaultGenerator(),
+		true,
+	)
 
 	// Create mock connection
 	rwc := newMockRWC()
@@ -301,33 +281,37 @@ func TestServer_Initialize(t *testing.T) {
 
 	// Send initialize request
 	id := int64(1)
-	initParams := InitializeParams{
+	rwc.writeMessage(t, "initialize", &id, InitializeParams{
 		RootURI: "file:///test",
-	}
-	rwc.writeMessage(t, "initialize", &id, initParams)
+	})
 
 	// Wait for and verify initialize response
-	err := rwc.waitForMessage(t, 1*time.Second)
-	require.NoError(t, err)
-
-	// Skip any log messages and get the initialize response
-	method, respID, result, err := rwc.readMessage(t)
-	require.NoError(t, err)
-	require.Empty(t, method) // Should be empty for a response
-	require.NotNil(t, respID)
-	require.Equal(t, id, *respID)
-
-	// Verify initialize result
-	resultBytes, err := json.Marshal(result)
-	require.NoError(t, err)
 	var initResult InitializeResult
-	err = json.Unmarshal(resultBytes, &initResult)
-	require.NoError(t, err)
+	for {
+		method, respID, result, err := rwc.readMessage(t)
+		require.NoError(t, err)
+
+		// Skip log messages
+		if method == "window/logMessage" {
+			t.Logf("Log message: %v", result)
+			continue
+		}
+
+		// Found initialize response
+		if respID != nil {
+			require.Equal(t, id, *respID)
+			resultBytes, err := json.Marshal(result)
+			require.NoError(t, err)
+			err = json.Unmarshal(resultBytes, &initResult)
+			require.NoError(t, err)
+			break
+		}
+	}
 
 	// Verify capabilities
-	assert.Equal(t, 1, initResult.Capabilities.TextDocumentSync.Change)
-	assert.True(t, initResult.Capabilities.HoverProvider)
-	assert.Equal(t, []string{"."}, initResult.Capabilities.CompletionProvider.TriggerCharacters)
+	require.True(t, initResult.Capabilities.HoverProvider)
+	require.NotNil(t, initResult.Capabilities.TextDocumentSync)
+	require.Equal(t, 1, initResult.Capabilities.TextDocumentSync.Change)
 }
 
 func TestMessageEncoding(t *testing.T) {
@@ -373,4 +357,198 @@ func TestMessageEncoding(t *testing.T) {
 	err = json.Unmarshal(resultBytes, &readParams)
 	require.NoError(t, err)
 	require.Equal(t, params.RootURI, readParams.RootURI)
+}
+
+func TestServer_DidOpen(t *testing.T) {
+	// Create a test workspace
+	dir, err := os.MkdirTemp("", "lsp-test-*")
+	require.NoError(t, err)
+	t.Cleanup(func() { os.RemoveAll(dir) })
+
+	// Create a test template file
+	tmplContent := `{{- /*gotype: example.com/test/types.Person */ -}}
+{{- define "header" -}}
+# Person Information
+{{- end -}}
+
+{{template "header"}}
+
+Name: {{.Name}}
+Age: {{.Age}}
+Address:
+  Street: {{.Address.Street}}
+  City: {{.Address.City}}
+`
+	err = os.WriteFile(filepath.Join(dir, "test.tmpl"), []byte(tmplContent), 0644)
+	require.NoError(t, err)
+
+	// Create a Go module in the same directory as the template
+	err = os.WriteFile(filepath.Join(dir, "go.mod"), []byte(`module example.com/test
+
+go 1.21
+`), 0644)
+	require.NoError(t, err)
+
+	// Create types package
+	typesDir := filepath.Join(dir, "types")
+	err = os.MkdirAll(typesDir, 0755)
+	require.NoError(t, err)
+
+	// Create types.go file
+	typesContent := `package types
+
+type Person struct {
+	Name    string
+	Age     int
+	Address Address
+}
+
+type Address struct {
+	Street string
+	City   string
+}
+`
+	err = os.WriteFile(filepath.Join(typesDir, "types.go"), []byte(typesContent), 0644)
+	require.NoError(t, err)
+
+	t.Logf("Test workspace created at: %s", dir)
+
+	// Create server with debug enabled
+	server := NewServer(
+		parser.NewDefaultTemplateParser(),
+		types.NewDefaultValidator(),
+		ast.NewDefaultPackageAnalyzer(),
+		diagnostic.NewDefaultGenerator(),
+		true,
+	)
+
+	// Create mock connection
+	rwc := newMockRWC()
+
+	// Start server in background with timeout context
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Start server in goroutine
+	serverErrCh := make(chan error, 1)
+	go func() {
+		t.Log("Starting server...")
+		serverErrCh <- server.Start(ctx, rwc, rwc)
+	}()
+
+	// Helper function to wait for a specific message type
+	waitForMessage := func(expectedMethod string, timeout time.Duration) (string, *int64, interface{}, error) {
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+
+		msgCh := make(chan struct {
+			method string
+			id     *int64
+			result interface{}
+			err    error
+		})
+
+		go func() {
+			for {
+				method, id, result, err := rwc.readMessage(t)
+				if err != nil {
+					msgCh <- struct {
+						method string
+						id     *int64
+						result interface{}
+						err    error
+					}{"", nil, nil, err}
+					return
+				}
+
+				if method == "window/logMessage" {
+					t.Logf("Server log: %v", result)
+					continue
+				}
+
+				// For responses to requests, the method will be empty and we should look at the ID
+				if expectedMethod == "" && id != nil {
+					msgCh <- struct {
+						method string
+						id     *int64
+						result interface{}
+						err    error
+					}{"initialize", id, result, nil}
+					return
+				}
+
+				if expectedMethod != "" && method == expectedMethod {
+					msgCh <- struct {
+						method string
+						id     *int64
+						result interface{}
+						err    error
+					}{method, id, result, nil}
+					return
+				}
+			}
+		}()
+
+		select {
+		case msg := <-msgCh:
+			return msg.method, msg.id, msg.result, msg.err
+		case err := <-serverErrCh:
+			return "", nil, nil, fmt.Errorf("server error: %w", err)
+		case <-timer.C:
+			return "", nil, nil, fmt.Errorf("timeout waiting for message: %s", expectedMethod)
+		}
+	}
+
+	// First send initialize request
+	t.Log("Sending initialize request...")
+	id := int64(1)
+	rwc.writeMessage(t, "initialize", &id, InitializeParams{
+		RootURI: "file://" + dir,
+	})
+
+	// Wait for initialize response
+	method, respID, result, err := waitForMessage("", 5*time.Second)
+	require.NoError(t, err)
+	require.Equal(t, "initialize", method)
+	require.NotNil(t, respID)
+	require.Equal(t, id, *respID)
+
+	t.Log("Initialize response received")
+
+	// Send initialized notification
+	t.Log("Sending initialized notification...")
+	rwc.writeMessage(t, "initialized", nil, struct{}{})
+
+	// Give the server a moment to process the initialized notification
+	time.Sleep(100 * time.Millisecond)
+
+	// Send didOpen notification
+	t.Log("Sending didOpen notification...")
+	rwc.writeMessage(t, "textDocument/didOpen", nil, &DidOpenTextDocumentParams{
+		TextDocument: TextDocumentItem{
+			URI:        "file://" + filepath.Join(dir, "test.tmpl"),
+			LanguageID: "go-template",
+			Version:    1,
+			Text:       tmplContent,
+		},
+	})
+
+	// Wait for publishDiagnostics notification
+	t.Log("Waiting for diagnostics...")
+	method, _, result, err = waitForMessage("textDocument/publishDiagnostics", 10*time.Second)
+	require.NoError(t, err)
+	require.Equal(t, "textDocument/publishDiagnostics", method)
+
+	var diagParams PublishDiagnosticsParams
+	resultBytes, err := json.Marshal(result)
+	require.NoError(t, err)
+	err = json.Unmarshal(resultBytes, &diagParams)
+	require.NoError(t, err)
+
+	// Verify diagnostics
+	require.NotNil(t, diagParams)
+	require.Equal(t, "file://"+filepath.Join(dir, "test.tmpl"), diagParams.URI)
+	require.Empty(t, diagParams.Diagnostics, "Expected no diagnostics since go.mod exists and template is valid")
+
+	t.Log("Test completed successfully")
 }

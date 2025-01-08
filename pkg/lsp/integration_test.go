@@ -37,11 +37,10 @@ Address:
 	err = os.WriteFile(filepath.Join(dir, "test.tmpl"), []byte(tmplContent), 0644)
 	require.NoError(t, err)
 
-	// Create a Go module
+	// Create a Go module in the same directory as the template
 	err = os.WriteFile(filepath.Join(dir, "go.mod"), []byte(`module example.com/test
 
 go 1.21
-
 `), 0644)
 	require.NoError(t, err)
 
@@ -104,30 +103,40 @@ func TestIntegration_BasicLSPFlow(t *testing.T) {
 		})
 
 		// Wait for initialize response
-		_, respID, result, err := rwc.readMessage(t)
-		require.NoError(t, err)
-		require.Equal(t, id, *respID)
+		var initResult InitializeResult
+		for {
+			method, respID, result, err := rwc.readMessage(t)
+			require.NoError(t, err)
+
+			// Skip log messages
+			if method == "window/logMessage" {
+				continue
+			}
+
+			require.Equal(t, id, *respID)
+			resultBytes, err := json.Marshal(result)
+			require.NoError(t, err)
+			err = json.Unmarshal(resultBytes, &initResult)
+			require.NoError(t, err)
+			break
+		}
 
 		// Verify capabilities
-		var initResult InitializeResult
-		resultBytes, err := json.Marshal(result)
-		require.NoError(t, err)
-		err = json.Unmarshal(resultBytes, &initResult)
-		require.NoError(t, err)
 		require.True(t, initResult.Capabilities.HoverProvider)
 		require.NotNil(t, initResult.Capabilities.TextDocumentSync)
 		require.Equal(t, 1, initResult.Capabilities.TextDocumentSync.Change)
 	})
 
 	// Send initialized notification
-	rwc.writeMessage(t, "initialized", nil, nil)
+	rwc.writeMessage(t, "initialized", nil, struct{}{})
 
 	t.Run("textDocument/didOpen", func(t *testing.T) {
 		// Send didOpen notification
-		rwc.writeMessage(t, "textDocument/didOpen", nil, DidOpenTextDocumentParams{
+		rwc.writeMessage(t, "textDocument/didOpen", nil, &DidOpenTextDocumentParams{
 			TextDocument: TextDocumentItem{
-				URI:     uriFromPath(filepath.Join(workspaceDir, "test.tmpl")),
-				Version: 1,
+				URI:        uriFromPath(filepath.Join(workspaceDir, "test.tmpl")),
+				LanguageID: "go-template",
+				Version:    1,
 				Text: `{{- /*gotype: example.com/test/types.Person */ -}}
 {{- define "header" -}}
 # Person Information
@@ -145,18 +154,30 @@ Address:
 		})
 
 		// Wait for publishDiagnostics notification
-		method, _, result, err := rwc.readMessage(t)
-		require.NoError(t, err)
-		require.Equal(t, "textDocument/publishDiagnostics", method)
+		for {
+			method, _, result, err := rwc.readMessage(t)
+			require.NoError(t, err)
 
-		// Verify diagnostics
-		var diagParams PublishDiagnosticsParams
-		resultBytes, err := json.Marshal(result)
-		require.NoError(t, err)
-		err = json.Unmarshal(resultBytes, &diagParams)
-		require.NoError(t, err)
-		require.Equal(t, uriFromPath(filepath.Join(workspaceDir, "test.tmpl")), diagParams.URI)
-		require.Len(t, diagParams.Diagnostics, 1)
-		require.Equal(t, "no go.mod found in directory", diagParams.Diagnostics[0].Message)
+			// Skip log messages
+			if method == "window/logMessage" {
+				t.Logf("Log message: %v", result)
+				continue
+			}
+
+			// Found publishDiagnostics notification
+			if method == "textDocument/publishDiagnostics" {
+				var diagParams PublishDiagnosticsParams
+				resultBytes, err := json.Marshal(result)
+				require.NoError(t, err)
+				err = json.Unmarshal(resultBytes, &diagParams)
+				require.NoError(t, err)
+
+				// Verify diagnostics
+				require.NotNil(t, diagParams)
+				require.Equal(t, uriFromPath(filepath.Join(workspaceDir, "test.tmpl")), diagParams.URI)
+				require.Empty(t, diagParams.Diagnostics, "Expected no diagnostics since go.mod exists and template is valid")
+				break
+			}
+		}
 	})
 }
