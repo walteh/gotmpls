@@ -136,7 +136,20 @@ func TestDefaultValidator_ValidateField(t *testing.T) {
 }
 
 func TestDefaultValidator_ValidateMethod(t *testing.T) {
-	validator := &DefaultValidator{}
+	validator := &DefaultValidator{
+		RootMethods: map[string]*MethodInfo{
+			"eq": {
+				Name: "eq",
+				Parameters: []types.Type{
+					types.Typ[types.String],
+					types.Typ[types.String],
+				},
+				Results: []types.Type{
+					types.Typ[types.Bool],
+				},
+			},
+		},
+	}
 	// registry := mockTypeRegistry(t)
 	// typeInfo, err := validator.ValidateType(context.Background(), "github.com/example/types.Person", registry)
 	// require.NoError(t, err)
@@ -148,7 +161,7 @@ func TestDefaultValidator_ValidateMethod(t *testing.T) {
 	}{
 		{
 			name:       "valid method",
-			methodName: "GetName",
+			methodName: "eq",
 			wantErr:    false,
 		},
 		{

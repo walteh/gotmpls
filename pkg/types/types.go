@@ -261,6 +261,67 @@ func (v *DefaultValidator) ValidateField(ctx context.Context, typeInfo *TypeInfo
 	parts := strings.Split(fieldPath, ".")
 	currentType := typeInfo
 
+	// Check if we're in a range context
+	if len(parts) > 0 {
+		if field, ok := currentType.Fields[parts[0]]; ok {
+			// If it's a range variable, we need to get the element type of the slice/array
+			if sliceType, ok := field.Type.(*types.Slice); ok {
+				// Create a new type info for the element type
+				elemType := sliceType.Elem()
+				if named, ok := elemType.(*types.Named); ok {
+					if structType, ok := named.Underlying().(*types.Struct); ok {
+						currentType = &TypeInfo{
+							Name:   named.Obj().Name(),
+							Fields: make(map[string]*FieldInfo),
+						}
+						// Add fields from the struct
+						for i := 0; i < structType.NumFields(); i++ {
+							f := structType.Field(i)
+							currentType.Fields[f.Name()] = &FieldInfo{
+								Name: f.Name(),
+								Type: f.Type(),
+							}
+						}
+
+						// Add methods from the named type
+						for i := 0; i < named.NumMethods(); i++ {
+							method := named.Method(i)
+							sig := method.Type().(*types.Signature)
+
+							methodInfo := &MethodInfo{
+								Name:       method.Name(),
+								Parameters: make([]types.Type, sig.Params().Len()),
+								Results:    make([]types.Type, sig.Results().Len()),
+							}
+
+							for j := 0; j < sig.Params().Len(); j++ {
+								methodInfo.Parameters[j] = sig.Params().At(j).Type()
+							}
+
+							for j := 0; j < sig.Results().Len(); j++ {
+								methodInfo.Results[j] = sig.Results().At(j).Type()
+							}
+
+							currentType.Fields[method.Name()] = &FieldInfo{
+								Name:       method.Name(),
+								Type:       method.Type(),
+								MethodInfo: methodInfo,
+							}
+						}
+
+						// If we're accessing a field directly on the range variable, return it
+						if len(parts) == 1 {
+							if field, ok := currentType.Fields[parts[0]]; ok {
+								return field, nil
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Handle the field path normally
 	for i, part := range parts {
 		field, ok := currentType.Fields[part]
 		if !ok {
@@ -289,7 +350,6 @@ func (v *DefaultValidator) ValidateField(ctx context.Context, typeInfo *TypeInfo
 		nextType := &TypeInfo{
 			Name:   part,
 			Fields: make(map[string]*FieldInfo),
-			// Methods: make(map[string]*MethodInfo),
 		}
 
 		// Add fields from the struct

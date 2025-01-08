@@ -63,6 +63,7 @@ go 1.21
 type Person struct {
 	Name string
 	Age  int
+	Role string
 }
 
 func (p *Person) GetName() string {

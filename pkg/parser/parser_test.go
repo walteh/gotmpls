@@ -31,6 +31,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 					Column:  9,
 					EndLine: 3,
 					EndCol:  13,
+					Scope:   "main",
 				}
 				ageVar := parser.VariableLocation{
 					Name:    "Age",
@@ -38,6 +39,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 					Column:  28,
 					EndLine: 3,
 					EndCol:  31,
+					Scope:   "main",
 				}
 				return &parser.TemplateInfo{
 					Filename: "test.tmpl",
@@ -46,6 +48,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 							TypePath: "github.com/example/types.Config",
 							Line:     1,
 							Column:   12,
+							Scope:    "",
 						},
 					},
 					Variables: []parser.VariableLocation{
@@ -70,6 +73,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 					Column:  21,
 					EndLine: 3,
 					EndCol:  25,
+					Scope:   "main",
 				}
 				printfFunc := parser.VariableLocation{
 					Name:    "printf",
@@ -77,6 +81,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 					Column:  3,
 					EndLine: 3,
 					EndCol:  9,
+					Scope:   "main",
 					MethodArguments: []types.Type{
 						types.Typ[types.String],
 						&variable,
@@ -89,6 +94,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 							TypePath: "github.com/example/types.Config",
 							Line:     1,
 							Column:   12,
+							Scope:    "",
 						},
 					},
 					Variables: []parser.VariableLocation{
@@ -102,6 +108,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 							Column:  28,
 							EndLine: 3,
 							EndCol:  33,
+							Scope:   "main",
 							MethodArguments: []types.Type{
 								&printfFunc,
 							},
@@ -131,6 +138,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 					Column:  21,
 					EndLine: 1,
 					EndCol:  27,
+					Scope:   "",
 				}
 				printfFunc := parser.VariableLocation{
 					Name:    "printf",
@@ -138,6 +146,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 					Column:  9,
 					EndLine: 1,
 					EndCol:  15,
+					Scope:   "",
 					MethodArguments: []types.Type{
 						types.Typ[types.String],
 						&variable,
@@ -156,6 +165,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 							Column:  30,
 							EndLine: 1,
 							EndCol:  35,
+							Scope:   "",
 							MethodArguments: []types.Type{
 								&printfFunc,
 							},
@@ -269,27 +279,32 @@ Job: {{.GetJob | upper}}
 	// Check type hint
 	require.Equal(t, 1, len(info.TypeHints))
 	require.Equal(t, "github.com/walteh/go-tmpl-types-vscode/examples/types.Person", info.TypeHints[0].TypePath)
+	require.Equal(t, "", info.TypeHints[0].Scope) // Root scope
 
 	// Check variables - should include all parts of nested fields
-	expectedVars := []string{
-		"Names",
-		"Age",
-		"Address.Street", // From .Address.Street
-		"Address.City",   // From .Address.City
-		"HasJob",
-		"GetJob",
+	expectedVars := map[string]string{
+		"Names":          "",
+		"Age":            "",
+		"Address.Street": "",
+		"Address.City":   "",
+		"HasJob":         "",
+		"GetJob":         "",
 	}
-	foundVars := make([]string, len(info.Variables))
-	for i, v := range info.Variables {
-		foundVars[i] = v.Name
+
+	foundVars := make(map[string]string)
+	for _, v := range info.Variables {
+		foundVars[v.Name] = v.Scope
+		require.Equal(t, expectedVars[v.Name], v.Scope, "Variable %s has unexpected scope", v.Name)
 	}
-	require.ElementsMatch(t, expectedVars, foundVars)
+	require.Equal(t, len(expectedVars), len(foundVars), "Number of variables does not match")
 
 	// Check functions
 	require.Equal(t, 1, len(info.Functions))
 	require.Equal(t, "upper", info.Functions[0].Name)
+	require.Equal(t, "", info.Functions[0].Scope) // Root scope
 	require.Equal(t, 1, len(info.Functions[0].MethodArguments))
 	varArg, ok := info.Functions[0].MethodArguments[0].(*parser.VariableLocation)
 	require.True(t, ok)
 	require.Equal(t, "GetJob", varArg.Name)
+	require.Equal(t, "", varArg.Scope) // Root scope
 }

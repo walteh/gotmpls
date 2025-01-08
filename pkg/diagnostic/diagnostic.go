@@ -94,6 +94,140 @@ func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateIn
 
 	// Validate variables
 	for _, variable := range info.Variables {
+		// If we're in a range context, we need to validate against the element type
+		// if variable.RangeContext {
+		// 	// Get the slice field first
+		// 	parts := strings.Split(variable.Name, ".")
+		// 	if len(parts) > 1 {
+		// 		// For nested fields in a range context, we need to get the slice type first
+		// 		sliceField, err := typeValidator.ValidateField(ctx, typeInfo, parts[0])
+		// 		if err != nil {
+		// 			diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
+		// 				Message:  fmt.Sprintf("Invalid field access: %v", err),
+		// 				Line:     variable.Line,
+		// 				Column:   variable.Column,
+		// 				EndLine:  variable.EndLine,
+		// 				EndCol:   variable.EndCol,
+		// 				Severity: Error,
+		// 			})
+		// 			continue
+		// 		}
+
+		// 		// Get the element type of the slice
+		// 		sliceType, ok := sliceField.Type.(*types.Slice)
+		// 		if !ok {
+		// 			diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
+		// 				Message:  fmt.Sprintf("Invalid range: %s is not a slice", parts[0]),
+		// 				Line:     variable.Line,
+		// 				Column:   variable.Column,
+		// 				EndLine:  variable.EndLine,
+		// 				EndCol:   variable.EndCol,
+		// 				Severity: Error,
+		// 			})
+		// 			continue
+		// 		}
+
+		// 		// Create a new type info for the element type
+		// 		elemType := sliceType.Elem()
+		// 		if named, ok := elemType.(*types.Named); ok {
+		// 			if structType, ok := named.Underlying().(*types.Struct); ok {
+		// 				// Create a new type info for the element type
+		// 				elemTypeInfo := &pkg_types.TypeInfo{
+		// 					Name:   named.Obj().Name(),
+		// 					Fields: make(map[string]*pkg_types.FieldInfo),
+		// 				}
+
+		// 				// Add fields from the struct type
+		// 				for i := 0; i < structType.NumFields(); i++ {
+		// 					field := structType.Field(i)
+		// 					elemTypeInfo.Fields[field.Name()] = &pkg_types.FieldInfo{
+		// 						Name: field.Name(),
+		// 						Type: field.Type(),
+		// 					}
+		// 				}
+
+		// 				// Add methods from the named type
+		// 				for i := 0; i < named.NumMethods(); i++ {
+		// 					method := named.Method(i)
+		// 					sig := method.Type().(*types.Signature)
+		// 					methodInfo := &pkg_types.MethodInfo{
+		// 						Name:       method.Name(),
+		// 						Parameters: make([]types.Type, sig.Params().Len()),
+		// 						Results:    make([]types.Type, sig.Results().Len()),
+		// 					}
+
+		// 					for j := 0; j < sig.Params().Len(); j++ {
+		// 						methodInfo.Parameters[j] = sig.Params().At(j).Type()
+		// 					}
+
+		// 					for j := 0; j < sig.Results().Len(); j++ {
+		// 						methodInfo.Results[j] = sig.Results().At(j).Type()
+		// 					}
+
+		// 					elemTypeInfo.Fields[method.Name()] = &pkg_types.FieldInfo{
+		// 						Name:       method.Name(),
+		// 						Type:       method.Type(),
+		// 						MethodInfo: methodInfo,
+		// 					}
+		// 				}
+
+		// 				// Validate the field against the element type
+		// 				field, err := typeValidator.ValidateField(ctx, elemTypeInfo, parts[1])
+		// 				if err != nil {
+		// 					diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
+		// 						Message:  fmt.Sprintf("Invalid field access: %v", err),
+		// 						Line:     variable.Line,
+		// 						Column:   variable.Column,
+		// 						EndLine:  variable.EndLine,
+		// 						EndCol:   variable.EndCol,
+		// 						Severity: Error,
+		// 					})
+		// 					continue
+		// 				}
+
+		// 				// Add type information as hover info
+		// 				diagnostics.Hints = append(diagnostics.Hints, Diagnostic{
+		// 					Message:  fmt.Sprintf("Type: %v", field.Type),
+		// 					Line:     variable.Line,
+		// 					Column:   variable.Column,
+		// 					EndLine:  variable.EndLine,
+		// 					EndCol:   variable.EndCol,
+		// 					Severity: Hint,
+		// 				})
+		// 				fieldMap[variable.Name] = *field
+		// 			}
+		// 		}
+		// 	} else {
+		// 		// If we're in a range context but don't have a dot notation,
+		// 		// we're accessing the range variable directly
+		// 		// Get the slice field first
+		// 		sliceField, err := typeValidator.ValidateField(ctx, typeInfo, variable.Name)
+		// 		if err != nil {
+		// 			diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
+		// 				Message:  fmt.Sprintf("Invalid field access: %v", err),
+		// 				Line:     variable.Line,
+		// 				Column:   variable.Column,
+		// 				EndLine:  variable.EndLine,
+		// 				EndCol:   variable.EndCol,
+		// 				Severity: Error,
+		// 			})
+		// 			continue
+		// 		}
+
+		// 		// Add type information as hover info
+		// 		diagnostics.Hints = append(diagnostics.Hints, Diagnostic{
+		// 			Message:  fmt.Sprintf("Type: %v", sliceField.Type),
+		// 			Line:     variable.Line,
+		// 			Column:   variable.Column,
+		// 			EndLine:  variable.EndLine,
+		// 			EndCol:   variable.EndCol,
+		// 			Severity: Hint,
+		// 		})
+		// 		fieldMap[variable.Name] = *sliceField
+		// 	}
+		// 	continue
+		// }
+
 		field, err := typeValidator.ValidateField(ctx, typeInfo, variable.Name)
 		if err != nil {
 			diagnostics.Errors = append(diagnostics.Errors, Diagnostic{
@@ -151,7 +285,7 @@ func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateIn
 					// If the variable location has method arguments, it's a function call
 					if len(varLoc.MethodArguments) > 0 {
 						// Check if this is a valid method
-						argMethod, err := typeValidator.ValidateMethod(ctx, varLoc.Name)
+						method, err := typeValidator.ValidateMethod(ctx, varLoc.Name)
 						if err != nil {
 							// Check if we already have this error
 							found := false
@@ -175,7 +309,7 @@ func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateIn
 						}
 
 						// Add return type information as hover info
-						if len(argMethod.Results) > 0 {
+						if len(method.Results) > 0 {
 							found := false
 							for _, hint := range diagnostics.Hints {
 								if hint.Line == varLoc.Line && hint.Column == varLoc.Column {
@@ -185,7 +319,7 @@ func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateIn
 							}
 							if !found {
 								diagnostics.Hints = append(diagnostics.Hints, Diagnostic{
-									Message:  fmt.Sprintf("Returns: %v", argMethod.Results[0]),
+									Message:  fmt.Sprintf("Returns: %v", method.Results[0]),
 									Line:     varLoc.Line,
 									Column:   varLoc.Column,
 									EndLine:  varLoc.EndLine,
@@ -246,7 +380,7 @@ func (g *DefaultGenerator) Generate(ctx context.Context, info *parser.TemplateIn
 		if method.Results != nil && len(method.Results) > 0 {
 			found := false
 			for _, hint := range diagnostics.Hints {
-				if hint.Line == function.Line && hint.Column == function.Column && hint.Message == fmt.Sprintf("Returns: %v", method.Results[0]) {
+				if hint.Line == function.Line && hint.Column == function.Column {
 					found = true
 					break
 				}

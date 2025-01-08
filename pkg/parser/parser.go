@@ -72,20 +72,37 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 		Filename:  filename,
 		Variables: make([]VariableLocation, 0),
 		Functions: make([]VariableLocation, 0),
+		TypeHints: make([]TypeHint, 0),
 	}
 
-	// Extract type hints if present
-	matches := typeHintRegex.FindSubmatch(content)
-	if len(matches) >= 2 {
-		typePath := strings.TrimSpace(string(matches[1]))
-		line, col := 1, 12 // Type hint is always on the first line, column is fixed at 12 (after "/*gotype: ")
-		info.TypeHints = []TypeHint{
-			{
-				TypePath: typePath,
-				Line:     line,
-				Column:   col,
-			},
+	// Helper function to extract type hints from a template text
+	extractTypeHints := func(text string, scope string) []TypeHint {
+		var hints []TypeHint
+		matches := typeHintRegex.FindAllStringSubmatchIndex(text, -1)
+		for _, match := range matches {
+			if len(match) >= 4 {
+				typePath := strings.TrimSpace(text[match[2]:match[3]])
+				line, col := GetLineAndColumn(text, parse.Pos(match[0]))
+				// Find the actual position of "gotype:" in the match
+				gotypeLoc := strings.Index(text[match[0]:match[1]], "gotype:")
+				if gotypeLoc >= 0 {
+					col += gotypeLoc + len("gotype:") + 1 // +1 for the space after "gotype:"
+				}
+				hints = append(hints, TypeHint{
+					TypePath: typePath,
+					Line:     line,
+					Column:   col,
+					Scope:    scope,
+				})
+			}
 		}
+		return hints
+	}
+
+	// Extract type hints from the entire template content first
+	hints := extractTypeHints(contentStr, "")
+	if len(hints) > 0 {
+		info.TypeHints = hints
 	}
 
 	// Create a template with all necessary functions to avoid parsing errors
@@ -103,7 +120,7 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 	seenVars := make(map[string]*VariableLocation)
 
 	// Helper function to create a variable location
-	createVarLocation := func(field *parse.FieldNode) *VariableLocation {
+	createVarLocation := func(field *parse.FieldNode, scope string) *VariableLocation {
 		line, col := GetLineAndColumn(contentStr, field.Position())
 		endLine, endCol := GetLineAndColumn(contentStr, field.Position()+parse.Pos(len(field.String())-1))
 		fullName := ""
@@ -122,15 +139,16 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 			Column:  col,
 			EndLine: endLine,
 			EndCol:  endCol,
+			Scope:   scope,
 		}
 		seenVars[fullName] = item
 		info.Variables = append(info.Variables, *item)
 		return item
 	}
 
-	// Walk the AST and collect variables and functions
-	var walk func(node parse.Node) error
-	walk = func(node parse.Node) error {
+	// Walk the AST and collect variables, functions, and type hints
+	var walk func(node parse.Node, scope string) error
+	walk = func(node parse.Node, scope string) error {
 		if node == nil {
 			return nil
 		}
@@ -141,11 +159,11 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 				// Only handle variables that are direct references (not part of a pipe operation)
 				if len(n.Pipe.Cmds) == 1 && len(n.Pipe.Cmds[0].Args) == 1 {
 					if field, ok := n.Pipe.Cmds[0].Args[0].(*parse.FieldNode); ok {
-						createVarLocation(field)
+						createVarLocation(field, scope)
 					}
 				}
 			}
-			if err := walk(n.Pipe); err != nil {
+			if err := walk(n.Pipe, scope); err != nil {
 				return err
 			}
 		case *parse.IfNode:
@@ -154,32 +172,56 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 				for _, cmd := range n.Pipe.Cmds {
 					for _, arg := range cmd.Args {
 						if field, ok := arg.(*parse.FieldNode); ok {
-							createVarLocation(field)
+							createVarLocation(field, scope)
 						}
 					}
 				}
 			}
-			if err := walk(n.Pipe); err != nil {
+			if err := walk(n.Pipe, scope); err != nil {
 				return err
 			}
 			// Handle the body of the if statement
-			if err := walk(n.List); err != nil {
+			if err := walk(n.List, scope); err != nil {
 				return err
 			}
 			// Handle the else clause if it exists
 			if n.ElseList != nil {
-				if err := walk(n.ElseList); err != nil {
+				if err := walk(n.ElseList, scope); err != nil {
 					return err
 				}
 			}
 		case *parse.ListNode:
 			if n != nil {
 				for _, node := range n.Nodes {
-					if err := walk(node); err != nil {
+					if err := walk(node, scope); err != nil {
 						return err
 					}
 				}
 			}
+		// case *parse.WithNode:
+		// 	// Extract type hints from the with block
+		// 	if n.List != nil && n.List.Nodes != nil && len(n.List.Nodes) > 0 {
+		// 		firstNode := n.List.Nodes[0]
+		// 		if text, ok := firstNode.(*parse.TextNode); ok {
+		// 			hints := extractTypeHints(string(text.Text), scope+":with")
+		// 			info.TypeHints = append(info.TypeHints, hints...)
+		// 		}
+		// 	}
+		// 	if err := walk(n.List, scope+":with"); err != nil {
+		// 		return err
+		// 	}
+		// case *parse.RangeNode:
+		// 	// Extract type hints from the range block
+		// 	if n.List != nil && n.List.Nodes != nil && len(n.List.Nodes) > 0 {
+		// 		firstNode := n.List.Nodes[0]
+		// 		if text, ok := firstNode.(*parse.TextNode); ok {
+		// 			hints := extractTypeHints(string(text.Text), scope+":range")
+		// 			info.TypeHints = append(info.TypeHints, hints...)
+		// 		}
+		// 	}
+		// 	if err := walk(n.List, scope+":range"); err != nil {
+		// 		return err
+		// 	}
 		case *parse.PipeNode:
 			if n != nil {
 				var lastResult types.Type
@@ -199,7 +241,7 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 							}
 							switch v := arg.(type) {
 							case *parse.FieldNode:
-								item := createVarLocation(v)
+								item := createVarLocation(v, scope)
 								args = append(args, item)
 								lastResult = item
 							case *parse.StringNode:
@@ -221,12 +263,13 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 								EndLine:         endLine,
 								EndCol:          endCol,
 								MethodArguments: args,
+								Scope:           scope,
 							}
 							info.Functions = append(info.Functions, item)
 							lastResult = &item
 						} else if field, ok := cmd.Args[0].(*parse.FieldNode); ok {
 							// Handle field nodes that are part of a pipe operation
-							item := createVarLocation(field)
+							item := createVarLocation(field, scope)
 							lastResult = item
 						}
 					}
@@ -239,7 +282,7 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 	// Walk through all templates in the common.tmpl map
 	for _, t := range parsedTmpl.Templates() {
 		if t.Tree != nil {
-			if err := walk(t.Tree.Root); err != nil {
+			if err := walk(t.Tree.Root, ""); err != nil {
 				return nil, errors.Errorf("failed to walk template %s: %w", t.Name(), err)
 			}
 		}
@@ -274,6 +317,7 @@ type VariableLocation struct {
 	// Pipe               bool
 	// MethodArgumentsRef *VariableLocation // take the result of this named type as the argument
 	MethodArguments []types.Type
+	Scope           string // The scope of the variable (e.g., template name or block ID)
 }
 
 // String implements types.Type.
@@ -307,4 +351,5 @@ type TypeHint struct {
 	TypePath string // e.g. "github.com/walteh/minute-api/proto/cmd/protoc-gen-cdk/generator.BuilderConfig"
 	Line     int
 	Column   int
+	Scope    string // The scope of the type hint (e.g., template name or block ID)
 }
