@@ -72,7 +72,7 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 		Filename:  filename,
 		Variables: make([]VariableLocation, 0),
 		Functions: make([]VariableLocation, 0),
-		TypeHints: make([]TypeHint, 0),
+		TypeHints: nil,
 	}
 
 	// Helper function to extract type hints from a template text
@@ -83,11 +83,8 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 			if len(match) >= 4 {
 				typePath := strings.TrimSpace(text[match[2]:match[3]])
 				line, col := GetLineAndColumn(text, parse.Pos(match[0]))
-				// Find the actual position of "gotype:" in the match
-				gotypeLoc := strings.Index(text[match[0]:match[1]], "gotype:")
-				if gotypeLoc >= 0 {
-					col += gotypeLoc + len("gotype:") + 1 // +1 for the space after "gotype:"
-				}
+				// The type path starts after "{{- /*gotype: " (3 + 1 + 8 = 12 characters)
+				col = 12
 				hints = append(hints, TypeHint{
 					TypePath: typePath,
 					Line:     line,
@@ -198,30 +195,6 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 					}
 				}
 			}
-		// case *parse.WithNode:
-		// 	// Extract type hints from the with block
-		// 	if n.List != nil && n.List.Nodes != nil && len(n.List.Nodes) > 0 {
-		// 		firstNode := n.List.Nodes[0]
-		// 		if text, ok := firstNode.(*parse.TextNode); ok {
-		// 			hints := extractTypeHints(string(text.Text), scope+":with")
-		// 			info.TypeHints = append(info.TypeHints, hints...)
-		// 		}
-		// 	}
-		// 	if err := walk(n.List, scope+":with"); err != nil {
-		// 		return err
-		// 	}
-		// case *parse.RangeNode:
-		// 	// Extract type hints from the range block
-		// 	if n.List != nil && n.List.Nodes != nil && len(n.List.Nodes) > 0 {
-		// 		firstNode := n.List.Nodes[0]
-		// 		if text, ok := firstNode.(*parse.TextNode); ok {
-		// 			hints := extractTypeHints(string(text.Text), scope+":range")
-		// 			info.TypeHints = append(info.TypeHints, hints...)
-		// 		}
-		// 	}
-		// 	if err := walk(n.List, scope+":range"); err != nil {
-		// 		return err
-		// 	}
 		case *parse.PipeNode:
 			if n != nil {
 				var lastResult types.Type
@@ -275,6 +248,11 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 					}
 				}
 			}
+		case *parse.TemplateNode:
+			// Handle template nodes (e.g., {{template "header"}})
+			if err := walk(n.Pipe, scope); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -282,7 +260,12 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 	// Walk through all templates in the common.tmpl map
 	for _, t := range parsedTmpl.Templates() {
 		if t.Tree != nil {
-			if err := walk(t.Tree.Root, ""); err != nil {
+			// Only use template name as scope for defined templates
+			currentScope := ""
+			if t.Name() != "" && t.Name() != t.ParseName {
+				currentScope = t.Name()
+			}
+			if err := walk(t.Tree.Root, currentScope); err != nil {
 				return nil, errors.Errorf("failed to walk template %s: %w", t.Name(), err)
 			}
 		}
