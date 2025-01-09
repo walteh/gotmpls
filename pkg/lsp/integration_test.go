@@ -1,7 +1,6 @@
 package lsp
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -77,11 +76,10 @@ func TestIntegration_BasicLSPFlow(t *testing.T) {
 	// Create a test workspace
 	workspaceDir := setupTestWorkspace(t)
 
+	ctx := context.Background()
+
 	// Create a mock read-write connection
-	rwc := &mockRWC{
-		readBuf:  bytes.NewBuffer(nil),
-		writeBuf: bytes.NewBuffer(nil),
-	}
+	rwc, ctx := newMockRWC(t)
 
 	// Create a server with real components
 	server := NewServer(
@@ -93,19 +91,19 @@ func TestIntegration_BasicLSPFlow(t *testing.T) {
 	)
 
 	// Start the server in a goroutine
-	go server.Start(context.Background(), rwc, rwc)
+	go server.Start(ctx, rwc, rwc)
 
 	t.Run("initialize", func(t *testing.T) {
 		// Send initialize request
 		id := int64(1)
-		rwc.writeMessage(t, "initialize", &id, InitializeParams{
+		rwc.writeMessage(ctx, t, "initialize", &id, InitializeParams{
 			RootURI: uriFromPath(workspaceDir),
 		})
 
 		// Wait for initialize response
 		var initResult InitializeResult
 		for {
-			method, respID, result, err := rwc.readMessage(t)
+			method, respID, result, err := rwc.readMessage(ctx)
 			require.NoError(t, err)
 
 			// Skip log messages
@@ -128,11 +126,11 @@ func TestIntegration_BasicLSPFlow(t *testing.T) {
 	})
 
 	// Send initialized notification
-	rwc.writeMessage(t, "initialized", nil, struct{}{})
+	rwc.writeMessage(ctx, t, "initialized", nil, struct{}{})
 
 	t.Run("textDocument/didOpen", func(t *testing.T) {
 		// Send didOpen notification
-		rwc.writeMessage(t, "textDocument/didOpen", nil, &DidOpenTextDocumentParams{
+		rwc.writeMessage(ctx, t, "textDocument/didOpen", nil, &DidOpenTextDocumentParams{
 			TextDocument: TextDocumentItem{
 				URI:        uriFromPath(filepath.Join(workspaceDir, "test.tmpl")),
 				LanguageID: "go-template",
@@ -155,7 +153,7 @@ Address:
 
 		// Wait for publishDiagnostics notification
 		for {
-			method, _, result, err := rwc.readMessage(t)
+			method, _, result, err := rwc.readMessage(ctx)
 			require.NoError(t, err)
 
 			// Skip log messages

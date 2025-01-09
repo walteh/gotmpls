@@ -2,6 +2,8 @@ package lsp
 
 import (
 	"bufio"
+	"bytes"
+	"fmt"
 	"io"
 	"net/url"
 	"path/filepath"
@@ -17,6 +19,7 @@ type ReadWriteCloser struct {
 	writer *bufio.Writer
 	closer multiCloser
 	mu     sync.Mutex
+	buf    bytes.Buffer
 }
 
 type multiCloser struct {
@@ -53,14 +56,63 @@ func (rwc *ReadWriteCloser) Read(p []byte) (int, error) {
 func (rwc *ReadWriteCloser) Write(p []byte) (int, error) {
 	rwc.mu.Lock()
 	defer rwc.mu.Unlock()
-	n, err := rwc.writer.Write(p)
+
+	// Write to our temporary buffer first
+	n, err := rwc.buf.Write(p)
 	if err != nil {
 		return n, err
 	}
-	err = rwc.writer.Flush()
-	if err != nil {
-		return n, err
+
+	// Process all complete messages
+	for {
+		data := rwc.buf.Bytes()
+
+		// Look for Content-Length header
+		headerEnd := bytes.Index(data, []byte("\r\n\r\n"))
+		if headerEnd == -1 {
+			break // No complete header found
+		}
+
+		header := data[:headerEnd]
+		if !bytes.Contains(header, []byte("Content-Length: ")) {
+			break // Invalid header
+		}
+
+		contentLengthStr := bytes.TrimPrefix(bytes.TrimSpace(header), []byte("Content-Length: "))
+		contentLength := 0
+		_, err := fmt.Sscanf(string(contentLengthStr), "%d", &contentLength)
+		if err != nil {
+			break // Invalid Content-Length
+		}
+
+		// Check if we have the complete message
+		totalLength := headerEnd + 4 + contentLength // header + \r\n\r\n + content
+		if len(data) < totalLength {
+			break // Don't have complete message yet
+		}
+
+		// Write the complete message
+		message := data[:totalLength]
+		_, err = rwc.writer.Write(message)
+		if err != nil {
+			return n, err
+		}
+
+		// Flush after each complete message
+		err = rwc.writer.Flush()
+		if err != nil {
+			return n, err
+		}
+
+		// Remove the processed message from buffer
+		rwc.buf.Next(totalLength)
+
+		// If there's no more data, break
+		if rwc.buf.Len() == 0 {
+			break
+		}
 	}
+
 	return n, nil
 }
 
@@ -68,6 +120,20 @@ func (rwc *ReadWriteCloser) Write(p []byte) (int, error) {
 func (rwc *ReadWriteCloser) Close() error {
 	rwc.mu.Lock()
 	defer rwc.mu.Unlock()
+
+	// Write any remaining data
+	if rwc.buf.Len() > 0 {
+		_, err := rwc.writer.Write(rwc.buf.Bytes())
+		if err != nil {
+			return err
+		}
+	}
+
+	// Flush any remaining data
+	if err := rwc.writer.Flush(); err != nil {
+		return err
+	}
+
 	return rwc.closer.Close()
 }
 

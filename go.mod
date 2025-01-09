@@ -4,6 +4,7 @@ go 1.23.4
 
 require (
 	github.com/k0kubun/pp/v3 v3.4.1
+	github.com/rs/zerolog v1.33.0
 	github.com/sourcegraph/jsonrpc2 v0.2.0
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.10.0

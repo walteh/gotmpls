@@ -2,10 +2,11 @@ package ast
 
 import (
 	"context"
-	"fmt"
 	"go/types"
+	"path"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"gitlab.com/tozd/go/errors"
 )
 
@@ -159,29 +160,31 @@ type TypeRegistry struct {
 }
 
 func (r *TypeRegistry) GetPackage(ctx context.Context, packageName string) (*types.Package, error) {
-	fmt.Printf("looking for package: %s\n", packageName)
-	fmt.Printf("available packages: %v\n", r.Types)
+	zerolog.Ctx(ctx).Debug().Str("packageName", packageName).Interface("packages", r.Types).Msg("looking for package")
 
-	// First try exact match
+	// First, try to find an exact match
 	if pkg, ok := r.Types[packageName]; ok {
-		fmt.Printf("found exact match for package: %s\n", packageName)
+		zerolog.Ctx(ctx).Debug().Str("package", packageName).Msg("found exact match")
 		return pkg, nil
 	}
 
-	// Try to find a package that ends with the requested name
+	// Try to find by package name
 	for pkgPath, pkg := range r.Types {
-		if pkg.Name() == packageName {
-			fmt.Printf("found package by name: %s (path: %s)\n", packageName, pkgPath)
-			return pkg, nil
-		}
-		// Check if the package path ends with the requested name
-		if pkgPath == packageName || strings.HasSuffix(pkgPath, "/"+packageName) {
-			fmt.Printf("found package by path suffix: %s (path: %s)\n", packageName, pkgPath)
+		if path.Base(pkgPath) == packageName {
+			zerolog.Ctx(ctx).Debug().Str("packageName", packageName).Str("path", pkgPath).Msg("found by name")
 			return pkg, nil
 		}
 	}
 
-	fmt.Printf("package not found: %s\n", packageName)
+	// Try to find by path suffix
+	for pkgPath, pkg := range r.Types {
+		if strings.HasSuffix(pkgPath, "/"+packageName) {
+			zerolog.Ctx(ctx).Debug().Str("packageName", packageName).Str("path", pkgPath).Msg("found by suffix")
+			return pkg, nil
+		}
+	}
+
+	zerolog.Ctx(ctx).Debug().Str("packageName", packageName).Msg("not found")
 	return nil, errors.Errorf("package %s not found", packageName)
 }
 

@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
@@ -37,17 +38,27 @@ func (e *jsonrpcError) Error() string {
 
 // mockRWC implements a mock io.ReadWriteCloser for testing
 type mockRWC struct {
-	readBuf  *bytes.Buffer
-	writeBuf *bytes.Buffer
-	closed   bool
-	mu       sync.Mutex
+	readBuf         *bytes.Buffer
+	writeBuf        *bytes.Buffer
+	closed          bool
+	mu              sync.Mutex
+	creationContext context.Context
 }
 
-func newMockRWC() *mockRWC {
+func newMockRWC(t *testing.T) (*mockRWC, context.Context) {
+	logger := zerolog.New(zerolog.NewTestWriter(t)).
+		With().
+		Timestamp().
+		Str("test", t.Name()).
+		Logger()
+
+	ctx := logger.WithContext(context.Background())
+
 	return &mockRWC{
-		readBuf:  bytes.NewBuffer(nil),
-		writeBuf: bytes.NewBuffer(nil),
-	}
+		readBuf:         bytes.NewBuffer(nil),
+		writeBuf:        bytes.NewBuffer(nil),
+		creationContext: ctx,
+	}, ctx
 }
 
 func (m *mockRWC) Read(p []byte) (n int, err error) {
@@ -58,7 +69,6 @@ func (m *mockRWC) Read(p []byte) (n int, err error) {
 		return 0, io.EOF
 	}
 
-	// If there's no data to read, wait a bit and try again
 	for m.readBuf.Len() == 0 {
 		m.mu.Unlock()
 		time.Sleep(10 * time.Millisecond)
@@ -68,12 +78,20 @@ func (m *mockRWC) Read(p []byte) (n int, err error) {
 		}
 	}
 
-	// Read from the read buffer since this is what the server will read
 	n, err = m.readBuf.Read(p)
 	if err == io.EOF && n > 0 {
 		err = nil
 	}
-	fmt.Printf("mockRWC Read: %d bytes, err: %v, data: %s\n", n, err, string(p[:n]))
+
+	if m.creationContext == nil {
+		panic("what")
+	}
+	zerolog.Ctx(m.creationContext).
+		Debug().
+		Int("bytes", n).
+		Err(err).
+		Bytes("data", p[:n]).
+		Send()
 	return n, err
 }
 
@@ -85,9 +103,8 @@ func (m *mockRWC) Write(p []byte) (n int, err error) {
 		return 0, errors.Errorf("write on closed connection")
 	}
 
-	// Write to the write buffer since this is what the client will read
 	n, err = m.writeBuf.Write(p)
-	fmt.Printf("mockRWC Write: %d bytes, err: %v, data: %s\n", n, err, string(p))
+	zerolog.Ctx(m.creationContext).Debug().Int("bytes", n).Err(err).Bytes("data", p).Send()
 	return n, err
 }
 
@@ -103,7 +120,7 @@ func (m *mockRWC) Close() error {
 	return nil
 }
 
-func (m *mockRWC) writeMessage(t *testing.T, method string, id *int64, params interface{}) {
+func (m *mockRWC) writeMessage(ctx context.Context, t *testing.T, method string, id *int64, params interface{}) {
 	msg := struct {
 		JSONRPC string      `json:"jsonrpc"`
 		ID      *int64      `json:"id,omitempty"`
@@ -120,30 +137,30 @@ func (m *mockRWC) writeMessage(t *testing.T, method string, id *int64, params in
 	require.NoError(t, err)
 
 	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(data))
-	t.Logf("Writing message header: %q", header)
-	t.Logf("Writing message body: %s", string(data))
+	zerolog.Ctx(ctx).Debug().
+		Str("header", header).
+		RawJSON("body", data).
+		Msg("writing message")
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Write to the read buffer since this is what the server will read
 	_, err = m.readBuf.WriteString(header)
 	require.NoError(t, err)
 
 	_, err = m.readBuf.Write(data)
 	require.NoError(t, err)
 
-	t.Logf("Read buffer length after write: %d", m.readBuf.Len())
+	zerolog.Ctx(ctx).Debug().Int("bufferLen", m.readBuf.Len()).Msg("message written")
 }
 
-func (m *mockRWC) readMessage(t *testing.T) (method string, id *int64, result interface{}, err error) {
+func (m *mockRWC) readMessage(ctx context.Context) (method string, id *int64, result interface{}, err error) {
 	// Read the header first
 	var header string
 	for {
 		b, err := m.writeBuf.ReadByte()
 		if err != nil {
 			if err == io.EOF {
-				// If we hit EOF while reading header, wait a bit and try again
 				time.Sleep(10 * time.Millisecond)
 				continue
 			}
@@ -172,7 +189,10 @@ func (m *mockRWC) readMessage(t *testing.T) (method string, id *int64, result in
 		return "", nil, nil, err
 	}
 
-	t.Logf("Read message: %s", string(content))
+	zerolog.Ctx(ctx).Debug().
+		Str("header", header).
+		RawJSON("content", content).
+		Msg("read message")
 
 	// Parse the message
 	var msg struct {
@@ -191,8 +211,6 @@ func (m *mockRWC) readMessage(t *testing.T) (method string, id *int64, result in
 		return "", msg.ID, nil, errors.Errorf("JSON-RPC error: %v", msg.Error)
 	}
 
-	// For responses, result is in the result field
-	// For notifications/requests, result is in the params field
 	result = msg.Result
 	if result == nil {
 		result = msg.Params
@@ -211,6 +229,9 @@ func (m *mockRWC) drainMessages() {
 
 // setupTestServer creates a new server with debug enabled and a mock connection
 func setupTestServer(t *testing.T) (*Server, *mockRWC, context.Context, context.CancelFunc) {
+	// Setup test logger with test output
+
+	// Create server with test logger
 	server := NewServer(
 		parser.NewDefaultTemplateParser(),
 		types.NewDefaultValidator(),
@@ -219,14 +240,16 @@ func setupTestServer(t *testing.T) (*Server, *mockRWC, context.Context, context.
 		true,
 	)
 
-	rwc := newMockRWC()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Create mock RWC with test logger
+	rwc, ctx := newMockRWC(t)
 
+	// Add timeout to context
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	return server, rwc, ctx, cancel
 }
 
 // waitForMessage waits for a specific message type from the server
-func waitForMessage(t *testing.T, rwc *mockRWC, serverErrCh chan error, expectedMethod string, timeout time.Duration) (string, *int64, interface{}, error) {
+func waitForMessage(ctx context.Context, rwc *mockRWC, serverErrCh chan error, expectedMethod string, timeout time.Duration) (string, *int64, interface{}, error) {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 
@@ -239,7 +262,7 @@ func waitForMessage(t *testing.T, rwc *mockRWC, serverErrCh chan error, expected
 
 	go func() {
 		for {
-			method, id, result, err := rwc.readMessage(t)
+			method, id, result, err := rwc.readMessage(ctx)
 			if err != nil {
 				msgCh <- struct {
 					method string
@@ -251,7 +274,7 @@ func waitForMessage(t *testing.T, rwc *mockRWC, serverErrCh chan error, expected
 			}
 
 			if method == "window/logMessage" {
-				t.Logf("Server log: %v", result)
+				zerolog.Ctx(ctx).Debug().Interface("message", result).Msg("received log message")
 				continue
 			}
 
@@ -289,6 +312,8 @@ func waitForMessage(t *testing.T, rwc *mockRWC, serverErrCh chan error, expected
 }
 
 func TestServer_Initialize(t *testing.T) {
+	// Setup test with logging
+
 	// Create server with debug enabled
 	server := NewServer(
 		parser.NewDefaultTemplateParser(),
@@ -298,11 +323,11 @@ func TestServer_Initialize(t *testing.T) {
 		true,
 	)
 
-	// Create mock connection
-	rwc := newMockRWC()
+	// Create mock connection with test logger
+	rwc, ctx := newMockRWC(t)
 
 	// Start server in background with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	// Start server in goroutine
@@ -313,7 +338,7 @@ func TestServer_Initialize(t *testing.T) {
 
 	// Send initialize request
 	id := int64(1)
-	rwc.writeMessage(t, "initialize", &id, InitializeParams{
+	rwc.writeMessage(ctx, t, "initialize", &id, InitializeParams{
 		RootURI: "file:///test",
 	})
 
@@ -328,12 +353,12 @@ func TestServer_Initialize(t *testing.T) {
 			t.Fatal("timeout waiting for initialize response")
 			return
 		default:
-			method, respID, result, err := rwc.readMessage(t)
+			method, respID, result, err := rwc.readMessage(ctx)
 			require.NoError(t, err)
 
 			// Skip log messages
 			if method == "window/logMessage" {
-				t.Logf("Log message: %v", result)
+				zerolog.Ctx(ctx).Debug().Interface("message", result).Msg("received log message")
 				continue
 			}
 
@@ -356,7 +381,7 @@ func TestServer_Initialize(t *testing.T) {
 }
 
 func TestMessageEncoding(t *testing.T) {
-	rwc := newMockRWC()
+	rwc, ctx := newMockRWC(t)
 
 	// Write a test message to the write buffer directly
 	id := int64(1)
@@ -385,7 +410,7 @@ func TestMessageEncoding(t *testing.T) {
 	require.NoError(t, err)
 
 	// Read it back
-	method, respID, result, err := rwc.readMessage(t)
+	method, respID, result, err := rwc.readMessage(ctx)
 	require.NoError(t, err)
 	require.Equal(t, "initialize", method)
 	require.NotNil(t, respID)
@@ -416,12 +441,12 @@ func TestServer_DidOpen(t *testing.T) {
 	// First send initialize request
 	t.Log("Sending initialize request...")
 	id := int64(1)
-	rwc.writeMessage(t, "initialize", &id, InitializeParams{
+	rwc.writeMessage(ctx, t, "initialize", &id, InitializeParams{
 		RootURI: "file://" + dir,
 	})
 
 	// Wait for initialize response
-	method, respID, result, err := waitForMessage(t, rwc, serverErrCh, "", 5*time.Second)
+	method, respID, result, err := waitForMessage(ctx, rwc, serverErrCh, "", 5*time.Second)
 	require.NoError(t, err)
 	require.Equal(t, "initialize", method)
 	require.NotNil(t, respID)
@@ -431,7 +456,7 @@ func TestServer_DidOpen(t *testing.T) {
 
 	// Send initialized notification
 	t.Log("Sending initialized notification...")
-	rwc.writeMessage(t, "initialized", nil, struct{}{})
+	rwc.writeMessage(ctx, t, "initialized", nil, struct{}{})
 
 	// Give the server a moment to process the initialized notification
 	time.Sleep(100 * time.Millisecond)
@@ -441,7 +466,7 @@ func TestServer_DidOpen(t *testing.T) {
 	tmplContent, err := os.ReadFile(filepath.Join(dir, "test.tmpl"))
 	require.NoError(t, err)
 
-	rwc.writeMessage(t, "textDocument/didOpen", nil, &DidOpenTextDocumentParams{
+	rwc.writeMessage(ctx, t, "textDocument/didOpen", nil, &DidOpenTextDocumentParams{
 		TextDocument: TextDocumentItem{
 			URI:        "file://" + filepath.Join(dir, "test.tmpl"),
 			LanguageID: "go-template",
@@ -452,7 +477,7 @@ func TestServer_DidOpen(t *testing.T) {
 
 	// Wait for publishDiagnostics notification
 	t.Log("Waiting for diagnostics...")
-	method, _, result, err = waitForMessage(t, rwc, serverErrCh, "textDocument/publishDiagnostics", 10*time.Second)
+	method, _, result, err = waitForMessage(ctx, rwc, serverErrCh, "textDocument/publishDiagnostics", 10*time.Second)
 	require.NoError(t, err)
 	require.Equal(t, "textDocument/publishDiagnostics", method)
 

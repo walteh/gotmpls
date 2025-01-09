@@ -10,7 +10,7 @@ import (
 
 func (s *Server) handleTextDocumentDidOpen(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
 	if s.debug {
-		s.debugf("handling textDocument/didOpen")
+		s.debugf(ctx, "handling textDocument/didOpen")
 	}
 
 	var params DidOpenTextDocumentParams
@@ -24,7 +24,7 @@ func (s *Server) handleTextDocumentDidOpen(ctx context.Context, req *jsonrpc2.Re
 
 func (s *Server) handleTextDocumentDidChange(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
 	if s.debug {
-		s.debugf("handling textDocument/didChange")
+		s.debugf(ctx, "handling textDocument/didChange")
 	}
 
 	var params DidChangeTextDocumentParams
@@ -43,7 +43,7 @@ func (s *Server) handleTextDocumentDidChange(ctx context.Context, req *jsonrpc2.
 
 func (s *Server) handleTextDocumentDidClose(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
 	if s.debug {
-		s.debugf("handling textDocument/didClose")
+		s.debugf(ctx, "handling textDocument/didClose")
 	}
 
 	var params DidCloseTextDocumentParams
@@ -57,7 +57,7 @@ func (s *Server) handleTextDocumentDidClose(ctx context.Context, req *jsonrpc2.R
 
 func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
 	if s.debug {
-		s.debugf("handling textDocument/hover")
+		s.debugf(ctx, "handling textDocument/hover")
 	}
 
 	var params HoverParams
@@ -71,7 +71,7 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 
 func (s *Server) handleTextDocumentCompletion(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
 	if s.debug {
-		s.debugf("handling textDocument/completion")
+		s.debugf(ctx, "handling textDocument/completion")
 	}
 
 	var params CompletionParams

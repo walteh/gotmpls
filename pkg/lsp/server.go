@@ -1,12 +1,16 @@
 package lsp
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
+	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/sourcegraph/jsonrpc2"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
@@ -20,6 +24,7 @@ type Server struct {
 	analyzer  ast.PackageAnalyzer
 	generator diagnostic.Generator
 	debug     bool
+	logger    *zerolog.Logger
 	documents sync.Map // map[string]string
 	workspace string
 	conn      *jsonrpc2.Conn
@@ -27,19 +32,79 @@ type Server struct {
 
 type handlerFunc func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error)
 
+// bufferedReadWriteCloser wraps a reader and writer with buffering
+type bufferedReadWriteCloser struct {
+	reader *bufio.Reader
+	writer *bufio.Writer
+	closer io.Closer
+}
+
+func newBufferedReadWriteCloser(r io.Reader, w io.Writer) io.ReadWriteCloser {
+	return &bufferedReadWriteCloser{
+		reader: bufio.NewReader(r),
+		writer: bufio.NewWriter(w),
+		closer: io.NopCloser(nil),
+	}
+}
+
+func (b *bufferedReadWriteCloser) Read(p []byte) (n int, err error) {
+	return b.reader.Read(p)
+}
+
+func (b *bufferedReadWriteCloser) Write(p []byte) (n int, err error) {
+	n, err = b.writer.Write(p)
+	if err != nil {
+		return n, err
+	}
+	return n, b.writer.Flush()
+}
+
+func (b *bufferedReadWriteCloser) Close() error {
+	return b.closer.Close()
+}
+
 func NewServer(parser parser.TemplateParser, validator types.Validator, analyzer ast.PackageAnalyzer, generator diagnostic.Generator, debug bool) *Server {
+	logger := zerolog.New(os.Stderr).With().
+		Str("component", "lsp").
+		Bool("debug", debug).
+		Timestamp().
+		Logger()
+
 	return &Server{
 		parser:    parser,
 		validator: validator,
 		analyzer:  analyzer,
 		generator: generator,
 		debug:     debug,
+		logger:    &logger,
 	}
 }
 
-func (s *Server) Start(ctx context.Context, in io.ReadCloser, out io.WriteCloser) error {
+func (s *Server) Start(ctx context.Context, reader io.Reader, writer io.Writer) error {
+	ctx = s.logger.WithContext(ctx)
+	zerolog.Ctx(ctx).Info().Msg("starting LSP server")
+
+	// Create a separate writer for LSP messages
+	lspWriter := zerolog.ConsoleWriter{
+		Out:        os.Stderr,
+		NoColor:    true,
+		TimeFormat: time.RFC3339,
+		FormatMessage: func(i interface{}) string {
+			if str, ok := i.(string); ok {
+				if !strings.Contains(str, "Content-Length") {
+					return str
+				}
+			}
+			return ""
+		},
+	}
+
+	// Update logger to use LSP writer
+	lspLogger := s.logger.Output(lspWriter)
+	ctx = lspLogger.WithContext(ctx)
+
 	// Create a buffered stream with VSCode codec for proper LSP message formatting
-	stream := jsonrpc2.NewBufferedStream(NewReadWriteCloser(in, out), jsonrpc2.VSCodeObjectCodec{})
+	stream := jsonrpc2.NewBufferedStream(newBufferedReadWriteCloser(reader, writer), jsonrpc2.VSCodeObjectCodec{})
 	conn := jsonrpc2.NewConn(ctx, stream, s)
 	s.conn = conn
 
@@ -54,20 +119,20 @@ func (s *Server) Start(ctx context.Context, in io.ReadCloser, out io.WriteCloser
 
 func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
 	if s.debug {
-		s.debugf("received request: %s", req.Method)
+		s.debugf(ctx, "received request: %s", req.Method)
 		if req.Params != nil {
-			s.debugf("request params: %s", string(*req.Params))
+			s.debugf(ctx, "request params: %s", string(*req.Params))
 		}
 	}
 
 	handler := s.router(req.Method)
 	if handler == nil {
 		if s.debug {
-			s.debugf("unhandled method: %s", req.Method)
+			s.debugf(ctx, "unhandled method: %s", req.Method)
 		}
 		if !req.Notif {
 			if err := conn.Reply(ctx, req.ID, nil); err != nil {
-				s.debugf("error sending default reply: %v", err)
+				s.debugf(ctx, "error sending default reply: %v", err)
 			}
 		}
 		return
@@ -75,13 +140,13 @@ func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.
 
 	result, err := handler(ctx, req)
 	if err != nil {
-		s.debugf("error handling %s: %v", req.Method, err)
+		s.debugf(ctx, "error handling %s: %v", req.Method, err)
 		if !req.Notif {
 			if err := conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
 				Code:    jsonrpc2.CodeInternalError,
 				Message: err.Error(),
 			}); err != nil {
-				s.debugf("error sending error reply: %v", err)
+				s.debugf(ctx, "error sending error reply: %v", err)
 			}
 		}
 		return
@@ -89,7 +154,7 @@ func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.
 
 	if !req.Notif && result != nil {
 		if err := conn.Reply(ctx, req.ID, result); err != nil {
-			s.debugf("error sending reply: %v", err)
+			s.debugf(ctx, "error sending reply: %v", err)
 		}
 	}
 }
@@ -137,7 +202,7 @@ func (s *Server) router(method string) handlerFunc {
 	}
 }
 
-func (s *Server) debugf(format string, args ...interface{}) {
+func (s *Server) debugf(ctx context.Context, format string, args ...interface{}) {
 	if !s.debug {
 		return
 	}
@@ -150,9 +215,12 @@ func (s *Server) debugf(format string, args ...interface{}) {
 			Message: msg,
 		}
 		// Use the connection's notification method directly
-		_ = s.conn.Notify(context.Background(), "window/logMessage", params)
+		_ = s.conn.Notify(ctx, "window/logMessage", params)
 	} else {
-		fmt.Fprintf(os.Stderr, "Debug: %s\n", msg)
+		zerolog.Ctx(ctx).Debug().
+			Str("component", "lsp").
+			Bool("debug", s.debug).
+			Msg(msg)
 	}
 }
 
@@ -163,7 +231,7 @@ func (s *Server) publishDiagnostics(ctx context.Context, uri string, diagnostics
 	}
 
 	if s.debug {
-		s.debugf("publishing %d diagnostics for %s", len(diagnostics), uri)
+		s.debugf(ctx, "publishing %d diagnostics for %s", len(diagnostics), uri)
 		for _, d := range diagnostics {
 			severity := "unknown"
 			switch d.Severity {
@@ -176,7 +244,7 @@ func (s *Server) publishDiagnostics(ctx context.Context, uri string, diagnostics
 			case 4:
 				severity = "hint"
 			}
-			s.debugf("  - %s at %v: %s", severity, d.Range, d.Message)
+			s.debugf(ctx, "  - %s at %v: %s", severity, d.Range, d.Message)
 		}
 	}
 

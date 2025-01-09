@@ -81,7 +81,8 @@ func TestDefaultValidator_ValidateType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			typeInfo, err := validator.ValidateType(context.Background(), tt.typePath, registry)
+			ctx := context.Background()
+			typeInfo, err := validator.ValidateType(ctx, tt.typePath, registry)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, typeInfo)
@@ -96,7 +97,8 @@ func TestDefaultValidator_ValidateType(t *testing.T) {
 func TestDefaultValidator_ValidateField(t *testing.T) {
 	validator := &DefaultValidator{}
 	registry := mockTypeRegistry(t)
-	typeInfo, err := validator.ValidateType(context.Background(), "github.com/example/types.Person", registry)
+	ctx := context.Background()
+	typeInfo, err := validator.ValidateType(ctx, "github.com/example/types.Person", registry)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -123,7 +125,7 @@ func TestDefaultValidator_ValidateField(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fieldInfo, err := validator.ValidateField(context.Background(), typeInfo, tt.fieldPath)
+			fieldInfo, err := validator.ValidateField(ctx, typeInfo, tt.fieldPath)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, fieldInfo)
@@ -173,7 +175,8 @@ func TestDefaultValidator_ValidateMethod(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			methodInfo, err := validator.ValidateMethod(context.Background(), tt.methodName)
+			ctx := context.Background()
+			methodInfo, err := validator.ValidateMethod(ctx, tt.methodName)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, methodInfo)

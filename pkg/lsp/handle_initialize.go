@@ -10,7 +10,7 @@ import (
 
 func (s *Server) handleInitialize(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
 	if s.debug {
-		s.debugf("handling initialize request")
+		s.debugf(ctx, "handling initialize request")
 	}
 
 	var params InitializeParams
@@ -25,7 +25,7 @@ func (s *Server) handleInitialize(ctx context.Context, req *jsonrpc2.Request) (i
 	}
 
 	s.workspace = workspacePath
-	s.debugf("workspace path: %s", s.workspace)
+	s.debugf(ctx, "workspace path: %s", s.workspace)
 
 	return InitializeResult{
 		Capabilities: ServerCapabilities{

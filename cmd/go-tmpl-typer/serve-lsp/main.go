@@ -2,9 +2,9 @@ package serve_lsp
 
 import (
 	"context"
-	"fmt"
 	"os"
 
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
@@ -45,8 +45,16 @@ func (me *Handler) Run(ctx context.Context) error {
 		me.debug,
 	)
 
+	logger := zerolog.New(os.Stderr).With().
+		Str("component", "lsp-server").
+		Bool("debug", me.debug).
+		Timestamp().
+		Logger()
+
+	ctx = logger.WithContext(ctx)
+
 	if me.debug {
-		fmt.Fprintf(os.Stderr, "starting language server with debug logging enabled\n")
+		zerolog.Ctx(ctx).Info().Msg("starting language server with debug logging enabled")
 	}
 
 	// Start the server using stdin/stdout
@@ -56,3 +64,33 @@ func (me *Handler) Run(ctx context.Context) error {
 
 	return nil
 }
+
+// func main() {
+// 	debug := false
+// 	flag.BoolVar(&debug, "debug", false, "enable debug logging")
+// 	flag.Parse()
+
+// 	logger := zerolog.New(os.Stderr).With().
+// 		Str("component", "lsp-server").
+// 		Bool("debug", debug).
+// 		Timestamp().
+// 		Logger()
+// 	ctx := logger.WithContext(context.Background())
+
+// 	if debug {
+// 		zerolog.Ctx(ctx).Info().Msg("starting language server with debug logging enabled")
+// 	}
+
+// 	server := lsp.NewServer(
+// 		parser.NewDefaultTemplateParser(),
+// 		types.NewDefaultValidator(),
+// 		ast.NewDefaultPackageAnalyzer(),
+// 		diagnostic.NewDefaultGenerator(),
+// 		debug,
+// 	)
+
+// 	if err := server.Start(ctx, os.Stdin, os.Stdout); err != nil {
+// 		zerolog.Ctx(ctx).Error().Err(err).Msg("server error")
+// 		os.Exit(1)
+// 	}
+// }

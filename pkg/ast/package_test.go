@@ -11,21 +11,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestModule(t *testing.T) (string, func()) {
+func setupTestModule(t *testing.T) (string, context.Context) {
+	ctx := context.Background()
+
 	// Create a temporary directory for our test module
 	tmpDir, err := os.MkdirTemp("", "package-analyzer-test")
 	require.NoError(t, err)
 
-	cleanup := func() {
+	t.Cleanup(func() {
 		os.RemoveAll(tmpDir)
-	}
+	})
 
-	return tmpDir, cleanup
+	return tmpDir, ctx
 }
 
 func TestPackageAnalyzer(t *testing.T) {
-	tmpDir, cleanup := setupTestModule(t)
-	defer cleanup()
+	tmpDir, ctx := setupTestModule(t)
 
 	// Create a minimal Go module
 	err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(`
@@ -66,12 +67,12 @@ func (p *Person) HasJob() bool {
 	analyzer := NewDefaultPackageAnalyzer()
 
 	// Analyze the package
-	registry, err := analyzer.AnalyzePackage(context.Background(), tmpDir)
+	registry, err := analyzer.AnalyzePackage(ctx, tmpDir)
 	require.NoError(t, err)
 	require.NotNil(t, registry)
 
 	// Verify the types were loaded
-	pkg, err := registry.GetPackage(context.Background(), "example.com/test/types")
+	pkg, err := registry.GetPackage(ctx, "example.com/test/types")
 	require.NoError(t, err)
 	require.NotNil(t, pkg)
 
@@ -101,8 +102,7 @@ func (p *Person) HasJob() bool {
 }
 
 func TestPackageAnalyzer_NoGoMod(t *testing.T) {
-	tmpDir, cleanup := setupTestModule(t)
-	defer cleanup()
+	tmpDir, ctx := setupTestModule(t)
 
 	// Create a test package without a go.mod
 	typesDir := filepath.Join(tmpDir, "types")
@@ -119,21 +119,21 @@ type Person struct {
 	require.NoError(t, err)
 
 	analyzer := NewDefaultPackageAnalyzer()
-	_, err = analyzer.AnalyzePackage(context.Background(), tmpDir)
+	_, err = analyzer.AnalyzePackage(ctx, tmpDir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing go.mod")
 }
 
 func TestPackageAnalyzer_InvalidPath(t *testing.T) {
+	ctx := context.Background()
 	analyzer := NewDefaultPackageAnalyzer()
-	_, err := analyzer.AnalyzePackage(context.Background(), "/path/that/does/not/exist")
+	_, err := analyzer.AnalyzePackage(ctx, "/path/that/does/not/exist")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing go.mod")
 }
 
 func TestPackageAnalyzer_Diagnostics(t *testing.T) {
-	tmpDir, cleanup := setupTestModule(t)
-	defer cleanup()
+	tmpDir, ctx := setupTestModule(t)
 
 	// Create a minimal Go module
 	err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(`
@@ -160,12 +160,12 @@ type InvalidType struct {
 	require.NoError(t, err)
 
 	analyzer := NewDefaultPackageAnalyzer()
-	registry, err := analyzer.AnalyzePackage(context.Background(), tmpDir)
+	registry, err := analyzer.AnalyzePackage(ctx, tmpDir)
 	require.NoError(t, err)
 	require.NotNil(t, registry)
 
 	// Verify that we can detect the invalid type
-	pkg, err := registry.GetPackage(context.Background(), "example.com/test/types")
+	pkg, err := registry.GetPackage(ctx, "example.com/test/types")
 	require.NoError(t, err)
 	require.NotNil(t, pkg)
 
@@ -174,12 +174,12 @@ type InvalidType struct {
 	require.NotNil(t, obj)
 
 	// Test case 2: Missing package
-	_, err = registry.GetPackage(context.Background(), "non/existent/package")
+	_, err = registry.GetPackage(ctx, "non/existent/package")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "package non/existent/package not found")
 
 	// Test case 3: Invalid type lookup
-	_, err = registry.GetTypes(context.Background(), "non/existent/package")
+	_, err = registry.GetTypes(ctx, "non/existent/package")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "package non/existent/package not found")
 }

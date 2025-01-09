@@ -164,19 +164,20 @@ func TestPackageAnalyzer_AnalyzePackage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
 			mockAnalyzer := mockery.NewMockPackageAnalyzer_ast(t)
 
 			if !tt.wantErr {
 				mockAnalyzer.EXPECT().
-					AnalyzePackage(context.Background(), tt.packageDir).
+					AnalyzePackage(ctx, tt.packageDir).
 					Return(tt.want, nil)
 			} else {
 				mockAnalyzer.EXPECT().
-					AnalyzePackage(context.Background(), tt.packageDir).
+					AnalyzePackage(ctx, tt.packageDir).
 					Return(nil, assert.AnError)
 			}
 
-			got, err := mockAnalyzer.AnalyzePackage(context.Background(), tt.packageDir)
+			got, err := mockAnalyzer.AnalyzePackage(ctx, tt.packageDir)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
