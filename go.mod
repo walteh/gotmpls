@@ -4,6 +4,7 @@ go 1.23.4
 
 require (
 	github.com/fatih/color v1.18.0
+	github.com/google/go-cmp v0.6.0
 	github.com/k0kubun/pp/v3 v3.4.1
 	github.com/rs/xid v1.5.0
 	github.com/rs/zerolog v1.33.0

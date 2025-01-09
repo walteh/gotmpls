@@ -11,7 +11,7 @@ import (
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
-	"github.com/walteh/go-tmpl-typer/pkg/types"
+	pkg_types "github.com/walteh/go-tmpl-typer/pkg/types"
 )
 
 func setupTestWorkspace(t *testing.T) string {
@@ -84,10 +84,10 @@ func TestIntegration_BasicLSPFlow(t *testing.T) {
 	// Create a server with real components
 	server := NewServer(
 		parser.NewDefaultTemplateParser(),
-		types.NewDefaultValidator(),
+		pkg_types.NewDefaultValidator(),
 		ast.NewDefaultPackageAnalyzer(),
 		diagnostic.NewDefaultGenerator(),
-		true,
+		false,
 	)
 
 	// Start the server in a goroutine

@@ -62,11 +62,6 @@ func (b *bufferedReadWriteCloser) Close() error {
 }
 
 func NewServer(parser parser.TemplateParser, validator types.Validator, analyzer ast.PackageAnalyzer, generator diagnostic.Generator, debug bool) *Server {
-	// logger := zerolog.New(os.Stderr).With().
-	// 	Str("component", "lsp").
-	// 	Bool("debug", debug).
-	// 	Timestamp().
-	// 	Logger()
 
 	return &Server{
 		parser:    parser,
@@ -74,8 +69,7 @@ func NewServer(parser parser.TemplateParser, validator types.Validator, analyzer
 		analyzer:  analyzer,
 		generator: generator,
 		debug:     debug,
-		id:        xid.New().String(),
-		// logger:    &logger,
+		id:        xid.New().String(), // logger:    &logger,
 	}
 }
 

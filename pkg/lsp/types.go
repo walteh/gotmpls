@@ -1,6 +1,8 @@
 package lsp
 
 import (
+	"encoding/json"
+
 	"github.com/rs/zerolog"
 )
 
@@ -47,6 +49,19 @@ type LogMessageParams struct {
 	Raw     string         `json:"raw"`
 	Extra   map[string]any `json:"extra"`
 	Time    string         `json:"time"`
+}
+
+func MustParseLogMessageParams(msg any) LogMessageParams {
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		panic(err)
+	}
+	var params LogMessageParams
+	err = json.Unmarshal(msgBytes, &params)
+	if err != nil {
+		panic(err)
+	}
+	return params
 }
 
 func ParseMessageTypeFromZerolog(level string) MessageType {

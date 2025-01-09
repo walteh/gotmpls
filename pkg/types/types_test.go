@@ -20,6 +20,7 @@ func mockTypeRegistry(t *testing.T) *ast.TypeRegistry {
 		types.NewField(0, pkg, "Name", types.Typ[types.String], false),
 		types.NewField(0, pkg, "Age", types.Typ[types.Int], false),
 		types.NewField(0, pkg, "Address", createAddressType(t, pkg), false),
+		types.NewField(0, pkg, "SimpleString", types.Typ[types.String], false),
 	}
 	structType := types.NewStruct(fields, nil)
 
@@ -54,6 +55,16 @@ func createAddressType(t *testing.T, pkg *types.Package) types.Type {
 	fields := []*types.Var{
 		types.NewField(0, pkg, "Street", types.Typ[types.String], false),
 		types.NewField(0, pkg, "City", types.Typ[types.String], false),
+		types.NewField(0, pkg, "Location", createLocationType(t, pkg), false),
+	}
+	return types.NewStruct(fields, nil)
+}
+
+// createLocationType creates a deeply nested type for testing
+func createLocationType(t *testing.T, pkg *types.Package) types.Type {
+	fields := []*types.Var{
+		types.NewField(0, pkg, "Latitude", types.Typ[types.Float64], false),
+		types.NewField(0, pkg, "Longitude", types.Typ[types.Float64], false),
 	}
 	return types.NewStruct(fields, nil)
 }
@@ -66,15 +77,30 @@ func TestDefaultValidator_ValidateType(t *testing.T) {
 		name     string
 		typePath string
 		wantErr  bool
+		check    func(*testing.T, *TypeInfo)
 	}{
 		{
 			name:     "valid type",
 			typePath: "github.com/example/types.Person",
 			wantErr:  false,
+			check: func(t *testing.T, info *TypeInfo) {
+				require.NotNil(t, info.Fields["Name"])
+				assert.Equal(t, "string", info.Fields["Name"].Type.String())
+
+				require.NotNil(t, info.Fields["Address"])
+				addressType, ok := info.Fields["Address"].Type.(*types.Struct)
+				require.True(t, ok)
+				assert.Equal(t, 3, addressType.NumFields()) // Street, City, Location
+			},
 		},
 		{
 			name:     "invalid type",
 			typePath: "github.com/example/types.NonExistent",
+			wantErr:  true,
+		},
+		{
+			name:     "invalid package",
+			typePath: "invalid/package.Type",
 			wantErr:  true,
 		},
 	}
@@ -86,9 +112,13 @@ func TestDefaultValidator_ValidateType(t *testing.T) {
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, typeInfo)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, typeInfo)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.NotNil(t, typeInfo)
+			if tt.check != nil {
+				tt.check(t, typeInfo)
 			}
 		})
 	}
@@ -105,20 +135,60 @@ func TestDefaultValidator_ValidateField(t *testing.T) {
 		name      string
 		fieldPath string
 		wantErr   bool
+		check     func(*testing.T, *FieldInfo)
 	}{
 		{
-			name:      "valid field",
-			fieldPath: "Name",
+			name:      "simple string field",
+			fieldPath: "SimpleString",
 			wantErr:   false,
+			check: func(t *testing.T, info *FieldInfo) {
+				assert.Equal(t, "string", info.Type.String())
+			},
 		},
 		{
-			name:      "nested field",
+			name:      "nested field first level",
+			fieldPath: "Address",
+			wantErr:   false,
+			check: func(t *testing.T, info *FieldInfo) {
+				structType, ok := info.Type.(*types.Struct)
+				require.True(t, ok)
+				assert.Equal(t, 3, structType.NumFields())
+			},
+		},
+		{
+			name:      "nested field second level",
 			fieldPath: "Address.Street",
 			wantErr:   false,
+			check: func(t *testing.T, info *FieldInfo) {
+				assert.Equal(t, "string", info.Type.String())
+			},
 		},
 		{
-			name:      "invalid field",
+			name:      "nested field third level",
+			fieldPath: "Address.Location.Latitude",
+			wantErr:   false,
+			check: func(t *testing.T, info *FieldInfo) {
+				assert.Equal(t, "float64", info.Type.String())
+			},
+		},
+		{
+			name:      "invalid root field",
 			fieldPath: "NonExistent",
+			wantErr:   true,
+		},
+		{
+			name:      "invalid nested field",
+			fieldPath: "Address.NonExistent",
+			wantErr:   true,
+		},
+		{
+			name:      "invalid deep nested field",
+			fieldPath: "Address.Location.NonExistent",
+			wantErr:   true,
+		},
+		{
+			name:      "attempt to nest on simple type",
+			fieldPath: "SimpleString.Something",
 			wantErr:   true,
 		},
 	}
@@ -129,9 +199,13 @@ func TestDefaultValidator_ValidateField(t *testing.T) {
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, fieldInfo)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, fieldInfo)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.NotNil(t, fieldInfo)
+			if tt.check != nil {
+				tt.check(t, fieldInfo)
 			}
 		})
 	}

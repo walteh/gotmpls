@@ -46,14 +46,12 @@ func (a *DefaultPackageAnalyzer) AnalyzePackage(ctx context.Context, dir string)
 		Env:  append(os.Environ(), "GO111MODULE=on"),
 	}
 
-	zerolog.Ctx(ctx).Debug().Msgf("loading packages with config: %+v\n", cfg)
-
 	// Load all packages in the module, including examples
 	patterns := []string{
 		"./...",
 	}
 
-	zerolog.Ctx(ctx).Debug().Msgf("loading packages with patterns: %v\n", patterns)
+	zerolog.Ctx(ctx).Debug().Strs("patterns", patterns).Str("dir", dir).Msg("loading packages")
 
 	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {

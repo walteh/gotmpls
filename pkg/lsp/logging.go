@@ -35,10 +35,19 @@ func (s *Server) ApplyLSPWriter(ctx context.Context, conn *jsonrpc2.Conn) contex
 
 var myLoggerId = xid.New().String()
 
+func debugf(ctx context.Context, format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+
+	zerolog.Ctx(ctx).Debug().
+		Str("id", myLoggerId).
+		CallerSkipFrame(1).
+		Msg(msg)
+}
+
 func (s *Server) debugf(ctx context.Context, format string, args ...interface{}) {
-	if !s.debug {
-		return
-	}
+	// if !s.debug {
+	// 	return
+	// }
 
 	msg := fmt.Sprintf(format, args...)
 
