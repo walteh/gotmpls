@@ -3,13 +3,10 @@ package lsp
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"io"
-	"os"
-	"strings"
 	"sync"
-	"time"
 
+	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/sourcegraph/jsonrpc2"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
@@ -24,10 +21,11 @@ type Server struct {
 	analyzer  ast.PackageAnalyzer
 	generator diagnostic.Generator
 	debug     bool
-	logger    *zerolog.Logger
+	// logger    *zerolog.Logger
 	documents sync.Map // map[string]string
 	workspace string
 	conn      *jsonrpc2.Conn
+	id        string
 }
 
 type handlerFunc func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error)
@@ -64,11 +62,11 @@ func (b *bufferedReadWriteCloser) Close() error {
 }
 
 func NewServer(parser parser.TemplateParser, validator types.Validator, analyzer ast.PackageAnalyzer, generator diagnostic.Generator, debug bool) *Server {
-	logger := zerolog.New(os.Stderr).With().
-		Str("component", "lsp").
-		Bool("debug", debug).
-		Timestamp().
-		Logger()
+	// logger := zerolog.New(os.Stderr).With().
+	// 	Str("component", "lsp").
+	// 	Bool("debug", debug).
+	// 	Timestamp().
+	// 	Logger()
 
 	return &Server{
 		parser:    parser,
@@ -76,37 +74,22 @@ func NewServer(parser parser.TemplateParser, validator types.Validator, analyzer
 		analyzer:  analyzer,
 		generator: generator,
 		debug:     debug,
-		logger:    &logger,
+		id:        xid.New().String(),
+		// logger:    &logger,
 	}
 }
 
 func (s *Server) Start(ctx context.Context, reader io.Reader, writer io.Writer) error {
-	ctx = s.logger.WithContext(ctx)
-	zerolog.Ctx(ctx).Info().Msg("starting LSP server")
-
-	// Create a separate writer for LSP messages
-	lspWriter := zerolog.ConsoleWriter{
-		Out:        os.Stderr,
-		NoColor:    true,
-		TimeFormat: time.RFC3339,
-		FormatMessage: func(i interface{}) string {
-			if str, ok := i.(string); ok {
-				if !strings.Contains(str, "Content-Length") {
-					return str
-				}
-			}
-			return ""
-		},
-	}
-
-	// Update logger to use LSP writer
-	lspLogger := s.logger.Output(lspWriter)
-	ctx = lspLogger.WithContext(ctx)
+	// ctx = s.logger.WithContext(ctx)
+	zerolog.Ctx(ctx).Info().Msg("starting LSP server - all logging will be redirected to LSP")
 
 	// Create a buffered stream with VSCode codec for proper LSP message formatting
 	stream := jsonrpc2.NewBufferedStream(newBufferedReadWriteCloser(reader, writer), jsonrpc2.VSCodeObjectCodec{})
 	conn := jsonrpc2.NewConn(ctx, stream, s)
 	s.conn = conn
+
+	// // Log takeover message
+	// logger.Info().Msg("LSP server taking over logging output")
 
 	// Wait for either the connection to be closed or the context to be done
 	select {
@@ -118,12 +101,15 @@ func (s *Server) Start(ctx context.Context, reader io.Reader, writer io.Writer) 
 }
 
 func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
+	ctx = s.ApplyLSPWriter(ctx, conn)
 	if s.debug {
 		s.debugf(ctx, "received request: %s", req.Method)
 		if req.Params != nil {
 			s.debugf(ctx, "request params: %s", string(*req.Params))
 		}
 	}
+
+	ctx = zerolog.Ctx(ctx).With().Str("method", req.Method).Logger().WithContext(ctx)
 
 	handler := s.router(req.Method)
 	if handler == nil {
@@ -199,28 +185,6 @@ func (s *Server) router(method string) handlerFunc {
 		}
 	default:
 		return nil
-	}
-}
-
-func (s *Server) debugf(ctx context.Context, format string, args ...interface{}) {
-	if !s.debug {
-		return
-	}
-
-	msg := fmt.Sprintf(format, args...)
-
-	if s.conn != nil {
-		params := &LogMessageParams{
-			Type:    Info,
-			Message: msg,
-		}
-		// Use the connection's notification method directly
-		_ = s.conn.Notify(ctx, "window/logMessage", params)
-	} else {
-		zerolog.Ctx(ctx).Debug().
-			Str("component", "lsp").
-			Bool("debug", s.debug).
-			Msg(msg)
 	}
 }
 

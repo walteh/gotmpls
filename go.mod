@@ -3,7 +3,9 @@ module github.com/walteh/go-tmpl-typer
 go 1.23.4
 
 require (
+	github.com/fatih/color v1.18.0
 	github.com/k0kubun/pp/v3 v3.4.1
+	github.com/rs/xid v1.5.0
 	github.com/rs/zerolog v1.33.0
 	github.com/sourcegraph/jsonrpc2 v0.2.0
 	github.com/spf13/cobra v1.8.1

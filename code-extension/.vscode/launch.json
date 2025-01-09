@@ -5,7 +5,7 @@
 			"name": "run-extension",
 			"type": "extensionHost",
 			"request": "launch",
-			// "cwd": "${workspaceFolder}",
+			"preLaunchTask": "rebuild-extension",
 			"args": [
 				"${workspaceFolder}/..",
 				"--extensionDevelopmentPath=${workspaceFolder}",

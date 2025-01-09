@@ -1,5 +1,9 @@
 package lsp
 
+import (
+	"github.com/rs/zerolog"
+)
+
 // LSP types based on the specification
 // https://microsoft.github.io/language-server-protocol/specifications/specification-current/
 
@@ -7,10 +11,13 @@ package lsp
 type MessageType int
 
 const (
-	Error   MessageType = 1
-	Warning MessageType = 2
-	Info    MessageType = 3
-	Log     MessageType = 4
+	Error      MessageType = 1
+	Warning    MessageType = 2
+	Info       MessageType = 3
+	Debug      MessageType = 4
+	Trace      MessageType = 5
+	Dependency MessageType = 6
+	Unknown    MessageType = 7
 )
 
 func (mt MessageType) String() string {
@@ -21,8 +28,12 @@ func (mt MessageType) String() string {
 		return "warning"
 	case Info:
 		return "info"
-	case Log:
-		return "log"
+	case Debug:
+		return "debug"
+	case Trace:
+		return "trace"
+	case Dependency:
+		return "dependency"
 	default:
 		return "unknown"
 	}
@@ -30,8 +41,33 @@ func (mt MessageType) String() string {
 
 // LogMessageParams represents the parameters for a window/logMessage notification
 type LogMessageParams struct {
-	Type    MessageType `json:"type"`
-	Message string      `json:"message"`
+	Type    MessageType    `json:"type"`
+	Message string         `json:"message"`
+	Source  string         `json:"source"`
+	Raw     string         `json:"raw"`
+	Extra   map[string]any `json:"extra"`
+	Time    string         `json:"time"`
+}
+
+func ParseMessageTypeFromZerolog(level string) MessageType {
+	zlgLevel, err := zerolog.ParseLevel(level)
+	if err != nil {
+		return Unknown
+	}
+	switch zlgLevel {
+	case zerolog.InfoLevel:
+		return Info
+	case zerolog.ErrorLevel:
+		return Error
+	case zerolog.WarnLevel:
+		return Warning
+	case zerolog.DebugLevel:
+		return Debug
+	case zerolog.TraceLevel:
+		return Trace
+	default:
+		return Unknown
+	}
 }
 
 // DiagnosticSeverity represents the severity of a diagnostic

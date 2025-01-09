@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/walteh/go-tmpl-typer/pkg/debug"
+	"github.com/rs/zerolog"
 	"gitlab.com/tozd/go/errors"
 	"golang.org/x/tools/go/packages"
 )
@@ -31,14 +31,14 @@ func (a *DefaultPackageAnalyzer) AnalyzePackage(ctx context.Context, dir string)
 		return nil, errors.Errorf("no packages found in directory: %s (missing go.mod)", dir)
 	}
 
-	debug.Printf("analyzing packages in directory: %s\n", dir)
+	zerolog.Ctx(ctx).Debug().Msgf("analyzing packages in directory: %s\n", dir)
 
 	// Read go.mod to get module name
 	modContent, err := os.ReadFile(modPath)
 	if err != nil {
 		return nil, errors.Errorf("failed to read go.mod: %v", err)
 	}
-	debug.Printf("go.mod content:\n%s\n", string(modContent))
+	zerolog.Ctx(ctx).Debug().Msgf("go.mod content:\n%s\n", string(modContent))
 
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedModule | packages.NeedImports | packages.NeedDeps,
@@ -46,31 +46,31 @@ func (a *DefaultPackageAnalyzer) AnalyzePackage(ctx context.Context, dir string)
 		Env:  append(os.Environ(), "GO111MODULE=on"),
 	}
 
-	debug.Printf("loading packages with config: %+v\n", cfg)
+	zerolog.Ctx(ctx).Debug().Msgf("loading packages with config: %+v\n", cfg)
 
 	// Load all packages in the module, including examples
 	patterns := []string{
 		"./...",
 	}
 
-	debug.Printf("loading packages with patterns: %v\n", patterns)
+	zerolog.Ctx(ctx).Debug().Msgf("loading packages with patterns: %v\n", patterns)
 
 	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {
 		return nil, errors.Errorf("failed to load package: err: %v", err)
 	}
 
-	debug.Printf("loaded %d packages\n", len(pkgs))
+	zerolog.Ctx(ctx).Debug().Msgf("loaded %d packages\n", len(pkgs))
 	for _, pkg := range pkgs {
-		debug.Printf("package: %s (path: %s)\n", pkg.Name, pkg.PkgPath)
+		zerolog.Ctx(ctx).Debug().Msgf("package: %s (path: %s)\n", pkg.Name, pkg.PkgPath)
 		if len(pkg.Errors) > 0 {
-			debug.Printf("  errors:\n")
+			zerolog.Ctx(ctx).Debug().Msgf("  errors:\n")
 			for _, err := range pkg.Errors {
-				debug.Printf("    - %v\n", err)
+				zerolog.Ctx(ctx).Debug().Msgf("    - %v\n", err)
 			}
 		}
 		if pkg.Module != nil {
-			debug.Printf("  module: %s\n", pkg.Module.Path)
+			zerolog.Ctx(ctx).Debug().Msgf("  module: %s\n", pkg.Module.Path)
 		}
 	}
 
@@ -80,11 +80,11 @@ func (a *DefaultPackageAnalyzer) AnalyzePackage(ctx context.Context, dir string)
 
 	for _, pkg := range pkgs {
 		if pkg.Types == nil {
-			debug.Printf("skipping package %s: no type information\n", pkg.PkgPath)
+			zerolog.Ctx(ctx).Debug().Msgf("skipping package %s: no type information\n", pkg.PkgPath)
 			continue
 		}
 
-		debug.Printf("adding package to registry: %s\n", pkg.PkgPath)
+		zerolog.Ctx(ctx).Debug().Msgf("adding package to registry: %s\n", pkg.PkgPath)
 		a.registry.AddPackage(pkg.Types)
 	}
 

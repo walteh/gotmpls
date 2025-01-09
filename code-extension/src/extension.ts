@@ -111,20 +111,33 @@ export function activate(context: vscode.ExtensionContext) {
 			});
 
 			client.onNotification('window/logMessage', (params: any) => {
+				var str = ""
 				switch (params.type) {
 					case 1: // Error
-						outputChannel.appendLine(`[Error] ${params.message}`);
+						str = `🟥 error      - ${params.time} ${params.source} - ${params.message}`;
 						break;
 					case 2: // Warning
-						outputChannel.appendLine(`[Warning] ${params.message}`);
+						str = `🟧 warning    - ${params.time} ${params.source} - ${params.message}`;
 						break;
 					case 3: // Info
-						outputChannel.appendLine(`[Info] ${params.message}`);
+						str = `🟦 info       - ${params.time} ${params.source} - ${params.message}`;
 						break;
-					case 4: // Log
-						outputChannel.appendLine(`[Log] ${params.message}`);
+					case 4: // Debug
+						str = `🟪 debug      - ${params.time} ${params.source} - ${params.message}`;
+						break;
+					case 5: // Trace
+						str = `⬜ trace      - ${params.time} ${params.source} - ${params.message}`;
+						break;
+					case 6: // Dependency
+						str = `⬜ dependency - ${params.time} ${params.source} - ${params.message}`;
 						break;
 				}
+				if (params.extra) {
+					for (const [key, value] of Object.entries(params.extra)) {
+						str += ` ${key}=${value}`;
+					}
+				}
+				outputChannel.appendLine(str);
 			});
 
 			// Start the client

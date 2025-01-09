@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 
-	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
@@ -44,18 +43,6 @@ func (me *Handler) Run(ctx context.Context) error {
 		diagnostic.NewDefaultGenerator(),
 		me.debug,
 	)
-
-	logger := zerolog.New(os.Stderr).With().
-		Str("component", "lsp-server").
-		Bool("debug", me.debug).
-		Timestamp().
-		Logger()
-
-	ctx = logger.WithContext(ctx)
-
-	if me.debug {
-		zerolog.Ctx(ctx).Info().Msg("starting language server with debug logging enabled")
-	}
 
 	// Start the server using stdin/stdout
 	if err := server.Start(ctx, os.Stdin, os.Stdout); err != nil {
