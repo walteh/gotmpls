@@ -129,4 +129,79 @@ type Person struct {
 		require.NoError(t, err)
 		require.Nil(t, hoverResult, "hover should return nil for non-existent field")
 	})
+
+	t.Run("server verifies hover ranges", func(t *testing.T) {
+		files := testFiles{
+			"test.tmpl": `{{- /*gotype: test.Person*/ -}}
+Address:
+  Street: {{.Address.Street}}`,
+			"go.mod": "module test",
+			"test.go": `
+package test
+type Person struct {
+	Address struct {
+		Street string
+	}
+}`,
+		}
+
+		setup, err := setupNeovimTest(t, server, files)
+		require.NoError(t, err)
+		defer setup.cleanup()
+
+		testFile := filepath.Join(setup.tmpDir, "test.tmpl")
+
+		// Test hover over different parts of .Address.Street
+		positions := []struct {
+			character int
+			name      string
+			expected  bool
+		}{
+			// `  Street: {{.Address.Street}}`
+			{5, "before address", false},
+			{13, "start of Address", true},
+			{23, "middle of Street", true},
+			{30, "after Street", false},
+		}
+		//"{{- /*gotype: test.Person*/ -}}\nAddress:\n  Street: {{.Address.Street}}"
+		for _, pos := range positions {
+			t.Run(pos.name, func(t *testing.T) {
+				hoverResult, err := setup.requestHover(t, ctx, &lsp.HoverParams{
+					TextDocument: lsp.TextDocumentIdentifier{URI: "file://" + testFile},
+					Position:     lsp.Position{Line: 2, Character: pos.character},
+				})
+				require.NoError(t, err)
+				require.NotNil(t, hoverResult)
+				require.Equal(t, "**Variable**: Person.Address.Street\n**Type**: string", hoverResult.Contents.Value)
+
+				// Log the range to see what we're getting
+				t.Logf("Hover range for character %d: %v",
+					pos.character,
+					hoverResult.Range,
+				)
+
+				// Verify that the range ONLY covers the .Address.Street field expression
+				require.NotNil(t, hoverResult.Range)
+				require.Equal(t, 2, hoverResult.Range.Start.Line, "range should be on line 2")
+				require.Equal(t, 2, hoverResult.Range.End.Line, "range should be on line 2")
+
+				// The range should start at the beginning of .Address.Street (after the {{ and space)
+				expectedStart := 21 // Position at the start of .Address.Street
+				expectedEnd := 27   // Position at the end of .Address.Street
+				if pos.character >= expectedStart && pos.character <= expectedEnd {
+					require.Equal(t, expectedStart, hoverResult.Range.Start.Character,
+						"range should start at the beginning of .Address.Street (after {{ and space)")
+					require.Equal(t, expectedEnd, hoverResult.Range.End.Character,
+						"range should end at the end of .Address.Street")
+				} else {
+					require.Nil(t, hoverResult.Range, "range should be nil for positions outside .Address.Street")
+				}
+
+				t.Logf("Expected range: {start: %d, end: %d}, Got range: {start: %d, end: %d}",
+					expectedStart, expectedEnd,
+					hoverResult.Range.Start.Character, hoverResult.Range.End.Character)
+
+			})
+		}
+	})
 }

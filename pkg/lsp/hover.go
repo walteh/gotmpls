@@ -14,7 +14,7 @@ import (
 
 // HandleSimpleVariableHover handles hover for simple variables like .Name
 func HandleSimpleVariableHover(ctx context.Context, validator pkg_types.Validator, v parser.VariableLocation, typeInfo *pkg_types.TypeInfo, typeName string) (*Hover, error) {
-	field, err := validator.ValidateField(ctx, typeInfo, v.Name)
+	field, err := validator.ValidateField(ctx, typeInfo, v)
 	if err != nil || field == nil {
 		debugf(ctx, "failed to validate field %s: %v", v.Name, err)
 		return nil, err
@@ -24,11 +24,11 @@ func HandleSimpleVariableHover(ctx context.Context, validator pkg_types.Validato
 	return &Hover{
 		Contents: MarkupContent{
 			Kind:  "markdown",
-			Value: fmt.Sprintf("**Variable**: %s.%s\n**Type**: %s", typeName, v.Name, field.Type.String()),
+			Value: fmt.Sprintf("**Variable**: %s%s\n**Type**: %s", typeName, v.LongName, field.Type.String()),
 		},
 		Range: &Range{
-			Start: Position{Line: v.Line - 1, Character: v.Column - 1},
-			End:   Position{Line: v.Line - 1, Character: v.EndCol - 1},
+			Start: Position{Line: v.Line - 1, Character: v.Column},
+			End:   Position{Line: v.Line - 1, Character: v.EndCol},
 		},
 	}, nil
 }
@@ -42,7 +42,7 @@ func HandleFieldAccessHover(ctx context.Context, validator pkg_types.Validator, 
 		return nil, nil
 	}
 
-	field, err := validator.ValidateField(ctx, typeInfo, v.Name)
+	field, err := validator.ValidateField(ctx, typeInfo, v)
 	if err != nil {
 		debugf(ctx, "failed to validate field %s: %v", v.Name, err)
 		return nil, err
@@ -52,11 +52,11 @@ func HandleFieldAccessHover(ctx context.Context, validator pkg_types.Validator, 
 	return &Hover{
 		Contents: MarkupContent{
 			Kind:  "markdown",
-			Value: fmt.Sprintf("**Variable**: %s.%s\n**Type**: %s", typeName, v.Name, field.Type.String()),
+			Value: fmt.Sprintf("**Variable**: %s%s\n**Type**: %s", typeName, v.LongName, field.Type.String()),
 		},
 		Range: &Range{
-			Start: Position{Line: v.Line - 1, Character: v.Column - 1},
-			End:   Position{Line: v.Line - 1, Character: v.EndCol - 1},
+			Start: Position{Line: v.Line - 1, Character: v.Column},
+			End:   Position{Line: v.Line - 1, Character: v.EndCol},
 		},
 	}, nil
 }
@@ -79,7 +79,7 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 	}
 
 	// Let the parser handle all template parsing
-	tmpl, err := s.parser.Parse(ctx, []byte(text), params.TextDocument.URI)
+	tmpl, err := s.server.parser.Parse(ctx, []byte(text), params.TextDocument.URI)
 	if err != nil {
 		s.debugf(ctx, "failed to parse template: %v", err)
 		return nil, errors.Errorf("failed to parse template: %w", err)
@@ -94,7 +94,7 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 	typeName := strings.Split(typeHint.TypePath, ".")[len(strings.Split(typeHint.TypePath, "."))-1]
 
 	// Let the validator handle all type validation
-	typeInfo, err := s.validator.ValidateType(ctx, typeHint.TypePath, s.analyzer)
+	typeInfo, err := s.server.validator.ValidateType(ctx, typeHint.TypePath, s.server.analyzer)
 	if err != nil {
 		s.debugf(ctx, "failed to validate type: %v", err)
 		return nil, errors.Errorf("failed to validate type: %w", err)
@@ -107,14 +107,14 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 			continue
 		}
 
-		// Let the parser determine if this is a field access
-		if strings.Contains(v.Name, ".") {
-			return HandleFieldAccessHover(ctx, s.validator, v, typeInfo, typeName, params.Position)
-		}
+		// // Let the parser determine if this is a field access
+		// if v.LongName != "" {
+		// 	return HandleFieldAccessHover(ctx, s.server.validator, v, typeInfo, typeName, params.Position)
+		// }
 
 		// Convert LSP's 0-based column to parser's 1-based column for comparison
 		if v.Column <= params.Position.Character+1 && v.EndCol >= params.Position.Character+1 {
-			return HandleSimpleVariableHover(ctx, s.validator, v, typeInfo, typeName)
+			return HandleSimpleVariableHover(ctx, s.server.validator, v, typeInfo, typeName)
 		}
 	}
 

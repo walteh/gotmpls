@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
+	"github.com/walteh/go-tmpl-typer/pkg/parser"
 )
 
 // mockTypeRegistry creates a mock type registry for testing
@@ -133,22 +134,26 @@ func TestDefaultValidator_ValidateField(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		fieldPath string
+		fieldPath parser.VariableLocation
 		wantErr   bool
 		check     func(*testing.T, *FieldInfo)
 	}{
 		{
-			name:      "simple string field",
-			fieldPath: "SimpleString",
-			wantErr:   false,
+			name: "simple string field",
+			fieldPath: parser.VariableLocation{
+				LongName: "SimpleString",
+			},
+			wantErr: false,
 			check: func(t *testing.T, info *FieldInfo) {
 				assert.Equal(t, "string", info.Type.String())
 			},
 		},
 		{
-			name:      "nested field first level",
-			fieldPath: "Address",
-			wantErr:   false,
+			name: "nested field first level",
+			fieldPath: parser.VariableLocation{
+				LongName: "Address",
+			},
+			wantErr: false,
 			check: func(t *testing.T, info *FieldInfo) {
 				structType, ok := info.Type.(*types.Struct)
 				require.True(t, ok)
@@ -156,40 +161,52 @@ func TestDefaultValidator_ValidateField(t *testing.T) {
 			},
 		},
 		{
-			name:      "nested field second level",
-			fieldPath: "Address.Street",
-			wantErr:   false,
+			name: "nested field second level",
+			fieldPath: parser.VariableLocation{
+				LongName: "Address.Street",
+			},
+			wantErr: false,
 			check: func(t *testing.T, info *FieldInfo) {
 				assert.Equal(t, "string", info.Type.String())
 			},
 		},
 		{
-			name:      "nested field third level",
-			fieldPath: "Address.Location.Latitude",
-			wantErr:   false,
+			name: "nested field third level",
+			fieldPath: parser.VariableLocation{
+				LongName: "Address.Location.Latitude",
+			},
+			wantErr: false,
 			check: func(t *testing.T, info *FieldInfo) {
 				assert.Equal(t, "float64", info.Type.String())
 			},
 		},
 		{
-			name:      "invalid root field",
-			fieldPath: "NonExistent",
-			wantErr:   true,
+			name: "invalid root field",
+			fieldPath: parser.VariableLocation{
+				LongName: "NonExistent",
+			},
+			wantErr: true,
 		},
 		{
-			name:      "invalid nested field",
-			fieldPath: "Address.NonExistent",
-			wantErr:   true,
+			name: "invalid nested field",
+			fieldPath: parser.VariableLocation{
+				LongName: "Address.NonExistent",
+			},
+			wantErr: true,
 		},
 		{
-			name:      "invalid deep nested field",
-			fieldPath: "Address.Location.NonExistent",
-			wantErr:   true,
+			name: "invalid deep nested field",
+			fieldPath: parser.VariableLocation{
+				LongName: "Address.Location.NonExistent",
+			},
+			wantErr: true,
 		},
 		{
-			name:      "attempt to nest on simple type",
-			fieldPath: "SimpleString.Something",
-			wantErr:   true,
+			name: "attempt to nest on simple type",
+			fieldPath: parser.VariableLocation{
+				LongName: "SimpleString.Something",
+			},
+			wantErr: true,
 		},
 	}
 

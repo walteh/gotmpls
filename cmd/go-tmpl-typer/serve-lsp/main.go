@@ -45,7 +45,7 @@ func (me *Handler) Run(ctx context.Context) error {
 	)
 
 	// Start the server using stdin/stdout
-	if err := server.Start(ctx, os.Stdin, os.Stdout); err != nil {
+	if err := server.Spawn(ctx, os.Stdin, os.Stdout); err != nil {
 		return errors.Errorf("failed to start language server: %w", err)
 	}
 

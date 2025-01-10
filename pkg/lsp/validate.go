@@ -27,7 +27,7 @@ func (s *Server) validateDocument(ctx context.Context, uri string, content strin
 	s.debugf(ctx, "document path: %s", docPath)
 
 	// Parse the template
-	info, err := s.parser.Parse(ctx, []byte(content), docPath)
+	info, err := s.server.parser.Parse(ctx, []byte(content), docPath)
 	if err != nil {
 		s.debugf(ctx, "parse error: %v", err)
 		return nil, s.publishDiagnostics(ctx, uri, []Diagnostic{{
@@ -62,7 +62,7 @@ func (s *Server) validateDocument(ctx context.Context, uri string, content strin
 	s.debugf(ctx, "found go.mod at %s", modPath)
 
 	// Analyze the package to get type information
-	registry, err := s.analyzer.AnalyzePackage(ctx, templateDir)
+	registry, err := s.server.analyzer.AnalyzePackage(ctx, templateDir)
 	if err != nil {
 		s.debugf(ctx, "package analysis error: %v", err)
 		return nil, s.publishDiagnostics(ctx, uri, []Diagnostic{{
@@ -78,7 +78,7 @@ func (s *Server) validateDocument(ctx context.Context, uri string, content strin
 	s.debugf(ctx, "analyzed package registry: %+v", registry)
 
 	// Generate diagnostics
-	diagnostics, err := s.generator.Generate(ctx, info, s.validator, registry)
+	diagnostics, err := s.server.generator.Generate(ctx, info, s.server.validator, registry)
 	if err != nil {
 		s.debugf(ctx, "diagnostic generation error: %v", err)
 		return nil, s.publishDiagnostics(ctx, uri, []Diagnostic{{

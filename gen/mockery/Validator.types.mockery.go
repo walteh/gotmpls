@@ -9,6 +9,8 @@ import (
 
 	mock "github.com/stretchr/testify/mock"
 
+	parser "github.com/walteh/go-tmpl-typer/pkg/parser"
+
 	types "github.com/walteh/go-tmpl-typer/pkg/types"
 )
 
@@ -73,7 +75,7 @@ func (_c *MockValidator_types_GetRootMethods_Call) RunAndReturn(run func() map[s
 }
 
 // ValidateField provides a mock function with given fields: ctx, typeInfo, fieldPath
-func (_m *MockValidator_types) ValidateField(ctx context.Context, typeInfo *types.TypeInfo, fieldPath string) (*types.FieldInfo, error) {
+func (_m *MockValidator_types) ValidateField(ctx context.Context, typeInfo *types.TypeInfo, fieldPath parser.VariableLocation) (*types.FieldInfo, error) {
 	ret := _m.Called(ctx, typeInfo, fieldPath)
 
 	if len(ret) == 0 {
@@ -82,10 +84,10 @@ func (_m *MockValidator_types) ValidateField(ctx context.Context, typeInfo *type
 
 	var r0 *types.FieldInfo
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *types.TypeInfo, string) (*types.FieldInfo, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *types.TypeInfo, parser.VariableLocation) (*types.FieldInfo, error)); ok {
 		return rf(ctx, typeInfo, fieldPath)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *types.TypeInfo, string) *types.FieldInfo); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *types.TypeInfo, parser.VariableLocation) *types.FieldInfo); ok {
 		r0 = rf(ctx, typeInfo, fieldPath)
 	} else {
 		if ret.Get(0) != nil {
@@ -93,7 +95,7 @@ func (_m *MockValidator_types) ValidateField(ctx context.Context, typeInfo *type
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *types.TypeInfo, string) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, *types.TypeInfo, parser.VariableLocation) error); ok {
 		r1 = rf(ctx, typeInfo, fieldPath)
 	} else {
 		r1 = ret.Error(1)
@@ -110,14 +112,14 @@ type MockValidator_types_ValidateField_Call struct {
 // ValidateField is a helper method to define mock.On call
 //   - ctx context.Context
 //   - typeInfo *types.TypeInfo
-//   - fieldPath string
+//   - fieldPath parser.VariableLocation
 func (_e *MockValidator_types_Expecter) ValidateField(ctx interface{}, typeInfo interface{}, fieldPath interface{}) *MockValidator_types_ValidateField_Call {
 	return &MockValidator_types_ValidateField_Call{Call: _e.mock.On("ValidateField", ctx, typeInfo, fieldPath)}
 }
 
-func (_c *MockValidator_types_ValidateField_Call) Run(run func(ctx context.Context, typeInfo *types.TypeInfo, fieldPath string)) *MockValidator_types_ValidateField_Call {
+func (_c *MockValidator_types_ValidateField_Call) Run(run func(ctx context.Context, typeInfo *types.TypeInfo, fieldPath parser.VariableLocation)) *MockValidator_types_ValidateField_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*types.TypeInfo), args[2].(string))
+		run(args[0].(context.Context), args[1].(*types.TypeInfo), args[2].(parser.VariableLocation))
 	})
 	return _c
 }
@@ -127,7 +129,7 @@ func (_c *MockValidator_types_ValidateField_Call) Return(_a0 *types.FieldInfo, _
 	return _c
 }
 
-func (_c *MockValidator_types_ValidateField_Call) RunAndReturn(run func(context.Context, *types.TypeInfo, string) (*types.FieldInfo, error)) *MockValidator_types_ValidateField_Call {
+func (_c *MockValidator_types_ValidateField_Call) RunAndReturn(run func(context.Context, *types.TypeInfo, parser.VariableLocation) (*types.FieldInfo, error)) *MockValidator_types_ValidateField_Call {
 	_c.Call.Return(run)
 	return _c
 }

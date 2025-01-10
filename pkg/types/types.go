@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
+	"github.com/walteh/go-tmpl-typer/pkg/parser"
 	"gitlab.com/tozd/go/errors"
 )
 
@@ -35,7 +36,7 @@ type Validator interface {
 	// ValidateType validates a type against package information
 	ValidateType(ctx context.Context, typePath string, registry ast.PackageAnalyzer) (*TypeInfo, error)
 	// ValidateField validates a field access on a type
-	ValidateField(ctx context.Context, typeInfo *TypeInfo, fieldPath string) (*FieldInfo, error)
+	ValidateField(ctx context.Context, typeInfo *TypeInfo, fieldPath parser.VariableLocation) (*FieldInfo, error)
 	// ValidateMethod validates a method call on a type
 	ValidateMethod(ctx context.Context, methodName string) (*MethodInfo, error)
 	// GetRootMethods returns the map of root methods
@@ -257,8 +258,8 @@ func (v *DefaultValidator) ValidateType(ctx context.Context, typePath string, re
 }
 
 // ValidateField implements Validator
-func (v *DefaultValidator) ValidateField(ctx context.Context, typeInfo *TypeInfo, fieldPath string) (*FieldInfo, error) {
-	parts := strings.Split(fieldPath, ".")
+func (v *DefaultValidator) ValidateField(ctx context.Context, typeInfo *TypeInfo, fieldPath parser.VariableLocation) (*FieldInfo, error) {
+	parts := strings.Split(strings.TrimPrefix(fieldPath.LongName, "."), ".")
 	currentType := typeInfo
 
 	// Check if we're in a range context

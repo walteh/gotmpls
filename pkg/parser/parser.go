@@ -22,44 +22,24 @@ func NewDefaultTemplateParser() *DefaultTemplateParser {
 var typeHintRegex = regexp.MustCompile(`{{-?\s*/\*gotype:\s*([^*]+)\s*\*/\s*-?}}`)
 
 // GetLineAndColumn calculates the line and column number for a given position in the text
-// pos is 0-based, but we return 1-based column numbers as per editor/IDE conventions
+// pos is 0-based, but we return 1-based line and column numbers as per editor/IDE conventions
 func GetLineAndColumn(text string, pos parse.Pos) (line, col int) {
 	if pos == 0 {
 		return 1, 1
 	}
 
-	// pos is already 0-based, so we don't need to subtract 1
-	offset := int(pos)
-
-	// Count newlines before the position to get the line number
-	line = 1
+	// Count newlines up to pos to get line number
+	line = 0
 	lastNewline := -1
-	for i := 0; i < offset && i < len(text); i++ {
+	for i := 0; i < int(pos); i++ {
 		if text[i] == '\n' {
 			line++
 			lastNewline = i
 		}
 	}
 
-	// Column is the number of characters after the last newline
-	// Add 1 to convert from 0-based offset to 1-based column number
-	col = offset - lastNewline
-
-	// If we're in a pipe expression (after a |), we need to adjust the column
-	// by looking backwards from our position to find the pipe
-	if offset > 0 && offset < len(text) {
-		for i := offset - 1; i >= 0; i-- {
-			if text[i] == '|' {
-				// We found a pipe before our position, adjust the column
-				col--
-				break
-			}
-			if text[i] == '{' || text[i] == '}' || text[i] == '\n' {
-				// Stop looking if we hit template boundaries or newlines
-				break
-			}
-		}
-	}
+	// Column is just the distance from the last newline + 1 (for 1-based column)
+	col = int(pos) - lastNewline
 
 	return line, col
 }
@@ -118,8 +98,9 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 
 	// Helper function to create a variable location
 	createVarLocation := func(field *parse.FieldNode, scope string) *VariableLocation {
+		name := field.Ident[len(field.Ident)-1]
 		line, col := GetLineAndColumn(contentStr, field.Position())
-		endLine, endCol := GetLineAndColumn(contentStr, field.Position()+parse.Pos(len(field.String())-1))
+		endLine, endCol := GetLineAndColumn(contentStr, field.Position()+parse.Pos(len(name)-1)+1)
 		fullName := ""
 		for _, ident := range field.Ident {
 			fullName += ident + "."
@@ -131,13 +112,15 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 		}
 
 		item := &VariableLocation{
-			Name:    fullName,
-			Line:    line,
-			Column:  col,
-			EndLine: endLine,
-			EndCol:  endCol,
-			Scope:   scope,
+			Name:     name,
+			LongName: field.String(),
+			Line:     line,
+			Column:   col,
+			EndLine:  endLine,
+			EndCol:   endCol,
+			Scope:    scope,
 		}
+
 		seenVars[fullName] = item
 		info.Variables = append(info.Variables, *item)
 		return item
@@ -151,6 +134,7 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 		}
 
 		switch n := node.(type) {
+
 		case *parse.ActionNode:
 			if n.Pipe != nil {
 				// Only handle variables that are direct references (not part of a pipe operation)
@@ -253,7 +237,13 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 			if err := walk(n.Pipe, scope); err != nil {
 				return err
 			}
+		case *parse.TextNode:
+			// Handle text nodes (e.g., "Address:")
+			// if n != nil {
+			// 	info.Text = n.Text
+			// }
 		}
+
 		return nil
 	}
 
@@ -292,11 +282,12 @@ var _ types.Type = &VariableLocation{}
 
 // VariableLocation represents a variable usage in a template
 type VariableLocation struct {
-	Name    string
-	Line    int
-	Column  int
-	EndLine int
-	EndCol  int
+	Name     string
+	LongName string
+	Line     int
+	Column   int
+	EndLine  int
+	EndCol   int
 	// Pipe               bool
 	// MethodArgumentsRef *VariableLocation // take the result of this named type as the argument
 	MethodArguments []types.Type

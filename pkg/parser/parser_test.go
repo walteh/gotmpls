@@ -176,12 +176,47 @@ Hello {{.Name}}! You are {{.Age}} years old.
 			}(),
 			wantErr: false,
 		},
+		{
+			name: "broken example",
+			template: `{{- /*gotype: test.Person*/ -}}
+Address:
+  Street: {{.Address.Street}}`,
+			want: func() *parser.TemplateInfo {
+				streetVar := parser.VariableLocation{
+					Name:     "Street",
+					LongName: ".Address.Street",
+					Line:     3,
+					Column:   21,
+					EndLine:  3,
+					EndCol:   26,
+					Scope:    "",
+				}
+				return &parser.TemplateInfo{
+					Filename: "test.tmpl",
+					TypeHints: []parser.TypeHint{
+						{
+							TypePath: "test.Person",
+							Line:     1,
+							Column:   12,
+							Scope:    "",
+						},
+					},
+					Variables: []parser.VariableLocation{streetVar},
+					Functions: []parser.VariableLocation{},
+				}
+			}(),
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			if tt.name == "broken example" {
+				t.Logf("running %s", tt.name)
+			}
 			p := parser.NewDefaultTemplateParser()
-			got, err := p.Parse(context.Background(), []byte(tt.template), "test.tmpl")
+			got, err := p.Parse(ctx, []byte(tt.template), "test.tmpl")
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -242,10 +277,20 @@ func TestGetLineAndColumn(t *testing.T) {
 			wantLine: 2,
 			wantCol:  3,
 		},
+		{
+			name:     "broken example",
+			text:     "{{- /*gotype: test.Person*/ -}}\nAddress:\n  Street: {{.Address.Street}}",
+			pos:      parse.Pos(61),
+			wantLine: 3,
+			wantCol:  13,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.name == "broken example" {
+				t.Logf("running %s", tt.name)
+			}
 			gotLine, gotCol := parser.GetLineAndColumn(tt.text, tt.pos)
 			if gotLine != tt.wantLine || gotCol != tt.wantCol {
 				t.Errorf("GetLineAndColumn() = (%v, %v), want (%v, %v)", gotLine, gotCol, tt.wantLine, tt.wantCol)

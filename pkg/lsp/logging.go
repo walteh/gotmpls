@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/rs/xid"
@@ -21,10 +22,16 @@ type LSPWriter struct {
 	ctx  context.Context
 }
 
-func (s *Server) ApplyLSPWriter(ctx context.Context, conn *jsonrpc2.Conn) context.Context {
+func (s *Server) ApplyLSPWriter(ctx context.Context, conn *jsonrpc2.Conn, extraLogWriters ...io.Writer) context.Context {
 	lspWriter := NewLSPWriter(ctx, conn)
+	var writer io.Writer
+	if len(extraLogWriters) > 0 {
+		writer = zerolog.MultiLevelWriter(append(extraLogWriters, lspWriter)...)
+	} else {
+		writer = lspWriter
+	}
 
-	ctx = zerolog.New(lspWriter).With().
+	ctx = zerolog.New(writer).With().
 		Logger().
 		Hook(debug.CustomTimeHook{WithColor: false}).
 		Hook(debug.CustomCallerHook{WithColor: false}).

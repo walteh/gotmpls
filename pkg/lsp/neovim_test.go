@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/neovim/go-client/nvim"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	"github.com/walteh/go-tmpl-typer/pkg/archive"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
@@ -34,19 +35,19 @@ type testFiles map[string]string
 
 // neovimTestSetup contains all the necessary components for a neovim LSP test
 type neovimTestSetup struct {
-	nvimInstance *nvim.Nvim
-	server       *lsp.Server
-	tmpDir       string
-	cleanup      func()
-	t            *testing.T
+	nvimInstance  *nvim.Nvim
+	serverSpawner *lsp.ServerSpawner
+	tmpDir        string
+	cleanup       func()
+	t             *testing.T
 }
 
-func setupNeovimTest(t *testing.T, server *lsp.Server, files testFiles) (*neovimTestSetup, error) {
+func setupNeovimTest(t *testing.T, server *lsp.ServerSpawner, files testFiles) (*neovimTestSetup, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
 	setup := &neovimTestSetup{
-		server: server,
-		t:      t,
+		serverSpawner: server,
+		t:             t,
 	}
 
 	tmpDir, err := os.MkdirTemp("", "nvim-lspconfig-*")
@@ -106,7 +107,7 @@ func setupNeovimTest(t *testing.T, server *lsp.Server, files testFiles) (*neovim
 		defer conn.Close()
 
 		t.Log("Starting server...")
-		if err := server.Start(ctx, conn, conn); err != nil {
+		if err := server.Spawn(ctx, conn, conn, zerolog.NewTestWriter(t)); err != nil {
 			if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
 				serverError <- errors.Errorf("LSP server error: %v", err)
 			}

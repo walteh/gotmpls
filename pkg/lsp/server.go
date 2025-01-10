@@ -16,17 +16,13 @@ import (
 	"github.com/walteh/go-tmpl-typer/pkg/types"
 )
 
-type Server struct {
+type ServerSpawner struct {
+	id        string
 	parser    parser.TemplateParser
 	validator types.Validator
 	analyzer  ast.PackageAnalyzer
 	generator diagnostic.Generator
 	debug     bool
-	// logger    *zerolog.Logger
-	documents sync.Map // map[string]string
-	workspace string
-	conn      *jsonrpc2.Conn
-	id        string
 }
 
 type handlerFunc func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error)
@@ -62,9 +58,9 @@ func (b *bufferedReadWriteCloser) Close() error {
 	return b.closer.Close()
 }
 
-func NewServer(parser parser.TemplateParser, validator types.Validator, analyzer ast.PackageAnalyzer, generator diagnostic.Generator, debug bool) *Server {
+func NewServer(parser parser.TemplateParser, validator types.Validator, analyzer ast.PackageAnalyzer, generator diagnostic.Generator, debug bool) *ServerSpawner {
 
-	return &Server{
+	return &ServerSpawner{
 		parser:    parser,
 		validator: validator,
 		analyzer:  analyzer,
@@ -74,17 +70,34 @@ func NewServer(parser parser.TemplateParser, validator types.Validator, analyzer
 	}
 }
 
-func (s *Server) Start(ctx context.Context, reader io.Reader, writer io.Writer) error {
+type Server struct {
+	server          *ServerSpawner
+	documents       sync.Map // map[string]string
+	workspace       string
+	conn            *jsonrpc2.Conn
+	id              string
+	extraLogWriters []io.Writer
+	debug           bool
+}
+
+func (s *ServerSpawner) Spawn(ctx context.Context, reader io.Reader, writer io.Writer, extraLogWriters ...io.Writer) error {
 	// ctx = s.logger.WithContext(ctx)
 	zerolog.Ctx(ctx).Info().Msg("starting LSP server - all logging will be redirected to LSP")
 
+	spawn := &Server{
+		server:          s,
+		extraLogWriters: extraLogWriters,
+		id:              xid.New().String(),
+		conn:            nil,
+		documents:       sync.Map{},
+		workspace:       "",
+		debug:           s.debug,
+	}
+
 	// Create a buffered stream with VSCode codec for proper LSP message formatting
 	stream := jsonrpc2.NewBufferedStream(newBufferedReadWriteCloser(reader, writer), jsonrpc2.VSCodeObjectCodec{})
-	conn := jsonrpc2.NewConn(ctx, stream, s)
-	s.conn = conn
-
-	// // Log takeover message
-	// logger.Info().Msg("LSP server taking over logging output")
+	conn := jsonrpc2.NewConn(ctx, stream, spawn)
+	spawn.conn = conn
 
 	// Wait for either the connection to be closed or the context to be done
 	select {
@@ -96,7 +109,7 @@ func (s *Server) Start(ctx context.Context, reader io.Reader, writer io.Writer) 
 }
 
 func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
-	ctx = s.ApplyLSPWriter(ctx, conn)
+	ctx = s.ApplyLSPWriter(ctx, conn, s.extraLogWriters...)
 	if s.debug {
 		s.debugf(ctx, "received request: %s", req.Method)
 		if req.Params != nil {
