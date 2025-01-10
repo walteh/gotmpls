@@ -107,7 +107,13 @@ func setupNeovimTest(t *testing.T, server *lsp.ServerSpawner, files testFiles) (
 		defer conn.Close()
 
 		t.Log("Starting server...")
-		if err := server.Spawn(ctx, conn, conn, zerolog.NewTestWriter(t)); err != nil {
+		verboseLogging := os.Getenv("GO_TMPL_TYPER_VERBOSE_LOGGING") == "true"
+		loggers := []io.Writer{}
+		if verboseLogging {
+			t.Log("Verbose logging enabled")
+			loggers = append(loggers, zerolog.NewTestWriter(t))
+		}
+		if err := server.Spawn(ctx, conn, conn, loggers...); err != nil {
 			if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
 				serverError <- errors.Errorf("LSP server error: %v", err)
 			}

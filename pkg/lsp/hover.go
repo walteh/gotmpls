@@ -20,15 +20,14 @@ func HandleSimpleVariableHover(ctx context.Context, validator pkg_types.Validato
 		return nil, err
 	}
 
-	// Convert parser's 1-based positions to LSP's 0-based positions
 	return &Hover{
 		Contents: MarkupContent{
 			Kind:  "markdown",
 			Value: fmt.Sprintf("**Variable**: %s%s\n**Type**: %s", typeName, v.LongName, field.Type.String()),
 		},
 		Range: &Range{
-			Start: Position{Line: v.Line - 1, Character: v.Column},
-			End:   Position{Line: v.Line - 1, Character: v.EndCol},
+			Start: Position{Line: v.Line, Character: v.Column},
+			End:   Position{Line: v.Line, Character: v.EndCol},
 		},
 	}, nil
 }
@@ -37,8 +36,7 @@ func HandleSimpleVariableHover(ctx context.Context, validator pkg_types.Validato
 func HandleFieldAccessHover(ctx context.Context, validator pkg_types.Validator, v parser.VariableLocation, typeInfo *pkg_types.TypeInfo, typeName string, position Position) (*Hover, error) {
 	debugf(ctx, "handling field access hover for %s at position line:%d char:%d", v.Name, position.Line, position.Character)
 
-	// Convert LSP's 0-based line to parser's 1-based line for comparison
-	if position.Line+1 != v.Line {
+	if position.Line != v.Line {
 		return nil, nil
 	}
 
@@ -48,15 +46,14 @@ func HandleFieldAccessHover(ctx context.Context, validator pkg_types.Validator, 
 		return nil, err
 	}
 
-	// Convert parser's 1-based positions to LSP's 0-based positions
 	return &Hover{
 		Contents: MarkupContent{
 			Kind:  "markdown",
 			Value: fmt.Sprintf("**Variable**: %s%s\n**Type**: %s", typeName, v.LongName, field.Type.String()),
 		},
 		Range: &Range{
-			Start: Position{Line: v.Line - 1, Character: v.Column},
-			End:   Position{Line: v.Line - 1, Character: v.EndCol},
+			Start: Position{Line: v.Line, Character: v.Column},
+			End:   Position{Line: v.Line, Character: v.EndCol},
 		},
 	}, nil
 }

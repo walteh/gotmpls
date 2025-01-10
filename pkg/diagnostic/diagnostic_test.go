@@ -37,26 +37,26 @@ func mockTemplateInfo() *parser.TemplateInfo {
 		Variables: []parser.VariableLocation{
 			{
 				Name:    "Name",
-				Line:    3,
-				Column:  9,
-				EndLine: 3,
-				EndCol:  13,
+				Line:    2,
+				Column:  8,
+				EndLine: 2,
+				EndCol:  12,
 			},
 			{
 				Name:    "Address.Street",
-				Line:    4,
-				Column:  9,
-				EndLine: 4,
-				EndCol:  22,
+				Line:    3,
+				Column:  8,
+				EndLine: 3,
+				EndCol:  21,
 			},
 		},
 		Functions: []parser.VariableLocation{
 			{
 				Name:            "GetName",
-				Line:            5,
-				Column:          9,
-				EndLine:         5,
-				EndCol:          16,
+				Line:            4,
+				Column:          8,
+				EndLine:         4,
+				EndCol:          15,
 				MethodArguments: []types.Type{},
 			},
 		},
@@ -76,7 +76,7 @@ func setupMockValidator(t *testing.T, shouldErr bool, typeInfo *pkg_types.TypeIn
 	} else if typeInfo != nil && len(typeInfo.Fields) > 0 && typeInfo.Fields["GetJob"] != nil {
 		// This is the pipe operations test case
 		mockVal.EXPECT().ValidateType(mock.Anything, mock.Anything, mock.Anything).Return(typeInfo, nil).Once()
-		mockVal.EXPECT().ValidateField(mock.Anything, mock.Anything, "GetJob").Return(fieldInfo, nil).Once()
+		mockVal.EXPECT().ValidateField(mock.Anything, typeInfo, mock.Anything).Return(fieldInfo, nil).Once()
 
 		// Method validations for pipe operations
 		// First upper call with GetJob argument
@@ -115,8 +115,9 @@ func setupMockValidator(t *testing.T, shouldErr bool, typeInfo *pkg_types.TypeIn
 	} else if typeInfo != nil {
 		// This is the regular test case
 		mockVal.EXPECT().ValidateType(mock.Anything, mock.Anything, mock.Anything).Return(typeInfo, nil).Once()
-		mockVal.EXPECT().ValidateField(mock.Anything, mock.Anything, "Name").Return(fieldInfo, nil).Once()
-		mockVal.EXPECT().ValidateField(mock.Anything, mock.Anything, "Address.Street").Return(fieldInfo, nil).Once()
+		// We expect ValidateField to be called twice, once for each field
+		mockVal.EXPECT().ValidateField(mock.Anything, typeInfo, mock.Anything).Return(fieldInfo, nil).Once()
+		mockVal.EXPECT().ValidateField(mock.Anything, typeInfo, mock.Anything).Return(fieldInfo, nil).Once()
 		mockVal.EXPECT().ValidateMethod(mock.Anything, "GetName").Return(methodInfo, nil).Once()
 	}
 
@@ -162,26 +163,26 @@ func TestDefaultGenerator_Generate(t *testing.T) {
 				Hints: []diagnostic.Diagnostic{
 					{
 						Message:  "Type: string",
-						Line:     3,
-						Column:   9,
-						EndLine:  3,
-						EndCol:   13,
+						Line:     2,
+						Column:   8,
+						EndLine:  2,
+						EndCol:   12,
 						Severity: diagnostic.Hint,
 					},
 					{
 						Message:  "Type: string",
-						Line:     4,
-						Column:   9,
-						EndLine:  4,
-						EndCol:   22,
+						Line:     3,
+						Column:   8,
+						EndLine:  3,
+						EndCol:   21,
 						Severity: diagnostic.Hint,
 					},
 					{
 						Message:  "Returns: string",
-						Line:     5,
-						Column:   9,
-						EndLine:  5,
-						EndCol:   16,
+						Line:     4,
+						Column:   8,
+						EndLine:  4,
+						EndCol:   15,
 						Severity: diagnostic.Hint,
 					},
 				},
