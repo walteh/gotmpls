@@ -1,11 +1,13 @@
 module github.com/walteh/go-tmpl-typer
 
-go 1.23.4
+go 1.22.0
+
+toolchain go1.23.4
 
 require (
 	github.com/fatih/color v1.18.0
-	github.com/google/go-cmp v0.6.0
 	github.com/k0kubun/pp/v3 v3.4.1
+	github.com/neovim/go-client v1.2.1
 	github.com/rs/xid v1.5.0
 	github.com/rs/zerolog v1.33.0
 	github.com/sourcegraph/jsonrpc2 v0.2.0
@@ -20,7 +22,6 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/neovim/go-client v1.2.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect

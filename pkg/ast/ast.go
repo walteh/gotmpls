@@ -237,3 +237,87 @@ func (r *TypeRegistry) AnalyzePackage(ctx context.Context, packageDir string) (*
 	// For now, just return the registry itself since we're not doing actual package analysis
 	return r, nil
 }
+
+// TypeInfo represents information about a Go type
+type TypeInfo struct {
+	Name   string
+	Fields map[string]*FieldInfo
+}
+
+// FieldInfo represents information about a struct field
+type FieldInfo struct {
+	Name string
+	Type types.Type
+}
+
+// ValidateType validates a type against package information
+func (r *TypeRegistry) ValidateType(ctx context.Context, typePath string) (*TypeInfo, error) {
+	// Split the type path into package and type name
+	lastDot := strings.LastIndex(typePath, ".")
+	if lastDot == -1 {
+		return nil, errors.Errorf("invalid type path: %s", typePath)
+	}
+
+	pkgName, typeName := typePath[:lastDot], typePath[lastDot+1:]
+
+	// Get the package from the registry
+	pkg, err := r.GetPackage(ctx, pkgName)
+	if err != nil {
+		return nil, errors.Errorf("package not found in registry: %w", err)
+	}
+
+	// Find the type in the package scope
+	obj := pkg.Scope().Lookup(typeName)
+	if obj == nil {
+		return nil, errors.Errorf("type %s not found in package %s", typeName, pkgName)
+	}
+
+	// Get the type information
+	namedType, ok := obj.Type().(*types.Named)
+	if !ok {
+		return nil, errors.Errorf("type %s is not a named type", typeName)
+	}
+
+	// Get the underlying struct type
+	structType, ok := namedType.Underlying().(*types.Struct)
+	if !ok {
+		return nil, errors.Errorf("type %s is not a struct type", typeName)
+	}
+
+	// Create TypeInfo with fields
+	typeInfo := &TypeInfo{
+		Name:   typeName,
+		Fields: make(map[string]*FieldInfo),
+	}
+
+	// Add fields to the type info
+	for i := 0; i < structType.NumFields(); i++ {
+		field := structType.Field(i)
+		typeInfo.Fields[field.Name()] = &FieldInfo{
+			Name: field.Name(),
+			Type: field.Type(),
+		}
+	}
+
+	// Add methods to the type info
+	for i := 0; i < namedType.NumMethods(); i++ {
+		method := namedType.Method(i)
+		typeInfo.Fields[method.Name()] = &FieldInfo{
+			Name: method.Name(),
+			Type: method.Type(),
+		}
+	}
+
+	return typeInfo, nil
+}
+
+// GetFieldType returns the type of a field in a struct type
+func (r *TypeRegistry) GetFieldType(structType *types.Struct, fieldName string) (types.Type, error) {
+	for i := 0; i < structType.NumFields(); i++ {
+		field := structType.Field(i)
+		if field.Name() == fieldName {
+			return field.Type(), nil
+		}
+	}
+	return nil, errors.Errorf("field %s not found", fieldName)
+}

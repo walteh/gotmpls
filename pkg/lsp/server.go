@@ -11,7 +11,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sourcegraph/jsonrpc2"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
-	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
 	"github.com/walteh/go-tmpl-typer/pkg/types"
 )
@@ -21,7 +20,6 @@ type ServerSpawner struct {
 	parser    parser.TemplateParser
 	validator types.Validator
 	analyzer  ast.PackageAnalyzer
-	generator diagnostic.Generator
 	debug     bool
 }
 
@@ -58,18 +56,17 @@ func (b *bufferedReadWriteCloser) Close() error {
 	return b.closer.Close()
 }
 
-func NewServer(parser parser.TemplateParser, validator types.Validator, analyzer ast.PackageAnalyzer, generator diagnostic.Generator, debug bool) *ServerSpawner {
-
+func NewServer(parser parser.TemplateParser, validator types.Validator, analyzer ast.PackageAnalyzer, debug bool) *ServerSpawner {
 	return &ServerSpawner{
 		parser:    parser,
 		validator: validator,
 		analyzer:  analyzer,
-		generator: generator,
 		debug:     debug,
-		id:        xid.New().String(), // logger:    &logger,
+		id:        xid.New().String(),
 	}
 }
 
+// Server represents an LSP server instance
 type Server struct {
 	server          *ServerSpawner
 	documents       sync.Map // map[string]string
@@ -81,7 +78,6 @@ type Server struct {
 }
 
 func (s *ServerSpawner) Spawn(ctx context.Context, reader io.Reader, writer io.Writer, extraLogWriters ...io.Writer) error {
-	// ctx = s.logger.WithContext(ctx)
 	zerolog.Ctx(ctx).Info().Msg("starting LSP server - all logging will be redirected to LSP")
 
 	spawn := &Server{

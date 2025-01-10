@@ -8,6 +8,7 @@ import (
 	"text/template"
 	"text/template/parse"
 
+	"github.com/walteh/go-tmpl-typer/pkg/position"
 	"gitlab.com/tozd/go/errors"
 )
 
@@ -21,32 +22,11 @@ func NewDefaultTemplateParser() *DefaultTemplateParser {
 
 var typeHintRegex = regexp.MustCompile(`{{-?\s*/\*gotype:\s*([^*]+)\s*\*/\s*-?}}`)
 
-// GetLineAndColumn calculates the line and column number for a given position in the text
-// pos is 0-based, but we return 1-based line and column numbers as per editor/IDE conventions
-func GetLineAndColumn(text string, pos parse.Pos) (line, col int) {
-	if pos == 0 {
-		return 1, 1
-	}
-
-	// Count newlines up to pos to get line number
-	line = 0
-	lastNewline := -1
-	for i := 0; i < int(pos); i++ {
-		if text[i] == '\n' {
-			line++
-			lastNewline = i
-		}
-	}
-
-	// Column is just the distance from the last newline + 1 (for 1-based column)
-	col = int(pos) - lastNewline
-
-	return line, col
-}
-
 // Parse implements TemplateParser
 func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filename string) (*TemplateInfo, error) {
 	contentStr := string(content)
+
+	doc := position.NewDocument(contentStr)
 
 	info := &TemplateInfo{
 		Filename:  filename,
@@ -62,13 +42,9 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 		for _, match := range matches {
 			if len(match) >= 4 {
 				typePath := strings.TrimSpace(text[match[2]:match[3]])
-				line, col := GetLineAndColumn(text, parse.Pos(match[0]))
-				// The type path starts after "{{- /*gotype: " (3 + 1 + 8 = 12 characters)
-				col = 12
 				hints = append(hints, TypeHint{
 					TypePath: typePath,
-					Line:     line,
-					Column:   col,
+					Position: doc.NewBasicPosition(typePath, match[2]),
 					Scope:    scope,
 				})
 			}
@@ -93,36 +69,44 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 		return nil, errors.Errorf("failed to parse template: %w", err)
 	}
 
-	// Track seen variables to avoid duplicates but maintain references
-	seenVars := make(map[string]*VariableLocation)
+	// Track seen variables and functions to avoid duplicates but maintain references
+	seenVars := position.NewPositionsSeenMap()
+	seenFuncs := position.NewPositionsSeenMap()
 
 	// Helper function to create a variable location
 	createVarLocation := func(field *parse.FieldNode, scope string) *VariableLocation {
-		name := field.Ident[len(field.Ident)-1]
-		line, col := GetLineAndColumn(contentStr, field.Position())
-		endLine, endCol := GetLineAndColumn(contentStr, field.Position()+parse.Pos(len(name)-1)+1)
-		fullName := ""
-		for _, ident := range field.Ident {
-			fullName += ident + "."
-		}
-		fullName = strings.TrimSuffix(fullName, ".")
+		pos := doc.NewFieldNodePosition(field)
 
-		if existing, ok := seenVars[fullName]; ok {
-			return existing
+		if seenVars.Has(pos) {
+			return nil
 		}
 
 		item := &VariableLocation{
-			Name:     name,
-			LongName: field.String(),
-			Line:     line,
-			Column:   col,
-			EndLine:  endLine,
-			EndCol:   endCol,
+			Position: pos,
 			Scope:    scope,
 		}
 
-		seenVars[fullName] = item
+		seenVars.Add(pos)
 		info.Variables = append(info.Variables, *item)
+		return item
+	}
+
+	// Helper function to create a function location
+	createFuncLocation := func(fn *parse.IdentifierNode, args []types.Type, scope string) *VariableLocation {
+		pos := doc.NewIdentifierNodePosition(fn)
+
+		if seenFuncs.Has(pos) {
+			return nil
+		}
+
+		item := &VariableLocation{
+			Position:        pos,
+			MethodArguments: args,
+			Scope:           scope,
+		}
+
+		seenFuncs.Add(pos)
+		info.Functions = append(info.Functions, *item)
 		return item
 	}
 
@@ -210,20 +194,8 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 					// Process the function itself
 					if len(cmd.Args) > 0 {
 						if fn, ok := cmd.Args[0].(*parse.IdentifierNode); ok {
-							line, col := GetLineAndColumn(contentStr, fn.Position())
-							endLine, endCol := GetLineAndColumn(contentStr, fn.Position()+parse.Pos(len(fn.String())))
-
-							item := VariableLocation{
-								Name:            fn.Ident,
-								Line:            line,
-								Column:          col,
-								EndLine:         endLine,
-								EndCol:          endCol,
-								MethodArguments: args,
-								Scope:           scope,
-							}
-							info.Functions = append(info.Functions, item)
-							lastResult = &item
+							item := createFuncLocation(fn, args, scope)
+							lastResult = item
 						} else if field, ok := cmd.Args[0].(*parse.FieldNode); ok {
 							// Handle field nodes that are part of a pipe operation
 							item := createVarLocation(field, scope)
@@ -282,24 +254,28 @@ var _ types.Type = &VariableLocation{}
 
 // VariableLocation represents a variable usage in a template
 type VariableLocation struct {
-	Name     string
-	LongName string
-	Line     int
-	Column   int
-	EndLine  int
-	EndCol   int
-	// Pipe               bool
-	// MethodArgumentsRef *VariableLocation // take the result of this named type as the argument
+	Position        position.RawPosition
 	MethodArguments []types.Type
 	Scope           string // The scope of the variable (e.g., template name or block ID)
 }
 
-// String implements types.Type.
-func (v *VariableLocation) String() string {
-	return v.Name
+// Name returns the short name of the variable (last part after dot)
+func (v *VariableLocation) Name() string {
+	parts := strings.Split(v.Position.Text(), ".")
+	return parts[len(parts)-1]
 }
 
-// Underlying implements types.Type.
+// LongName returns the full name of the variable including dots
+func (v *VariableLocation) LongName() string {
+	return v.Position.Text()
+}
+
+// String implements types.Type - returns the short name
+func (v *VariableLocation) String() string {
+	return v.Name()
+}
+
+// Underlying implements types.Type
 func (v *VariableLocation) Underlying() types.Type {
 	return nil
 }
@@ -323,7 +299,6 @@ func (v *VariableLocation) Underlying() types.Type {
 // TypeHint represents a type hint comment in the template
 type TypeHint struct {
 	TypePath string // e.g. "github.com/walteh/minute-api/proto/cmd/protoc-gen-cdk/generator.BuilderConfig"
-	Line     int
-	Column   int
+	Position position.RawPosition
 	Scope    string // The scope of the type hint (e.g., template name or block ID)
 }

@@ -6,50 +6,24 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/walteh/go-tmpl-typer/gen/mockery"
+	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/completion"
-	"github.com/walteh/go-tmpl-typer/pkg/completion/providers"
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
-	typesp "github.com/walteh/go-tmpl-typer/pkg/types"
+	"github.com/walteh/go-tmpl-typer/pkg/position"
 )
 
-func TestProvider_GetCompletions(t *testing.T) {
-	mockValidator := &mockery.MockValidator_types{}
-	mockRegistry := &mockery.MockPackageAnalyzer_ast{}
+func TestGetCompletions(t *testing.T) {
+	// Create test registry
+	registry := ast.NewTypeRegistry()
+	pkg := types.NewPackage("test", "test")
+	registry.AddPackage(pkg)
 
-	// Setup mock validator
-	mockValidator.EXPECT().ValidateType(mock.Anything, "example.Person", mock.Anything).Return(&typesp.TypeInfo{
-		Name: "Person",
-		Fields: map[string]*typesp.FieldInfo{
-			"Name": {
-				Name: "Name",
-				Type: types.Typ[types.String],
-			},
-			"Age": {
-				Name: "Age",
-				Type: types.Typ[types.Int],
-			},
-		},
-	}, nil)
+	// Add test type
+	scope := pkg.Scope()
+	scope.Insert(types.NewTypeName(0, pkg, "Name", types.Typ[types.String]))
 
-	mockValidator.EXPECT().GetRootMethods().Return(map[string]*typesp.MethodInfo{
-		"len": {
-			Name:       "len",
-			Parameters: []types.Type{types.NewInterface(nil, nil)},
-			Results:    []types.Type{types.Typ[types.Int]},
-		},
-	})
-
-	// Setup mock registry
-	mockRegistry.EXPECT().GetPackage(mock.Anything, mock.Anything).Return(&types.Package{}, nil)
-	mockRegistry.EXPECT().GetTypes(mock.Anything, mock.Anything).Return(map[string]types.Object{
-		"Person": types.NewTypeName(0, types.NewPackage("example", "example"), "Person", types.NewStruct(nil, nil)),
-	}, nil)
-
-	// Create a new provider with the mocks
-	provider := completion.NewProvider(mockValidator, mockRegistry)
+	doc := position.NewDocument("dummy")
 
 	tests := []struct {
 		name          string
@@ -58,34 +32,27 @@ func TestProvider_GetCompletions(t *testing.T) {
 		character     int
 		templateInfo  *parser.TemplateInfo
 		expectError   bool
-		validateItems func(t *testing.T, items []providers.CompletionItem)
+		validateItems func(t *testing.T, items []completion.CompletionItem)
 	}{
 		{
-			name:      "basic field completion",
+			name:      "field completion",
 			content:   "{{ .Name }}",
 			line:      1,
 			character: 8,
 			templateInfo: &parser.TemplateInfo{
 				TypeHints: []parser.TypeHint{
 					{
-						TypePath: "example.Person",
-						Line:     1,
-						Column:   1,
-						Scope:    "",
+						TypePath: "Name",
+						Position: doc.NewBasicPosition("Name", 0),
 					},
 				},
 			},
-			validateItems: func(t *testing.T, items []providers.CompletionItem) {
-				require.NotEmpty(t, items)
-				found := false
-				for _, item := range items {
-					if item.Label == "Name" {
-						found = true
-						assert.Equal(t, "field", item.Kind)
-						break
-					}
-				}
-				assert.True(t, found, "Expected field 'Name' not found")
+			validateItems: func(t *testing.T, items []completion.CompletionItem) {
+				require.Len(t, items, 1, "should have one completion item")
+				item := items[0]
+				assert.Equal(t, "Name", item.Label, "completion label should match")
+				assert.Equal(t, string(completion.CompletionKindField), item.Kind, "should be a field completion")
+				assert.Equal(t, "string", item.Detail, "type detail should match")
 			},
 		},
 		{
@@ -96,36 +63,28 @@ func TestProvider_GetCompletions(t *testing.T) {
 			templateInfo: &parser.TemplateInfo{
 				Variables: []parser.VariableLocation{
 					{
-						Name:   "user",
-						Line:   1,
-						Column: 1,
-						Scope:  "",
+						Position: doc.NewBasicPosition("user", 0),
+						Scope:    "",
 					},
 				},
 			},
-			validateItems: func(t *testing.T, items []providers.CompletionItem) {
-				require.NotEmpty(t, items)
-				found := false
-				for _, item := range items {
-					if item.Label == "user" {
-						found = true
-						assert.Equal(t, "variable", item.Kind)
-						break
-					}
-				}
-				assert.True(t, found, "Expected variable 'user' not found")
+			validateItems: func(t *testing.T, items []completion.CompletionItem) {
+				require.Len(t, items, 1, "should have one completion item")
+				item := items[0]
+				assert.Equal(t, "user", item.Label, "completion label should match")
+				assert.Equal(t, string(completion.CompletionKindVariable), item.Kind, "should be a variable completion")
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			items, err := provider.GetCompletions(context.Background(), tt.templateInfo, tt.line, tt.character, tt.content)
+			items, err := completion.GetCompletions(context.Background(), registry, tt.templateInfo, tt.line, tt.character, tt.content)
 			if tt.expectError {
-				require.Error(t, err)
+				require.Error(t, err, "should return an error")
 				return
 			}
-			require.NoError(t, err)
+			require.NoError(t, err, "should not return an error")
 			tt.validateItems(t, items)
 		})
 	}

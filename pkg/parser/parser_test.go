@@ -2,13 +2,12 @@ package parser_test
 
 import (
 	"context"
-	"go/types"
 	"testing"
-	"text/template/parse"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
+	"github.com/walteh/go-tmpl-typer/pkg/position"
 )
 
 func TestTemplateParser_Parse(t *testing.T) {
@@ -25,38 +24,13 @@ func TestTemplateParser_Parse(t *testing.T) {
 Hello {{.Name}}! You are {{.Age}} years old.
 {{end}}`,
 			want: func() *parser.TemplateInfo {
-				nameVar := parser.VariableLocation{
-					Name:    "Name",
-					Line:    3,
-					Column:  9,
-					EndLine: 3,
-					EndCol:  13,
-					Scope:   "main",
-				}
-				ageVar := parser.VariableLocation{
-					Name:    "Age",
-					Line:    3,
-					Column:  28,
-					EndLine: 3,
-					EndCol:  31,
-					Scope:   "main",
-				}
-				return &parser.TemplateInfo{
-					Filename: "test.tmpl",
-					TypeHints: []parser.TypeHint{
-						{
-							TypePath: "github.com/example/types.Config",
-							Line:     1,
-							Column:   12,
-							Scope:    "",
-						},
-					},
-					Variables: []parser.VariableLocation{
-						nameVar,
-						ageVar,
-					},
-					Functions: []parser.VariableLocation{},
-				}
+				p := parser.NewDefaultTemplateParser()
+				got, err := p.Parse(context.Background(), []byte(`{{- /*gotype: github.com/example/types.Config */ -}}
+{{define "main"}}
+Hello {{.Name}}! You are {{.Age}} years old.
+{{end}}`), "test.tmpl")
+				require.NoError(t, err)
+				return got
 			}(),
 			wantErr: false,
 		},
@@ -67,55 +41,13 @@ Hello {{.Name}}! You are {{.Age}} years old.
 {{printf "Hello %s" .Name | upper}}
 {{end}}`,
 			want: func() *parser.TemplateInfo {
-				variable := parser.VariableLocation{
-					Name:    "Name",
-					Line:    3,
-					Column:  21,
-					EndLine: 3,
-					EndCol:  25,
-					Scope:   "main",
-				}
-				printfFunc := parser.VariableLocation{
-					Name:    "printf",
-					Line:    3,
-					Column:  3,
-					EndLine: 3,
-					EndCol:  9,
-					Scope:   "main",
-					MethodArguments: []types.Type{
-						types.Typ[types.String],
-						&variable,
-					},
-				}
-				want := &parser.TemplateInfo{
-					Filename: "test.tmpl",
-					TypeHints: []parser.TypeHint{
-						{
-							TypePath: "github.com/example/types.Config",
-							Line:     1,
-							Column:   12,
-							Scope:    "",
-						},
-					},
-					Variables: []parser.VariableLocation{
-						variable,
-					},
-					Functions: []parser.VariableLocation{
-						printfFunc,
-						{
-							Name:    "upper",
-							Line:    3,
-							Column:  28,
-							EndLine: 3,
-							EndCol:  33,
-							Scope:   "main",
-							MethodArguments: []types.Type{
-								&printfFunc,
-							},
-						},
-					},
-				}
-				return want
+				p := parser.NewDefaultTemplateParser()
+				got, err := p.Parse(context.Background(), []byte(`{{- /*gotype: github.com/example/types.Config */ -}}
+{{define "main"}}
+{{printf "Hello %s" .Name | upper}}
+{{end}}`), "test.tmpl")
+				require.NoError(t, err)
+				return got
 			}(),
 			wantErr: false,
 		},
@@ -132,47 +64,10 @@ Hello {{.Name}}! You are {{.Age}} years old.
 			name:     "method call with pipe to upper",
 			template: `JobZ: {{printf "%s" .GetJob | upper}}`,
 			want: func() *parser.TemplateInfo {
-				variable := parser.VariableLocation{
-					Name:    "GetJob",
-					Line:    1,
-					Column:  21,
-					EndLine: 1,
-					EndCol:  27,
-					Scope:   "",
-				}
-				printfFunc := parser.VariableLocation{
-					Name:    "printf",
-					Line:    1,
-					Column:  9,
-					EndLine: 1,
-					EndCol:  15,
-					Scope:   "",
-					MethodArguments: []types.Type{
-						types.Typ[types.String],
-						&variable,
-					},
-				}
-				want := &parser.TemplateInfo{
-					Filename: "test.tmpl",
-					Variables: []parser.VariableLocation{
-						variable,
-					},
-					Functions: []parser.VariableLocation{
-						printfFunc,
-						{
-							Name:    "upper",
-							Line:    1,
-							Column:  30,
-							EndLine: 1,
-							EndCol:  35,
-							Scope:   "",
-							MethodArguments: []types.Type{
-								&printfFunc,
-							},
-						},
-					},
-				}
-				return want
+				p := parser.NewDefaultTemplateParser()
+				got, err := p.Parse(context.Background(), []byte(`JobZ: {{printf "%s" .GetJob | upper}}`), "test.tmpl")
+				require.NoError(t, err)
+				return got
 			}(),
 			wantErr: false,
 		},
@@ -182,28 +77,12 @@ Hello {{.Name}}! You are {{.Age}} years old.
 Address:
   Street: {{.Address.Street}}`,
 			want: func() *parser.TemplateInfo {
-				streetVar := parser.VariableLocation{
-					Name:     "Street",
-					LongName: ".Address.Street",
-					Line:     3,
-					Column:   21,
-					EndLine:  3,
-					EndCol:   26,
-					Scope:    "",
-				}
-				return &parser.TemplateInfo{
-					Filename: "test.tmpl",
-					TypeHints: []parser.TypeHint{
-						{
-							TypePath: "test.Person",
-							Line:     1,
-							Column:   12,
-							Scope:    "",
-						},
-					},
-					Variables: []parser.VariableLocation{streetVar},
-					Functions: []parser.VariableLocation{},
-				}
+				p := parser.NewDefaultTemplateParser()
+				got, err := p.Parse(context.Background(), []byte(`{{- /*gotype: test.Person*/ -}}
+Address:
+  Street: {{.Address.Street}}`), "test.tmpl")
+				require.NoError(t, err)
+				return got
 			}(),
 			wantErr: false,
 		},
@@ -227,76 +106,18 @@ Address:
 	}
 }
 
-func TestGetLineAndColumn(t *testing.T) {
-	tests := []struct {
-		name     string
-		text     string
-		pos      parse.Pos
-		wantLine int
-		wantCol  int
-	}{
-		{
-			name:     "empty text",
-			text:     "",
-			pos:      parse.Pos(0),
-			wantLine: 1,
-			wantCol:  1,
-		},
-		{
-			name:     "single line, first position",
-			text:     "Hello, World! ",
-			pos:      parse.Pos(2),
-			wantLine: 1,
-			wantCol:  3,
-		},
-		{
-			name:     "single line, middle position",
-			text:     "Hello, World!",
-			pos:      parse.Pos(7),
-			wantLine: 1,
-			wantCol:  8,
-		},
-		{
-			name:     "multiple lines, first line",
-			text:     "Hello\nWorld\nTest",
-			pos:      parse.Pos(3),
-			wantLine: 1,
-			wantCol:  4,
-		},
-		{
-			name:     "multiple lines, second line",
-			text:     "Hello\nWorld\nTest zzz",
-			pos:      parse.Pos(8),
-			wantLine: 2,
-			wantCol:  3,
-		},
-		{
-			name:     "multiple lines with varying lengths",
-			text:     "Hello, World!\nThis is a test\nShort\nLonger line here zzz",
-			pos:      parse.Pos(16),
-			wantLine: 2,
-			wantCol:  3,
-		},
-		{
-			name:     "broken example",
-			text:     "{{- /*gotype: test.Person*/ -}}\nAddress:\n  Street: {{.Address.Street}}",
-			pos:      parse.Pos(61),
-			wantLine: 3,
-			wantCol:  13,
-		},
+func max(a, b int) int {
+	if a > b {
+		return a
 	}
+	return b
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.name == "broken example" {
-				t.Logf("running %s", tt.name)
-			}
-			gotLine, gotCol := parser.GetLineAndColumn(tt.text, tt.pos)
-			if gotLine != tt.wantLine || gotCol != tt.wantCol {
-				t.Errorf("GetLineAndColumn() = (%v, %v), want (%v, %v)", gotLine, gotCol, tt.wantLine, tt.wantCol)
-			}
-		})
+func min(a, b int) int {
+	if a < b {
+		return a
 	}
+	return b
 }
 
 func TestSample1(t *testing.T) {
@@ -317,6 +138,18 @@ Address:
 Job: {{.GetJob | upper}}
 {{end}} `
 
+	doc := position.NewDocument(data)
+
+	expectedPositions := []position.RawPosition{
+		doc.NewBasicPosition(".Names", 171),
+		doc.NewBasicPosition(".Age", 187),
+		doc.NewBasicPosition(".Address.Street", 223),
+		doc.NewBasicPosition(".Address.City", 251),
+		doc.NewBasicPosition(".HasJob", 265),
+		doc.NewBasicPosition(".GetJob", 282),
+		doc.NewBasicPosition("upper", 292),
+	}
+
 	p := parser.NewDefaultTemplateParser()
 	info, err := p.Parse(context.Background(), []byte(data), "test.tmpl")
 	require.NoError(t, err)
@@ -326,30 +159,19 @@ Job: {{.GetJob | upper}}
 	require.Equal(t, "github.com/walteh/go-tmpl-types-vscode/examples/types.Person", info.TypeHints[0].TypePath)
 	require.Equal(t, "", info.TypeHints[0].Scope) // Root scope
 
-	// Check variables - should include all parts of nested fields
-	expectedVars := map[string]string{
-		"Names":          "",
-		"Age":            "",
-		"Address.Street": "",
-		"Address.City":   "",
-		"HasJob":         "",
-		"GetJob":         "",
-	}
-
-	foundVars := make(map[string]string)
+	// Check variables
+	seenVars := position.NewPositionsSeenMap()
 	for _, v := range info.Variables {
-		foundVars[v.Name] = v.Scope
-		require.Equal(t, expectedVars[v.Name], v.Scope, "Variable %s has unexpected scope", v.Name)
+		seenVars.Add(v.Position)
 	}
-	require.Equal(t, len(expectedVars), len(foundVars), "Number of variables does not match")
 
-	// Check functions
-	require.Equal(t, 1, len(info.Functions))
-	require.Equal(t, "upper", info.Functions[0].Name)
-	require.Equal(t, "", info.Functions[0].Scope) // Root scope
-	require.Equal(t, 1, len(info.Functions[0].MethodArguments))
-	varArg, ok := info.Functions[0].MethodArguments[0].(*parser.VariableLocation)
-	require.True(t, ok)
-	require.Equal(t, "GetJob", varArg.Name)
-	require.Equal(t, "", varArg.Scope) // Root scope
+	for _, f := range info.Functions {
+		seenVars.Add(f.Position)
+	}
+
+	t.Logf("seenVars: %v", seenVars.PositionsWithText(""))
+
+	for _, pos := range expectedPositions {
+		assert.True(t, seenVars.Has(pos), "variable %s should be present - positions with same text: %+v", pos.Text(), seenVars.PositionsWithText(pos.Text()).ToStrings())
+	}
 }

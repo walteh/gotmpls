@@ -2,123 +2,101 @@ package completion
 
 import (
 	"strings"
-	"unicode"
 )
 
-// CompletionContext represents the context in which completion is being requested
+// CompletionContext holds information about the completion request context
 type CompletionContext struct {
-	Line       string
-	Position   int
-	InAction   bool
-	AfterDot   bool
-	Expression string
+	Content   string
+	Line      int
+	Character int
+	AfterDot  bool
 }
 
-// NewCompletionContext creates a new completion context for the given line and position
+// NewCompletionContext creates a new completion context
 func NewCompletionContext(content string, line, character int) *CompletionContext {
-	// Get the current line's content
-	lines := strings.Split(content, "\n")
-	if line <= 0 || line > len(lines) {
-		return &CompletionContext{}
-	}
-	currentLine := lines[line-1]
-	if character <= 0 || character > len(currentLine) {
-		return &CompletionContext{}
-	}
-
-	// Create the context with 0-based position
 	ctx := &CompletionContext{
-		Line:     currentLine,
-		Position: character,
+		Content:   content,
+		Line:      line,
+		Character: character,
 	}
 
-	// Find the first dot in the line
-	firstDot := -1
-	for i := 0; i < len(currentLine); i++ {
-		if currentLine[i] == '.' {
-			firstDot = i
-			break
+	// Check if we're after a dot
+	lines := strings.Split(content, "\n")
+	if line > 0 && line <= len(lines) {
+		currentLine := lines[line-1]
+		// Convert 1-based character position to 0-based for array indexing
+		char := character - 1
+		if char >= 0 && char < len(currentLine) {
+			// Check if we're at or right after a dot
+			if char > 0 && (currentLine[char] == '.' || (currentLine[char-1] == '.' && !strings.ContainsAny(currentLine[char:char+1], " \t"))) {
+				ctx.AfterDot = true
+			}
 		}
-	}
-
-	// If we found a dot, adjust the line to start from there
-	if firstDot >= 0 {
-		fieldPart := currentLine[firstDot:]
-		ctx.Line = fieldPart
-		ctx.Position = character - firstDot
-	}
-
-	// Set the context flags
-	ctx.AfterDot = ctx.isDotCompletion()
-	if ctx.AfterDot {
-		ctx.Expression = ctx.getExpressionBeforeDot()
 	}
 
 	return ctx
 }
 
-func (c *CompletionContext) isInTemplateAction() bool {
-	// For now, we're not dealing with template actions
-	// We'll just focus on field completions
-	return false
-}
-
-func (c *CompletionContext) isDotCompletion() bool {
-	if c.Position <= 0 || c.Position > len(c.Line) {
-		return false
-	}
-
-	// Check if we're right after a dot
-	if c.Position > 0 && c.Line[c.Position-1] == '.' {
-		return true
-	}
-
-	// Also check if we're at the start of a field reference
-	if c.Position == 1 && c.Line[0] == '.' {
-		return true
-	}
-
-	// Also check if we're at position 2 in a line starting with a dot
-	if c.Position == 2 && len(c.Line) >= 2 && c.Line[0] == '.' {
-		return true
-	}
-
-	return false
-}
-
-func (c *CompletionContext) getExpressionBeforeDot() string {
-	if c.Position <= 0 || c.Position > len(c.Line) {
-		return ""
-	}
-
-	// Find the last dot before the position
-	dotIndex := -1
-	for i := c.Position - 1; i >= 0; i-- {
-		if c.Line[i] == '.' {
-			dotIndex = i
-			break
+// IsInTemplateAction checks if the current position is within a template action ({{ }})
+func (c *CompletionContext) IsInTemplateAction() bool {
+	lines := strings.Split(c.Content, "\n")
+	if c.Line > 0 && c.Line <= len(lines) {
+		currentLine := lines[c.Line-1]
+		// Convert 1-based character position to 0-based for array indexing
+		char := c.Character - 1
+		if char >= 0 && char < len(currentLine) {
+			// Find the last {{ before the current position
+			lastOpen := strings.LastIndex(currentLine[:char+1], "{{")
+			if lastOpen == -1 {
+				return false
+			}
+			// Find the next }} after the last {{
+			nextClose := strings.Index(currentLine[lastOpen:], "}}")
+			if nextClose == -1 {
+				return true // No closing bracket found, assume we're in a template action
+			}
+			// Check if we're between {{ and }}
+			return char < lastOpen+nextClose
 		}
 	}
-	if dotIndex == -1 {
-		return ""
-	}
+	return false
+}
 
-	// Find the start of the expression before the dot
-	start := dotIndex - 1
-	for start >= 0 && unicode.IsSpace(rune(c.Line[start])) {
-		start--
+// GetExpressionBeforeDot returns the expression before the current dot
+func (c *CompletionContext) GetExpressionBeforeDot() string {
+	lines := strings.Split(c.Content, "\n")
+	if c.Line > 0 && c.Line <= len(lines) {
+		currentLine := lines[c.Line-1]
+		// Convert 1-based character position to 0-based for array indexing
+		char := c.Character - 1
+		if char >= 0 && char < len(currentLine) {
+			// Find the last dot before the current position
+			lastDot := strings.LastIndex(currentLine[:char+1], ".")
+			if lastDot == -1 {
+				return ""
+			}
+			// Find the previous dot or start of the line
+			prevDot := strings.LastIndex(currentLine[:lastDot], ".")
+			if prevDot == -1 {
+				// Look for {{ or start of line
+				start := strings.LastIndex(currentLine[:lastDot], "{{")
+				if start == -1 {
+					start = 0
+				} else {
+					start += 2 // Skip past {{
+				}
+				prevDot = start
+			} else {
+				prevDot++
+			}
+			// Return the expression between the dots, trimming any whitespace
+			return strings.TrimSpace(currentLine[prevDot:lastDot])
+		}
 	}
+	return ""
+}
 
-	// Find the end of the expression
-	end := start + 1
-	for start >= 0 && (unicode.IsLetter(rune(c.Line[start])) || unicode.IsDigit(rune(c.Line[start])) || c.Line[start] == '_') {
-		start--
-	}
-	start++
-
-	if start >= end {
-		return ""
-	}
-
-	return c.Line[start:end]
+// IsDotCompletion checks if we should provide dot completion
+func (c *CompletionContext) IsDotCompletion() bool {
+	return c.AfterDot && c.IsInTemplateAction()
 }

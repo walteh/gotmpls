@@ -256,3 +256,22 @@ func extractNumber(str, prefix, suffix string, startFrom ...int) int64 {
 	}
 	return val
 }
+
+// CompletionItemKind represents the kind of completion item
+type CompletionItemKind int
+
+const (
+	CompletionItemKindText     = 1
+	CompletionItemKindMethod   = 2
+	CompletionItemKindFunction = 3
+	CompletionItemKindField    = 4
+	CompletionItemKindVariable = 5
+)
+
+// CompletionItem represents a completion suggestion in LSP
+type CompletionItem struct {
+	Label         string             `json:"label"`
+	Kind          CompletionItemKind `json:"kind,omitempty"`
+	Detail        string             `json:"detail,omitempty"`
+	Documentation interface{}        `json:"documentation,omitempty"`
+}

@@ -319,3 +319,150 @@ func TestFunctionNode_Position(t *testing.T) {
 		})
 	}
 }
+
+func createMockRegistry(t *testing.T) *ast.TypeRegistry {
+	// Create a new types.Package
+	pkg := types.NewPackage("github.com/example/types", "types")
+
+	// Create a mock struct type
+	fields := []*types.Var{
+		types.NewField(0, pkg, "Name", types.Typ[types.String], false),
+		types.NewField(0, pkg, "Age", types.Typ[types.Int], false),
+		types.NewField(0, pkg, "SimpleString", types.Typ[types.String], false),
+	}
+	structType := types.NewStruct(fields, nil)
+
+	// Create the named type
+	named := types.NewNamed(
+		types.NewTypeName(0, pkg, "Person", nil),
+		structType,
+		nil,
+	)
+
+	// Add a method
+	sig := types.NewSignature(
+		nil,
+		types.NewTuple(),
+		types.NewTuple(types.NewVar(0, pkg, "", types.Typ[types.String])),
+		false,
+	)
+	named.AddMethod(types.NewFunc(0, pkg, "GetName", sig))
+
+	// Store in package scope
+	scope := pkg.Scope()
+	scope.Insert(named.Obj())
+
+	// Create and return the type registry
+	registry := ast.NewTypeRegistry()
+	registry.Types[pkg.Path()] = pkg
+	return registry
+}
+
+func TestTypeRegistry_ValidateType(t *testing.T) {
+	registry := createMockRegistry(t)
+	ctx := context.Background()
+
+	tests := []struct {
+		name     string
+		typePath string
+		wantErr  bool
+		check    func(*testing.T, *ast.TypeInfo)
+	}{
+		{
+			name:     "valid type",
+			typePath: "github.com/example/types.Person",
+			wantErr:  false,
+			check: func(t *testing.T, info *ast.TypeInfo) {
+				require.NotNil(t, info.Fields["Name"])
+				assert.Equal(t, "string", info.Fields["Name"].Type.String())
+				assert.Equal(t, "int", info.Fields["Age"].Type.String())
+				assert.Equal(t, "string", info.Fields["SimpleString"].Type.String())
+				assert.NotNil(t, info.Fields["GetName"], "method should be included in fields")
+			},
+		},
+		{
+			name:     "invalid type",
+			typePath: "github.com/example/types.NonExistent",
+			wantErr:  true,
+		},
+		{
+			name:     "invalid package",
+			typePath: "invalid/package.Type",
+			wantErr:  true,
+		},
+		{
+			name:     "invalid type path format",
+			typePath: "invalidformat",
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			typeInfo, err := registry.ValidateType(ctx, tt.typePath)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, typeInfo)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.NotNil(t, typeInfo)
+			if tt.check != nil {
+				tt.check(t, typeInfo)
+			}
+		})
+	}
+}
+
+func TestTypeRegistry_GetFieldType(t *testing.T) {
+	registry := createMockRegistry(t)
+	pkg := types.NewPackage("test", "test")
+
+	// Create a struct type for testing
+	fields := []*types.Var{
+		types.NewField(0, pkg, "Name", types.Typ[types.String], false),
+		types.NewField(0, pkg, "Age", types.Typ[types.Int], false),
+	}
+	structType := types.NewStruct(fields, nil)
+
+	tests := []struct {
+		name      string
+		fieldName string
+		wantType  types.Type
+		wantErr   bool
+	}{
+		{
+			name:      "existing string field",
+			fieldName: "Name",
+			wantType:  types.Typ[types.String],
+			wantErr:   false,
+		},
+		{
+			name:      "existing int field",
+			fieldName: "Age",
+			wantType:  types.Typ[types.Int],
+			wantErr:   false,
+		},
+		{
+			name:      "non-existent field",
+			fieldName: "NonExistent",
+			wantType:  nil,
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fieldType, err := registry.GetFieldType(structType, tt.fieldName)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, fieldType)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantType, fieldType)
+		})
+	}
+}
