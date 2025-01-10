@@ -2,7 +2,6 @@ package ast
 
 import (
 	"context"
-	"go/types"
 	"os"
 	"path/filepath"
 
@@ -11,20 +10,8 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-// DefaultPackageAnalyzer implements PackageAnalyzer
-type DefaultPackageAnalyzer struct {
-	registry *TypeRegistry
-}
-
-// NewDefaultPackageAnalyzer creates a new DefaultPackageAnalyzer
-func NewDefaultPackageAnalyzer() *DefaultPackageAnalyzer {
-	return &DefaultPackageAnalyzer{
-		registry: NewTypeRegistry(),
-	}
-}
-
 // AnalyzePackage implements PackageAnalyzer
-func (a *DefaultPackageAnalyzer) AnalyzePackage(ctx context.Context, dir string) (*TypeRegistry, error) {
+func AnalyzePackage(ctx context.Context, dir string) (*Registry, error) {
 	// Check if go.mod exists
 	modPath := filepath.Join(dir, "go.mod")
 	if _, err := os.Stat(modPath); err != nil {
@@ -76,6 +63,8 @@ func (a *DefaultPackageAnalyzer) AnalyzePackage(ctx context.Context, dir string)
 		return nil, errors.Errorf("no packages found in directory: %s", dir)
 	}
 
+	registry := NewRegistry()
+
 	for _, pkg := range pkgs {
 		if pkg.Types == nil {
 			zerolog.Ctx(ctx).Debug().Msgf("skipping package %s: no type information\n", pkg.PkgPath)
@@ -83,18 +72,8 @@ func (a *DefaultPackageAnalyzer) AnalyzePackage(ctx context.Context, dir string)
 		}
 
 		zerolog.Ctx(ctx).Debug().Msgf("adding package to registry: %s\n", pkg.PkgPath)
-		a.registry.AddPackage(pkg.Types)
+		registry.AddPackage(pkg.Types)
 	}
 
-	return a.registry, nil
-}
-
-// GetPackage implements PackageAnalyzer
-func (a *DefaultPackageAnalyzer) GetPackage(ctx context.Context, pkgPath string) (*types.Package, error) {
-	return a.registry.GetPackage(ctx, pkgPath)
-}
-
-// GetTypes implements PackageAnalyzer
-func (a *DefaultPackageAnalyzer) GetTypes(ctx context.Context, pkgPath string) (map[string]types.Object, error) {
-	return a.registry.GetTypes(ctx, pkgPath)
+	return registry, nil
 }

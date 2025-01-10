@@ -12,21 +12,11 @@ import (
 	"gitlab.com/tozd/go/errors"
 )
 
-// DefaultTemplateParser is the default implementation of TemplateParser
-type DefaultTemplateParser struct{}
-
-// NewDefaultTemplateParser creates a new DefaultTemplateParser
-func NewDefaultTemplateParser() *DefaultTemplateParser {
-	return &DefaultTemplateParser{}
-}
-
 var typeHintRegex = regexp.MustCompile(`{{-?\s*/\*gotype:\s*([^*]+)\s*\*/\s*-?}}`)
 
 // Parse implements TemplateParser
-func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filename string) (*TemplateInfo, error) {
+func Parse(ctx context.Context, content []byte, filename string) (*TemplateInfo, error) {
 	contentStr := string(content)
-
-	doc := position.NewDocument(contentStr)
 
 	info := &TemplateInfo{
 		Filename:  filename,
@@ -44,7 +34,7 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 				typePath := strings.TrimSpace(text[match[2]:match[3]])
 				hints = append(hints, TypeHint{
 					TypePath: typePath,
-					Position: doc.NewBasicPosition(typePath, match[2]),
+					Position: position.NewBasicPosition(typePath, match[2]),
 					Scope:    scope,
 				})
 			}
@@ -75,7 +65,7 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 
 	// Helper function to create a variable location
 	createVarLocation := func(field *parse.FieldNode, scope string) *VariableLocation {
-		pos := doc.NewFieldNodePosition(field)
+		pos := position.NewFieldNodePosition(field)
 
 		if seenVars.Has(pos) {
 			return nil
@@ -93,7 +83,7 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 
 	// Helper function to create a function location
 	createFuncLocation := func(fn *parse.IdentifierNode, args []types.Type, scope string) *VariableLocation {
-		pos := doc.NewIdentifierNodePosition(fn)
+		pos := position.NewIdentifierNodePosition(fn)
 
 		if seenFuncs.Has(pos) {
 			return nil
@@ -234,12 +224,6 @@ func (p *DefaultTemplateParser) Parse(ctx context.Context, content []byte, filen
 	}
 
 	return info, nil
-}
-
-// TemplateParser is responsible for parsing Go template files and extracting type information
-type TemplateParser interface {
-	// Parse parses a template file and returns the locations of variables and functions used
-	Parse(ctx context.Context, content []byte, filename string) (*TemplateInfo, error)
 }
 
 // TemplateInfo contains information about a parsed template

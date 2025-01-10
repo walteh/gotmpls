@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 
 	"github.com/sourcegraph/jsonrpc2"
+	"github.com/walteh/go-tmpl-typer/pkg/bridge"
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
-	"github.com/walteh/go-tmpl-typer/pkg/types"
 	"gitlab.com/tozd/go/errors"
 )
 
@@ -27,7 +27,7 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 	}
 
 	// Parse the template
-	info, err := s.server.parser.Parse(ctx, []byte(content), params.TextDocument.URI)
+	info, err := parser.Parse(ctx, []byte(content), params.TextDocument.URI)
 	if err != nil {
 		return nil, errors.Errorf("parsing template for hover: %w", err)
 	}
@@ -39,7 +39,7 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 	}
 
 	// Get type info
-	typeInfo, err := s.server.validator.ValidateType(ctx, hint.TypePath)
+	typeInfo, err := bridge.ValidateType(ctx, hint.TypePath)
 	if err != nil {
 		return nil, errors.Errorf("validating type for hover: %w", err)
 	}

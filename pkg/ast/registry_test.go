@@ -1,4 +1,4 @@
-package ast
+package ast_test
 
 import (
 	"context"
@@ -6,11 +6,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/walteh/go-tmpl-typer/pkg/bridge"
+	"github.com/walteh/go-tmpl-typer/pkg/ast"
 )
 
-func createMockRegistry(t *testing.T) *Registry {
+func createMockRegistry(t *testing.T) *ast.Registry {
 	// Create a new types.Package
 	pkg := types.NewPackage("github.com/example/types", "types")
 
@@ -43,66 +42,9 @@ func createMockRegistry(t *testing.T) *Registry {
 	scope.Insert(named.Obj())
 
 	// Create and return the type registry
-	registry := NewRegistry()
+	registry := ast.NewRegistry()
 	registry.Types[pkg.Path()] = pkg
 	return registry
-}
-
-func TestRegistry_ValidateType(t *testing.T) {
-	registry := createMockRegistry(t)
-	ctx := context.Background()
-
-	tests := []struct {
-		name     string
-		typePath string
-		wantErr  bool
-		check    func(*testing.T, *bridge.TypeInfo)
-	}{
-		{
-			name:     "valid type",
-			typePath: "github.com/example/types.Person",
-			wantErr:  false,
-			check: func(t *testing.T, info *bridge.TypeInfo) {
-				require.NotNil(t, info.Fields["Name"])
-				assert.Equal(t, "string", info.Fields["Name"].Type.String())
-				assert.Equal(t, "int", info.Fields["Age"].Type.String())
-				assert.Equal(t, "string", info.Fields["SimpleString"].Type.String())
-				assert.NotNil(t, info.Fields["GetName"], "method should be included in fields")
-			},
-		},
-		{
-			name:     "invalid type",
-			typePath: "github.com/example/types.NonExistent",
-			wantErr:  true,
-		},
-		{
-			name:     "invalid package",
-			typePath: "invalid/package.Type",
-			wantErr:  true,
-		},
-		{
-			name:     "invalid type path format",
-			typePath: "invalidformat",
-			wantErr:  true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			typeInfo, err := registry.ValidateType(ctx, tt.typePath)
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Nil(t, typeInfo)
-				return
-			}
-
-			assert.NoError(t, err)
-			assert.NotNil(t, typeInfo)
-			if tt.check != nil {
-				tt.check(t, typeInfo)
-			}
-		})
-	}
 }
 
 func TestRegistry_GetFieldType(t *testing.T) {

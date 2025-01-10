@@ -1,4 +1,4 @@
-package bridge
+package ast
 
 import (
 	"go/types"

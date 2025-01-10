@@ -4,40 +4,27 @@ import (
 	"context"
 
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
-	"github.com/walteh/go-tmpl-typer/pkg/bridge"
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
+	"github.com/walteh/go-tmpl-typer/pkg/position"
 	"gitlab.com/tozd/go/errors"
 )
 
 // Diagnostic represents a diagnostic message
 type Diagnostic struct {
 	Message  string
-	Location parser.RawPosition
-}
-
-// DiagnosticProvider provides diagnostic information for templates
-type DiagnosticProvider struct {
-	registry *ast.Registry
-}
-
-// NewDiagnosticProvider creates a new DiagnosticProvider
-func NewDiagnosticProvider(registry *ast.Registry) *DiagnosticProvider {
-	return &DiagnosticProvider{
-		registry: registry,
-	}
+	Location position.RawPosition
 }
 
 // GetDiagnostics returns diagnostic information for a template
-func (p *DiagnosticProvider) GetDiagnostics(ctx context.Context, template string, typePath string) ([]*Diagnostic, error) {
+func GetDiagnostics(ctx context.Context, template string, typePath string, registry *ast.Registry) ([]*Diagnostic, error) {
 	// Parse the template
-	templateParser := parser.NewDefaultTemplateParser()
-	nodes, err := templateParser.Parse(ctx, []byte(template), "template.tmpl")
+	nodes, err := parser.Parse(ctx, []byte(template), "template.tmpl")
 	if err != nil {
 		return nil, errors.Errorf("parsing template: %w", err)
 	}
 
 	// Get type information
-	typeInfo, err := p.registry.ValidateType(ctx, typePath)
+	typeInfo, err := ast.GenerateTypeInfoFromRegistry(ctx, typePath, registry)
 	if err != nil {
 		return nil, errors.Errorf("validating type: %w", err)
 	}
@@ -46,7 +33,7 @@ func (p *DiagnosticProvider) GetDiagnostics(ctx context.Context, template string
 	var diagnostics []*Diagnostic
 	for _, variable := range nodes.Variables {
 		// Validate field access
-		_, err := bridge.ValidateField(ctx, typeInfo, variable.Position)
+		_, err := ast.GenerateFieldInfoFromPosition(ctx, typeInfo, variable.Position)
 		if err != nil {
 			diagnostics = append(diagnostics, &Diagnostic{
 				Message:  err.Error(),

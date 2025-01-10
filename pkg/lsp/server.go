@@ -11,16 +11,13 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sourcegraph/jsonrpc2"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
-	"github.com/walteh/go-tmpl-typer/pkg/parser"
-	"github.com/walteh/go-tmpl-typer/pkg/types"
 )
 
 type ServerSpawner struct {
-	id        string
-	parser    parser.TemplateParser
-	validator types.Validator
-	analyzer  ast.PackageAnalyzer
-	debug     bool
+	id string
+
+	analyzer ast.PackageAnalyzer
+	debug    bool
 }
 
 type handlerFunc func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error)
@@ -56,13 +53,11 @@ func (b *bufferedReadWriteCloser) Close() error {
 	return b.closer.Close()
 }
 
-func NewServer(parser parser.TemplateParser, validator types.Validator, analyzer ast.PackageAnalyzer, debug bool) *ServerSpawner {
+func NewServer(analyzer ast.PackageAnalyzer, debug bool) *ServerSpawner {
 	return &ServerSpawner{
-		parser:    parser,
-		validator: validator,
-		analyzer:  analyzer,
-		debug:     debug,
-		id:        xid.New().String(),
+		analyzer: analyzer,
+		debug:    debug,
+		id:       xid.New().String(),
 	}
 }
 
@@ -173,8 +168,8 @@ func (s *Server) router(method string) handlerFunc {
 		return s.handleTextDocumentDidClose
 	case "textDocument/hover":
 		return s.handleTextDocumentHover
-	case "textDocument/completion":
-		return s.handleTextDocumentCompletion
+	// case "textDocument/completion":
+	// 	return s.handleTextDocumentCompletion
 	case "$/setTrace":
 		return func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
 			return nil, nil

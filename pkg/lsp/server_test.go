@@ -7,20 +7,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
-	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
 	"github.com/walteh/go-tmpl-typer/pkg/lsp"
-	"github.com/walteh/go-tmpl-typer/pkg/parser"
-	"github.com/walteh/go-tmpl-typer/pkg/types"
 )
 
 func TestServer(t *testing.T) {
 	ctx := context.Background()
 
 	server := lsp.NewServer(
-		parser.NewDefaultTemplateParser(),
-		types.NewDefaultValidator(),
 		ast.NewDefaultPackageAnalyzer(),
-		diagnostic.NewDefaultGenerator(),
 		true,
 	)
 
@@ -36,7 +30,7 @@ type Person struct {
 		}
 
 		setup, err := setupNeovimTest(t, server, files)
-		require.NoError(t, err)
+		require.NoError(t, err, "setup should succeed")
 		defer setup.cleanup()
 
 		// The fact that setupNeovimTest succeeded means the server initialized correctly
@@ -57,28 +51,38 @@ type Person struct {
 		}
 
 		setup, err := setupNeovimTest(t, server, files)
-		require.NoError(t, err)
+		require.NoError(t, err, "setup should succeed")
 		defer setup.cleanup()
 
 		// Test hover in first file
 		file1 := filepath.Join(setup.tmpDir, "file1.tmpl")
 		hoverResult, err := setup.requestHover(t, ctx, &lsp.HoverParams{
 			TextDocument: lsp.TextDocumentIdentifier{URI: "file://" + file1},
-			Position:     lsp.Position{Line: 1, Character: 5},
+			Position:     lsp.Position{Line: 1, Character: 3},
 		})
-		require.NoError(t, err)
-		require.NotNil(t, hoverResult)
+		require.NoError(t, err, "hover request should succeed")
+		require.NotNil(t, hoverResult, "hover result should not be nil")
 		require.Equal(t, "**Variable**: Person.Name\n**Type**: string", hoverResult.Contents.Value)
+		require.NotNil(t, hoverResult.Range, "hover range should not be nil")
+		require.Equal(t, 1, hoverResult.Range.Start.Line, "range should start on line 1")
+		require.Equal(t, 1, hoverResult.Range.End.Line, "range should end on line 1")
+		require.Equal(t, 3, hoverResult.Range.Start.Character, "range should start at the beginning of .Name")
+		require.Equal(t, 8, hoverResult.Range.End.Character, "range should end at the end of .Name")
 
 		// Test hover in second file
 		file2 := filepath.Join(setup.tmpDir, "file2.tmpl")
 		hoverResult, err = setup.requestHover(t, ctx, &lsp.HoverParams{
 			TextDocument: lsp.TextDocumentIdentifier{URI: "file://" + file2},
-			Position:     lsp.Position{Line: 1, Character: 5},
+			Position:     lsp.Position{Line: 1, Character: 3},
 		})
-		require.NoError(t, err)
-		require.NotNil(t, hoverResult)
+		require.NoError(t, err, "hover request should succeed")
+		require.NotNil(t, hoverResult, "hover result should not be nil")
 		require.Equal(t, "**Variable**: Person.Age\n**Type**: int", hoverResult.Contents.Value)
+		require.NotNil(t, hoverResult.Range, "hover range should not be nil")
+		require.Equal(t, 1, hoverResult.Range.Start.Line, "range should start on line 1")
+		require.Equal(t, 1, hoverResult.Range.End.Line, "range should end on line 1")
+		require.Equal(t, 3, hoverResult.Range.Start.Character, "range should start at the beginning of .Age")
+		require.Equal(t, 7, hoverResult.Range.End.Character, "range should end at the end of .Age")
 	})
 
 	t.Run("server handles file changes", func(t *testing.T) {
@@ -93,7 +97,7 @@ type Person struct {
 		}
 
 		setup, err := setupNeovimTest(t, server, files)
-		require.NoError(t, err)
+		require.NoError(t, err, "setup should succeed")
 		defer setup.cleanup()
 
 		testFile := filepath.Join(setup.tmpDir, "test.tmpl")
@@ -101,32 +105,37 @@ type Person struct {
 		// Test initial hover
 		hoverResult, err := setup.requestHover(t, ctx, &lsp.HoverParams{
 			TextDocument: lsp.TextDocumentIdentifier{URI: "file://" + testFile},
-			Position:     lsp.Position{Line: 1, Character: 5},
+			Position:     lsp.Position{Line: 1, Character: 3},
 		})
-		require.NoError(t, err)
-		require.NotNil(t, hoverResult)
+		require.NoError(t, err, "hover request should succeed")
+		require.NotNil(t, hoverResult, "hover result should not be nil")
 		require.Equal(t, "**Variable**: Person.Name\n**Type**: string", hoverResult.Contents.Value)
+		require.NotNil(t, hoverResult.Range, "hover range should not be nil")
+		require.Equal(t, 1, hoverResult.Range.Start.Line, "range should start on line 1")
+		require.Equal(t, 1, hoverResult.Range.End.Line, "range should end on line 1")
+		require.Equal(t, 3, hoverResult.Range.Start.Character, "range should start at the beginning of .Name")
+		require.Equal(t, 8, hoverResult.Range.End.Character, "range should end at the end of .Name")
 
 		// Save current file before making changes
 		err = setup.nvimInstance.Command("w")
-		require.NoError(t, err)
+		require.NoError(t, err, "save should succeed")
 
 		// Change the file content
 		err = setup.nvimInstance.Command("normal! ggdG")
-		require.NoError(t, err)
+		require.NoError(t, err, "delete content should succeed")
 		err = setup.nvimInstance.Command("normal! i{{- /*gotype: test.Person*/ -}}\n{{ .Age }}")
-		require.NoError(t, err)
+		require.NoError(t, err, "insert content should succeed")
 
 		// Save the changes
 		err = setup.nvimInstance.Command("w")
-		require.NoError(t, err)
+		require.NoError(t, err, "save should succeed")
 
 		// Test hover after change
 		hoverResult, err = setup.requestHover(t, ctx, &lsp.HoverParams{
 			TextDocument: lsp.TextDocumentIdentifier{URI: "file://" + testFile},
-			Position:     lsp.Position{Line: 1, Character: 5},
+			Position:     lsp.Position{Line: 1, Character: 3},
 		})
-		require.NoError(t, err)
+		require.NoError(t, err, "hover request should succeed")
 		require.Nil(t, hoverResult, "hover should return nil for non-existent field")
 	})
 
@@ -146,7 +155,7 @@ type Person struct {
 		}
 
 		setup, err := setupNeovimTest(t, server, files)
-		require.NoError(t, err)
+		require.NoError(t, err, "setup should succeed")
 		defer setup.cleanup()
 
 		testFile := filepath.Join(setup.tmpDir, "test.tmpl")
@@ -157,50 +166,31 @@ type Person struct {
 			name      string
 			expected  bool
 		}{
-			// `  Street: {{.Address.Street}}`
 			{5, "before address", false},
-			{13, "start of Address", true},
-			{23, "middle of Street", true},
-			{30, "after Street", false},
+			{12, "start of Address", true},
+			{19, "middle of Street", true},
+			{25, "after Street", false},
 		}
-		//"{{- /*gotype: test.Person*/ -}}\nAddress:\n  Street: {{.Address.Street}}"
+
 		for _, pos := range positions {
 			t.Run(pos.name, func(t *testing.T) {
 				hoverResult, err := setup.requestHover(t, ctx, &lsp.HoverParams{
 					TextDocument: lsp.TextDocumentIdentifier{URI: "file://" + testFile},
 					Position:     lsp.Position{Line: 2, Character: pos.character},
 				})
-				require.NoError(t, err)
-				require.NotNil(t, hoverResult)
-				require.Equal(t, "**Variable**: Person.Address.Street\n**Type**: string", hoverResult.Contents.Value)
+				require.NoError(t, err, "hover request should succeed")
 
-				// Log the range to see what we're getting
-				t.Logf("Hover range for character %d: %v",
-					pos.character,
-					hoverResult.Range,
-				)
-
-				// Verify that the range ONLY covers the .Address.Street field expression
-				require.NotNil(t, hoverResult.Range)
-				require.Equal(t, 2, hoverResult.Range.Start.Line, "range should be on line 2")
-				require.Equal(t, 2, hoverResult.Range.End.Line, "range should be on line 2")
-
-				// The range should start at the beginning of .Address.Street (after the {{ and space)
-				expectedStart := 21 // Position at the start of .Address.Street
-				expectedEnd := 27   // Position at the end of .Address.Street
-				if pos.character >= expectedStart && pos.character <= expectedEnd {
-					require.Equal(t, expectedStart, hoverResult.Range.Start.Character,
-						"range should start at the beginning of .Address.Street (after {{ and space)")
-					require.Equal(t, expectedEnd, hoverResult.Range.End.Character,
-						"range should end at the end of .Address.Street")
+				if pos.expected {
+					require.NotNil(t, hoverResult, "hover result should not be nil")
+					require.Equal(t, "**Variable**: Person.Address.Street\n**Type**: string", hoverResult.Contents.Value)
+					require.NotNil(t, hoverResult.Range, "hover range should not be nil")
+					require.Equal(t, 2, hoverResult.Range.Start.Line, "range should start on line 2")
+					require.Equal(t, 2, hoverResult.Range.End.Line, "range should end on line 2")
+					require.Equal(t, 12, hoverResult.Range.Start.Character, "range should start at the beginning of .Address.Street")
+					require.Equal(t, 26, hoverResult.Range.End.Character, "range should end at the end of .Address.Street")
 				} else {
-					require.Nil(t, hoverResult.Range, "range should be nil for positions outside .Address.Street")
+					require.Nil(t, hoverResult, "hover should return nil for positions outside variable")
 				}
-
-				t.Logf("Expected range: {start: %d, end: %d}, Got range: {start: %d, end: %d}",
-					expectedStart, expectedEnd,
-					hoverResult.Range.Start.Character, hoverResult.Range.End.Character)
-
 			})
 		}
 	})

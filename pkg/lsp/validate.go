@@ -3,7 +3,9 @@ package lsp
 import (
 	"context"
 
+	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
+	"github.com/walteh/go-tmpl-typer/pkg/position"
 	"gitlab.com/tozd/go/errors"
 )
 
@@ -13,9 +15,14 @@ func (s *Server) validateDocument(ctx context.Context, uri string, content strin
 	}
 
 	// Parse the template
-	info, err := s.server.parser.Parse(ctx, []byte(content), uri)
+	info, err := parser.Parse(ctx, []byte(content), uri)
 	if err != nil {
 		return nil, errors.Errorf("parsing template for validation: %w", err)
+	}
+
+	registry, err := s.server.analyzer.GetPackage(ctx, info.Filename)
+	if err != nil {
+		return nil, errors.Errorf("analyzing package: %w", err)
 	}
 
 	// Get type hints
@@ -27,7 +34,7 @@ func (s *Server) validateDocument(ctx context.Context, uri string, content strin
 	var diagnostics []Diagnostic
 	for _, hint := range info.TypeHints {
 		// Validate type
-		typeInfo, err := s.server.validator.ValidateType(ctx, hint.TypePath)
+		typeInfo, err := ast.GenerateTypeInfoFromRegistry(ctx, hint.TypePath, registry)
 		if err != nil {
 			diagnostics = append(diagnostics, Diagnostic{
 				Range: Range{
@@ -42,12 +49,12 @@ func (s *Server) validateDocument(ctx context.Context, uri string, content strin
 
 		// Validate variables
 		for _, v := range info.Variables {
-			if _, err := s.server.validator.ValidateField(ctx, hint.TypePath, v.Name()); err != nil {
-				startLine, startCol, endLine, endCol := parser.GetLineColumnRange(content, v.Position)
+			if _, err := ast.GenerateFieldInfoFromPosition(ctx, typeInfo, v.Position); err != nil {
+				loc := position.GetLocation(v.Position, content)
 				diagnostics = append(diagnostics, Diagnostic{
 					Range: Range{
-						Start: Position{Line: startLine - 1, Character: startCol - 1},
-						End:   Position{Line: endLine - 1, Character: endCol - 1},
+						Start: Position{Line: loc.Start.Line - 1, Character: loc.Start.Character - 1},
+						End:   Position{Line: loc.End.Line - 1, Character: loc.End.Character - 1},
 					},
 					Severity: int(SeverityError),
 					Message:  "Invalid field: " + err.Error(),

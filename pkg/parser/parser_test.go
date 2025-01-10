@@ -2,6 +2,7 @@ package parser_test
 
 import (
 	"context"
+	"go/types"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,15 +24,26 @@ func TestTemplateParser_Parse(t *testing.T) {
 {{define "main"}}
 Hello {{.Name}}! You are {{.Age}} years old.
 {{end}}`,
-			want: func() *parser.TemplateInfo {
-				p := parser.NewDefaultTemplateParser()
-				got, err := p.Parse(context.Background(), []byte(`{{- /*gotype: github.com/example/types.Config */ -}}
-{{define "main"}}
-Hello {{.Name}}! You are {{.Age}} years old.
-{{end}}`), "test.tmpl")
-				require.NoError(t, err)
-				return got
-			}(),
+			want: &parser.TemplateInfo{
+				Filename:  "test.tmpl",
+				Functions: []parser.VariableLocation{},
+				TypeHints: []parser.TypeHint{
+					{
+						TypePath: "github.com/example/types.Config",
+						Position: position.NewBasicPosition("github.com/example/types.Config", 14),
+					},
+				},
+				Variables: []parser.VariableLocation{
+					{
+						Position: position.NewBasicPosition(".Name", 79),
+						Scope:    "main",
+					},
+					{
+						Position: position.NewBasicPosition(".Age", 98),
+						Scope:    "main",
+					},
+				},
+			},
 			wantErr: false,
 		},
 		{
@@ -40,15 +52,51 @@ Hello {{.Name}}! You are {{.Age}} years old.
 {{define "main"}}
 {{printf "Hello %s" .Name | upper}}
 {{end}}`,
-			want: func() *parser.TemplateInfo {
-				p := parser.NewDefaultTemplateParser()
-				got, err := p.Parse(context.Background(), []byte(`{{- /*gotype: github.com/example/types.Config */ -}}
-{{define "main"}}
-{{printf "Hello %s" .Name | upper}}
-{{end}}`), "test.tmpl")
-				require.NoError(t, err)
-				return got
-			}(),
+			want: &parser.TemplateInfo{
+				Filename: "test.tmpl",
+				Functions: []parser.VariableLocation{
+					{
+						Position: position.NewBasicPosition("printf", 73),
+						MethodArguments: []types.Type{
+							types.Typ[types.String],
+							&parser.VariableLocation{
+								Position: position.NewBasicPosition(".Name", 91),
+								Scope:    "main",
+							},
+						},
+						Scope: "main",
+					},
+					{
+						Position: position.NewBasicPosition("upper", 99),
+						MethodArguments: []types.Type{
+							&parser.VariableLocation{
+								Position: position.NewBasicPosition("printf", 73),
+								MethodArguments: []types.Type{
+									types.Typ[types.String],
+									&parser.VariableLocation{
+										Position: position.NewBasicPosition(".Name", 91),
+										Scope:    "main",
+									},
+								},
+								Scope: "main",
+							},
+						},
+						Scope: "main",
+					},
+				},
+				TypeHints: []parser.TypeHint{
+					{
+						TypePath: "github.com/example/types.Config",
+						Position: position.NewBasicPosition("github.com/example/types.Config", 14),
+					},
+				},
+				Variables: []parser.VariableLocation{
+					{
+						Position: position.NewBasicPosition(".Name", 91),
+						Scope:    "main",
+					},
+				},
+			},
 			wantErr: false,
 		},
 		{
@@ -63,12 +111,39 @@ Hello {{.Name}}! You are {{.Age}} years old.
 		{
 			name:     "method call with pipe to upper",
 			template: `JobZ: {{printf "%s" .GetJob | upper}}`,
-			want: func() *parser.TemplateInfo {
-				p := parser.NewDefaultTemplateParser()
-				got, err := p.Parse(context.Background(), []byte(`JobZ: {{printf "%s" .GetJob | upper}}`), "test.tmpl")
-				require.NoError(t, err)
-				return got
-			}(),
+			want: &parser.TemplateInfo{
+				Filename: "test.tmpl",
+				Functions: []parser.VariableLocation{
+					{
+						Position: position.NewBasicPosition("printf", 8),
+						MethodArguments: []types.Type{
+							types.Typ[types.String],
+							&parser.VariableLocation{
+								Position: position.NewBasicPosition(".GetJob", 20),
+							},
+						},
+					},
+					{
+						Position: position.NewBasicPosition("upper", 30),
+						MethodArguments: []types.Type{
+							&parser.VariableLocation{
+								Position: position.NewBasicPosition("printf", 8),
+								MethodArguments: []types.Type{
+									types.Typ[types.String],
+									&parser.VariableLocation{
+										Position: position.NewBasicPosition(".GetJob", 20),
+									},
+								},
+							},
+						},
+					},
+				},
+				Variables: []parser.VariableLocation{
+					{
+						Position: position.NewBasicPosition(".GetJob", 20),
+					},
+				},
+			},
 			wantErr: false,
 		},
 		{
@@ -76,14 +151,21 @@ Hello {{.Name}}! You are {{.Age}} years old.
 			template: `{{- /*gotype: test.Person*/ -}}
 Address:
   Street: {{.Address.Street}}`,
-			want: func() *parser.TemplateInfo {
-				p := parser.NewDefaultTemplateParser()
-				got, err := p.Parse(context.Background(), []byte(`{{- /*gotype: test.Person*/ -}}
-Address:
-  Street: {{.Address.Street}}`), "test.tmpl")
-				require.NoError(t, err)
-				return got
-			}(),
+			want: &parser.TemplateInfo{
+				Filename:  "test.tmpl",
+				Functions: []parser.VariableLocation{},
+				TypeHints: []parser.TypeHint{
+					{
+						TypePath: "test.Person",
+						Position: position.NewBasicPosition("test.Person", 14),
+					},
+				},
+				Variables: []parser.VariableLocation{
+					{
+						Position: position.NewBasicPosition(".Address.Street", 61),
+					},
+				},
+			},
 			wantErr: false,
 		},
 	}
@@ -91,11 +173,7 @@ Address:
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			if tt.name == "broken example" {
-				t.Logf("running %s", tt.name)
-			}
-			p := parser.NewDefaultTemplateParser()
-			got, err := p.Parse(ctx, []byte(tt.template), "test.tmpl")
+			got, err := parser.Parse(ctx, []byte(tt.template), "test.tmpl")
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -104,20 +182,6 @@ Address:
 			assert.Equal(t, tt.want, got)
 		})
 	}
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func TestSample1(t *testing.T) {
@@ -138,40 +202,50 @@ Address:
 Job: {{.GetJob | upper}}
 {{end}} `
 
-	doc := position.NewDocument(data)
-
-	expectedPositions := []position.RawPosition{
-		doc.NewBasicPosition(".Names", 171),
-		doc.NewBasicPosition(".Age", 187),
-		doc.NewBasicPosition(".Address.Street", 223),
-		doc.NewBasicPosition(".Address.City", 251),
-		doc.NewBasicPosition(".HasJob", 265),
-		doc.NewBasicPosition(".GetJob", 282),
-		doc.NewBasicPosition("upper", 292),
+	want := &parser.TemplateInfo{
+		Filename: "test.tmpl",
+		TypeHints: []parser.TypeHint{
+			{
+				TypePath: "github.com/walteh/go-tmpl-types-vscode/examples/types.Person",
+				Position: position.NewBasicPosition("github.com/walteh/go-tmpl-types-vscode/examples/types.Person", 14),
+			},
+		},
+		Variables: []parser.VariableLocation{
+			{
+				Position: position.NewBasicPosition(".Names", 171),
+			},
+			{
+				Position: position.NewBasicPosition(".Age", 187),
+			},
+			{
+				Position: position.NewBasicPosition(".Address.Street", 223),
+			},
+			{
+				Position: position.NewBasicPosition(".Address.City", 251),
+			},
+			{
+				Position: position.NewBasicPosition(".HasJob", 265),
+			},
+			{
+				Position: position.NewBasicPosition(".GetJob", 282),
+			},
+		},
+		Functions: []parser.VariableLocation{
+			{
+				Position: position.NewBasicPosition("upper", 292),
+				MethodArguments: []types.Type{
+					&parser.VariableLocation{
+						Position: position.NewBasicPosition(".GetJob", 282),
+					},
+				},
+			},
+		},
 	}
 
-	p := parser.NewDefaultTemplateParser()
-	info, err := p.Parse(context.Background(), []byte(data), "test.tmpl")
+	ctx := context.Background()
+
+	got, err := parser.Parse(ctx, []byte(data), "test.tmpl")
 	require.NoError(t, err)
 
-	// Check type hint
-	require.Equal(t, 1, len(info.TypeHints))
-	require.Equal(t, "github.com/walteh/go-tmpl-types-vscode/examples/types.Person", info.TypeHints[0].TypePath)
-	require.Equal(t, "", info.TypeHints[0].Scope) // Root scope
-
-	// Check variables
-	seenVars := position.NewPositionsSeenMap()
-	for _, v := range info.Variables {
-		seenVars.Add(v.Position)
-	}
-
-	for _, f := range info.Functions {
-		seenVars.Add(f.Position)
-	}
-
-	t.Logf("seenVars: %v", seenVars.PositionsWithText(""))
-
-	for _, pos := range expectedPositions {
-		assert.True(t, seenVars.Has(pos), "variable %s should be present - positions with same text: %+v", pos.Text(), seenVars.PositionsWithText(pos.Text()).ToStrings())
-	}
+	assert.Equal(t, want, got)
 }

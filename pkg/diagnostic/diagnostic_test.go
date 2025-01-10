@@ -1,4 +1,4 @@
-package diagnostic
+package diagnostic_test
 
 import (
 	"context"
@@ -8,7 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
-	"github.com/walteh/go-tmpl-typer/pkg/parser"
+	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
+	"github.com/walteh/go-tmpl-typer/pkg/position"
 )
 
 func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
@@ -16,7 +17,7 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 		name     string
 		template string
 		typePath string
-		want     []*Diagnostic
+		want     []*diagnostic.Diagnostic
 		wantErr  bool
 	}{
 		{
@@ -30,12 +31,10 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 			name:     "invalid field",
 			template: "Hello {{.NonExistent}}!",
 			typePath: "github.com/example/types.Person",
-			want: []*Diagnostic{
+			want: []*diagnostic.Diagnostic{
 				{
-					Message: "field NonExistent not found in type Person",
-					Location: parser.RawPosition{
-						Text: ".NonExistent",
-					},
+					Message:  "field NonExistent not found in type Person",
+					Location: position.NewBasicPosition(".NonExistent", 0),
 				},
 			},
 			wantErr: false,
@@ -70,8 +69,7 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 			scope := pkg.Scope()
 			scope.Insert(named.Obj())
 
-			provider := NewDiagnosticProvider(registry)
-			got, err := provider.GetDiagnostics(context.Background(), tt.template, tt.typePath)
+			got, err := diagnostic.GetDiagnostics(context.Background(), tt.template, tt.typePath, registry)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -85,8 +83,8 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 
 			require.Equal(t, len(tt.want), len(got))
 			for i, want := range tt.want {
-				assert.Equal(t, want.Message, got[i].Message)
-				assert.Equal(t, want.Location.Text, got[i].Location.Text)
+				assert.Equal(t, want.Message, got[i].Message, "message mismatch")
+				assert.Equal(t, want.Location.Text(), got[i].Location.Text(), "location mismatch")
 			}
 		})
 	}

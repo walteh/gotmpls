@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
-	"github.com/walteh/go-tmpl-typer/pkg/bridge"
 	"gitlab.com/tozd/go/errors"
 )
 
@@ -92,73 +91,6 @@ func (r *Registry) TypeExists(typePath string) bool {
 	}
 
 	return false
-}
-
-// AnalyzePackage analyzes a Go package and returns type information
-func (r *Registry) AnalyzePackage(ctx context.Context, packageDir string) (*Registry, error) {
-	// For now, just return the registry itself since we're not doing actual package analysis
-	return r, nil
-}
-
-// ValidateType validates a type against package information
-func (r *Registry) ValidateType(ctx context.Context, typePath string) (*bridge.TypeInfo, error) {
-	// Split the type path into package and type name
-	lastDot := strings.LastIndex(typePath, ".")
-	if lastDot == -1 {
-		return nil, errors.Errorf("invalid type path: %s", typePath)
-	}
-
-	pkgName, typeName := typePath[:lastDot], typePath[lastDot+1:]
-
-	// Get the package from the registry
-	pkg, err := r.GetPackage(ctx, pkgName)
-	if err != nil {
-		return nil, errors.Errorf("package not found in registry: %w", err)
-	}
-
-	// Find the type in the package scope
-	obj := pkg.Scope().Lookup(typeName)
-	if obj == nil {
-		return nil, errors.Errorf("type %s not found in package %s", typeName, pkgName)
-	}
-
-	// Get the type information
-	namedType, ok := obj.Type().(*types.Named)
-	if !ok {
-		return nil, errors.Errorf("type %s is not a named type", typeName)
-	}
-
-	// Get the underlying struct type
-	structType, ok := namedType.Underlying().(*types.Struct)
-	if !ok {
-		return nil, errors.Errorf("type %s is not a struct type", typeName)
-	}
-
-	// Create TypeInfo with fields
-	typeInfo := &bridge.TypeInfo{
-		Name:   typeName,
-		Fields: make(map[string]*bridge.FieldInfo),
-	}
-
-	// Add fields to the type info
-	for i := 0; i < structType.NumFields(); i++ {
-		field := structType.Field(i)
-		typeInfo.Fields[field.Name()] = &bridge.FieldInfo{
-			Name: field.Name(),
-			Type: field.Type(),
-		}
-	}
-
-	// Add methods to the type info
-	for i := 0; i < namedType.NumMethods(); i++ {
-		method := namedType.Method(i)
-		typeInfo.Fields[method.Name()] = &bridge.FieldInfo{
-			Name: method.Name(),
-			Type: method.Type(),
-		}
-	}
-
-	return typeInfo, nil
 }
 
 // GetFieldType returns the type of a field in a struct type

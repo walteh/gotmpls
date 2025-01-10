@@ -7,20 +7,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
-	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
 	"github.com/walteh/go-tmpl-typer/pkg/lsp"
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
-	"github.com/walteh/go-tmpl-typer/pkg/types"
 )
 
 func TestHover(t *testing.T) {
 	ctx := context.Background()
 
 	server := lsp.NewServer(
-		parser.NewDefaultTemplateParser(),
-		types.NewDefaultValidator(),
+		parser.Parse,
 		ast.NewDefaultPackageAnalyzer(),
-		diagnostic.NewDefaultGenerator(),
 		true,
 	)
 
@@ -36,7 +32,7 @@ type Person struct {
 		}
 
 		setup, err := setupNeovimTest(t, server, files)
-		require.NoError(t, err)
+		require.NoError(t, err, "setup should succeed")
 		defer setup.cleanup()
 
 		testFile := filepath.Join(setup.tmpDir, "test.tmpl")
@@ -44,11 +40,16 @@ type Person struct {
 		// Test hover over .Name
 		hoverResult, err := setup.requestHover(t, ctx, &lsp.HoverParams{
 			TextDocument: lsp.TextDocumentIdentifier{URI: "file://" + testFile},
-			Position:     lsp.Position{Line: 1, Character: 5},
+			Position:     lsp.Position{Line: 1, Character: 3},
 		})
-		require.NoError(t, err)
-		require.NotNil(t, hoverResult)
+		require.NoError(t, err, "hover request should succeed")
+		require.NotNil(t, hoverResult, "hover result should not be nil")
 		require.Equal(t, "**Variable**: Person.Name\n**Type**: string", hoverResult.Contents.Value)
+		require.NotNil(t, hoverResult.Range, "hover range should not be nil")
+		require.Equal(t, 1, hoverResult.Range.Start.Line, "range should start on line 1")
+		require.Equal(t, 1, hoverResult.Range.End.Line, "range should end on line 1")
+		require.Equal(t, 3, hoverResult.Range.Start.Character, "range should start at the beginning of .Name")
+		require.Equal(t, 8, hoverResult.Range.End.Character, "range should end at the end of .Name")
 	})
 
 	t.Run("nested field hover", func(t *testing.T) {
@@ -66,7 +67,7 @@ type Address struct {
 		}
 
 		setup, err := setupNeovimTest(t, server, files)
-		require.NoError(t, err)
+		require.NoError(t, err, "setup should succeed")
 		defer setup.cleanup()
 
 		testFile := filepath.Join(setup.tmpDir, "test.tmpl")
@@ -76,9 +77,14 @@ type Address struct {
 			TextDocument: lsp.TextDocumentIdentifier{URI: "file://" + testFile},
 			Position:     lsp.Position{Line: 1, Character: 12},
 		})
-		require.NoError(t, err)
-		require.NotNil(t, hoverResult)
+		require.NoError(t, err, "hover request should succeed")
+		require.NotNil(t, hoverResult, "hover result should not be nil")
 		require.Equal(t, "**Variable**: Person.Address.Street\n**Type**: string", hoverResult.Contents.Value)
+		require.NotNil(t, hoverResult.Range, "hover range should not be nil")
+		require.Equal(t, 1, hoverResult.Range.Start.Line, "range should start on line 1")
+		require.Equal(t, 1, hoverResult.Range.End.Line, "range should end on line 1")
+		require.Equal(t, 3, hoverResult.Range.Start.Character, "range should start at the beginning of .Address.Street")
+		require.Equal(t, 17, hoverResult.Range.End.Character, "range should end at the end of .Address.Street")
 	})
 
 	t.Run("invalid type hint", func(t *testing.T) {
@@ -93,7 +99,7 @@ type Person struct {
 		}
 
 		setup, err := setupNeovimTest(t, server, files)
-		require.NoError(t, err)
+		require.NoError(t, err, "setup should succeed")
 		defer setup.cleanup()
 
 		testFile := filepath.Join(setup.tmpDir, "test.tmpl")
@@ -101,9 +107,9 @@ type Person struct {
 		// Test hover over .Name with invalid type hint
 		hoverResult, err := setup.requestHover(t, ctx, &lsp.HoverParams{
 			TextDocument: lsp.TextDocumentIdentifier{URI: "file://" + testFile},
-			Position:     lsp.Position{Line: 1, Character: 5},
+			Position:     lsp.Position{Line: 1, Character: 3},
 		})
-		require.NoError(t, err)
+		require.NoError(t, err, "hover request should succeed")
 		require.Nil(t, hoverResult, "hover should return nil for invalid type")
 	})
 
@@ -119,7 +125,7 @@ type Person struct {
 		}
 
 		setup, err := setupNeovimTest(t, server, files)
-		require.NoError(t, err)
+		require.NoError(t, err, "setup should succeed")
 		defer setup.cleanup()
 
 		testFile := filepath.Join(setup.tmpDir, "test.tmpl")
@@ -127,9 +133,9 @@ type Person struct {
 		// Test hover over .InvalidField
 		hoverResult, err := setup.requestHover(t, ctx, &lsp.HoverParams{
 			TextDocument: lsp.TextDocumentIdentifier{URI: "file://" + testFile},
-			Position:     lsp.Position{Line: 1, Character: 8},
+			Position:     lsp.Position{Line: 1, Character: 3},
 		})
-		require.NoError(t, err)
+		require.NoError(t, err, "hover request should succeed")
 		require.Nil(t, hoverResult, "hover should return nil for invalid field")
 	})
 }

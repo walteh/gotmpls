@@ -1,4 +1,4 @@
-package ast
+package ast_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/walteh/go-tmpl-typer/pkg/ast"
 )
 
 func setupTestModule(t *testing.T) (string, context.Context) {
@@ -63,11 +64,8 @@ func (p *Person) HasJob() bool {
 `), 0644)
 	require.NoError(t, err)
 
-	// Create the analyzer
-	analyzer := NewDefaultPackageAnalyzer()
-
 	// Analyze the package
-	registry, err := analyzer.AnalyzePackage(ctx, tmpDir)
+	registry, err := ast.AnalyzePackage(ctx, tmpDir)
 	require.NoError(t, err)
 	require.NotNil(t, registry)
 
@@ -118,16 +116,14 @@ type Person struct {
 `), 0644)
 	require.NoError(t, err)
 
-	analyzer := NewDefaultPackageAnalyzer()
-	_, err = analyzer.AnalyzePackage(ctx, tmpDir)
+	_, err = ast.AnalyzePackage(ctx, tmpDir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing go.mod")
 }
 
 func TestPackageAnalyzer_InvalidPath(t *testing.T) {
 	ctx := context.Background()
-	analyzer := NewDefaultPackageAnalyzer()
-	_, err := analyzer.AnalyzePackage(ctx, "/path/that/does/not/exist")
+	_, err := ast.AnalyzePackage(ctx, "/path/that/does/not/exist")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing go.mod")
 }
@@ -159,8 +155,7 @@ type InvalidType struct {
 `), 0644)
 	require.NoError(t, err)
 
-	analyzer := NewDefaultPackageAnalyzer()
-	registry, err := analyzer.AnalyzePackage(ctx, tmpDir)
+	registry, err := ast.AnalyzePackage(ctx, tmpDir)
 	require.NoError(t, err)
 	require.NotNil(t, registry)
 

@@ -5,21 +5,14 @@ import (
 	"text/template/parse"
 )
 
-type Document struct {
-	text string
-}
-
-func NewDocument(text string) *Document {
-	return &Document{
-		text: text,
-	}
+type Place struct {
+	Line      int
+	Character int
 }
 
 type Location struct {
-	StartColumn int
-	EndColumn   int
-	StartLine   int
-	EndLine     int
+	Start Place
+	End   Place
 }
 
 // RawPosition represents a position in the source text
@@ -28,8 +21,6 @@ type RawPosition interface {
 	Offset() int
 	// Text is the actual text at this position
 	Text() string
-	// Document is the document that this position is in
-	Document() *Document
 }
 
 // ID returns a unique identifier for this position based on offset and text
@@ -66,20 +57,17 @@ func GetLineAndColumn(text string, pos parse.Pos) (line, col int) {
 }
 
 // GetLineColumnRange calculates the line/column range for a RawPosition
-func GetLocation(pos RawPosition) Location {
-	startLine, startCol := GetLineAndColumn(pos.Document().text, parse.Pos(pos.Offset()))
-	endLine, endCol := GetLineAndColumn(pos.Document().text, parse.Pos(pos.Offset()+PositionLength(pos)))
+func GetLocation(pos RawPosition, fileText string) Location {
+	startLine, startCol := GetLineAndColumn(fileText, parse.Pos(pos.Offset()))
+	endLine, endCol := GetLineAndColumn(fileText, parse.Pos(pos.Offset()+PositionLength(pos)))
 	return Location{
-		StartColumn: startCol,
-		EndColumn:   endCol,
-		StartLine:   startLine,
-		EndLine:     endLine,
+		Start: Place{Line: startLine, Character: startCol},
+		End:   Place{Line: endLine, Character: endCol},
 	}
 }
 
 type IdentifierNodePosition struct {
 	identifierNode *parse.IdentifierNode
-	documentRef    *Document
 }
 
 var _ RawPosition = &IdentifierNodePosition{}
@@ -92,28 +80,25 @@ func (me *IdentifierNodePosition) Text() string {
 	return me.identifierNode.String()
 }
 
-func (me *IdentifierNodePosition) Document() *Document {
-	return me.documentRef
-}
+// func NewIdentifierNodePosition(node *parse.IdentifierNode) *IdentifierNodePosition {
+// 	return &IdentifierNodePosition{
+// 		identifierNode: node,
+// 	}
+// }
 
-func (me *Document) NewIdentifierNodePosition(node *parse.IdentifierNode) *IdentifierNodePosition {
-	return &IdentifierNodePosition{
-		identifierNode: node,
-		documentRef:    me,
-	}
+func NewIdentifierNodePosition(node *parse.IdentifierNode) *BasicPosition {
+	return NewBasicPosition(node.String(), int(node.Position()))
 }
 
 type BasicPosition struct {
-	text        string
-	offset      int
-	documentRef *Document
+	text   string
+	offset int
 }
 
-func (me *Document) NewBasicPosition(text string, offset int) *BasicPosition {
+func NewBasicPosition(text string, offset int) *BasicPosition {
 	return &BasicPosition{
-		text:        text,
-		offset:      offset,
-		documentRef: me,
+		text:   text,
+		offset: offset,
 	}
 }
 
@@ -127,13 +112,8 @@ func (me *BasicPosition) Text() string {
 	return me.text
 }
 
-func (me *BasicPosition) Document() *Document {
-	return me.documentRef
-}
-
 type FieldNodePosition struct {
-	fieldNode   *parse.FieldNode
-	documentRef *Document
+	fieldNode *parse.FieldNode
 }
 
 var _ RawPosition = &FieldNodePosition{}
@@ -146,15 +126,14 @@ func (me *FieldNodePosition) Text() string {
 	return me.fieldNode.String()
 }
 
-func (me *FieldNodePosition) Document() *Document {
-	return me.documentRef
-}
+// func NewFieldNodePosition(node *parse.FieldNode) *FieldNodePosition {
+// 	return &FieldNodePosition{
+// 		fieldNode: node,
+// 	}
+// }
 
-func (me *Document) NewFieldNodePosition(node *parse.FieldNode) *FieldNodePosition {
-	return &FieldNodePosition{
-		fieldNode:   node,
-		documentRef: me,
-	}
+func NewFieldNodePosition(node *parse.FieldNode) *BasicPosition {
+	return NewBasicPosition(node.String(), int(node.Position()))
 }
 
 func RawPositionToString(pos RawPosition) string {
@@ -169,4 +148,8 @@ func (me RawPositionArray) ToStrings() []string {
 		texts = append(texts, RawPositionToString(pos))
 	}
 	return texts
+}
+
+func ConvertToBasicPosition(pos RawPosition) *BasicPosition {
+	return NewBasicPosition(pos.Text(), pos.Offset())
 }
