@@ -4,8 +4,6 @@ always assume the existing code is correct unless you have a good reason to beli
 never modify significant portions of code without asking
 
 golang imports:
-always use gitlab.com/tozd/go/errors for golang errors
-always use errors.Errorf to wrap golangerrors, never use errors.Wrap
 always assume that broken imports are because the reference need to be adjusted, not because the thing being referenced doesn't exist
 never directly modify go.mod or go.sum files, always use go mod tidy and go mod init to update them (or other commands that are appropriate)
 
@@ -32,3 +30,9 @@ run linting checks and tests before you make changes to get a better sense of wh
 always assume errors you introduce are a result of code you wrote, if you think otherwise, ask to make sure you can make changes elsewhere.
 utilize "github.com/k0kubun/pp/v3" pp.Printf to print out the structure of variables for debugging purposes
 always run specific tests to isolate the problem, use -v sparingly - you should still see logs for ones that fail
+
+golang errors:
+always use gitlab.com/tozd/go/errors for golang errors
+always use errors.Errorf to wrap golangerrors, never use errors.Wrap
+the wrapped error naming philosophy should always make the error message say what was trying to be done, not what went wrong (i.e. errors.Errorf("reading file: %w", err))
+for new errors the name just needs to be the best name for that error

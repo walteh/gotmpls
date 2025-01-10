@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -195,31 +196,25 @@ func setupNeovimTest(t *testing.T, server *lsp.Server, files testFiles) (*neovim
 // Helper method to wait for LSP to initialize
 func (s *neovimTestSetup) waitForLSP() error {
 	waitForLSP := func() bool {
-		var b bool
-		err := s.nvimInstance.Eval(`luaeval('vim.lsp.buf_get_clients() ~= nil and #vim.lsp.buf_get_clients() > 0')`, &b)
+		var hasClients bool
+		err := s.nvimInstance.Eval(`luaeval('vim.lsp.get_active_clients() ~= nil and #vim.lsp.get_active_clients() > 0')`, &hasClients)
 		if err != nil {
 			s.t.Logf("Error checking LSP clients: %v", err)
 			return false
 		}
-		s.t.Logf("LSP clients count: %v", b)
 
-		if b {
-			// Get LSP client info
+		s.t.Logf("LSP clients count: %v", hasClients)
+
+		if hasClients {
+			// Log client info for debugging
 			var clientInfo string
 			err = s.nvimInstance.Eval(`luaeval('vim.inspect(vim.lsp.get_active_clients())')`, &clientInfo)
 			if err == nil {
-				s.t.Logf("LSP client info: %v", clientInfo)
-			}
-
-			// Get LSP logs
-			var logs string
-			err = s.nvimInstance.Eval(`luaeval('vim.inspect(vim.lsp.get_log_lines())')`, &logs)
-			if err == nil {
-				s.t.Logf("LSP logs: %v", logs)
+				// s.t.Logf("LSP client info: %v", clientInfo)
 			}
 		}
 
-		return b
+		return hasClients
 	}
 
 	var success bool
@@ -319,7 +314,164 @@ EOF`, tmpDir, stdioProxyPath, socketPath)
 	return configPath, nil
 }
 
+// Helper methods for neovimTestSetup
+func (s *neovimTestSetup) openFile(path string) (nvim.Buffer, error) {
+	path = strings.TrimPrefix(path, "file://")
+
+	err := s.nvimInstance.Command("edit " + path)
+	if err != nil {
+		return 0, errors.Errorf("failed to open file: %w", err)
+	}
+
+	buffer, err := s.nvimInstance.CurrentBuffer()
+	if err != nil {
+		return 0, errors.Errorf("failed to get current buffer: %w", err)
+	}
+
+	err = s.nvimInstance.SetBufferOption(buffer, "filetype", "go-template")
+	if err != nil {
+		return 0, errors.Errorf("failed to set filetype: %w", err)
+	}
+
+	return buffer, nil
+}
+
+func (s *neovimTestSetup) attachLSP(buffer nvim.Buffer) error {
+	err := s.waitForLSP()
+	if err != nil {
+		return errors.Errorf("failed to wait for LSP: %w", err)
+	}
+
+	// Attach LSP client using Lua
+	err = s.nvimInstance.Eval(`luaeval('vim.lsp.buf_attach_client(0, 1)')`, nil)
+	if err != nil {
+		return errors.Errorf("failed to attach LSP client: %w", err)
+	}
+
+	// Get current buffer text
+	lines, err := s.nvimInstance.BufferLines(buffer, 0, -1, true)
+	if err != nil {
+		return errors.Errorf("failed to get buffer lines: %w", err)
+	}
+	text := strings.Join(bytesSliceToStringSlice(lines), "\n")
+
+	// Send file contents to LSP server using Lua
+	bufPath, err := s.nvimInstance.BufferName(buffer)
+	if err != nil {
+		return errors.Errorf("failed to get buffer name: %w", err)
+	}
+
+	notifyCmd := fmt.Sprintf(`luaeval('vim.lsp.buf_notify(0, "textDocument/didOpen", {
+		textDocument = {
+			uri = "file://%s",
+			languageId = "go-template",
+			version = 1,
+			text = [[%s]]
+		}
+	})')`, bufPath, text)
+
+	err = s.nvimInstance.Eval(notifyCmd, nil)
+	if err != nil {
+		return errors.Errorf("failed to notify LSP: %w", err)
+	}
+
+	// Wait for LSP server to process the file
+	time.Sleep(100 * time.Millisecond)
+	return nil
+}
+
+func (s *neovimTestSetup) requestHover(t *testing.T, ctx context.Context, request *lsp.HoverParams) (*lsp.Hover, error) {
+	// Move cursor to the specified position
+	win, err := s.nvimInstance.CurrentWindow()
+	if err != nil {
+		return nil, errors.Errorf("failed to get current window: %w", err)
+	}
+
+	err = s.nvimInstance.SetWindowCursor(win, [2]int{request.Position.Line, request.Position.Character})
+	if err != nil {
+		return nil, errors.Errorf("failed to set cursor position: %w", err)
+	}
+
+	buffer, err := s.openFile(request.TextDocument.URI)
+	if err != nil {
+		return nil, errors.Errorf("failed to open file: %w", err)
+	}
+
+	err = s.attachLSP(buffer)
+	if err != nil {
+		return nil, errors.Errorf("failed to attach LSP: %w", err)
+	}
+
+	bufPath, err := s.nvimInstance.BufferName(buffer)
+	if err != nil {
+		return nil, errors.Errorf("failed to get buffer name: %w", err)
+	}
+
+	// Request hover using Lua
+	var hoverResult string
+	hoverCmd := fmt.Sprintf(`
+		local result = vim.lsp.buf_request_sync(0, "textDocument/hover", {
+			textDocument = { uri = "file://%s" },
+			position = { line = %d, character = %d }
+		}, 1000)
+		if result and result[1] and result[1].result then
+			return vim.json.encode(result[1].result)
+		end
+		return nil
+	`, bufPath, request.Position.Line, request.Position.Character)
+
+	err = s.nvimInstance.ExecLua(hoverCmd, &hoverResult)
+	if err != nil {
+		return nil, errors.Errorf("failed to request hover: %w", err)
+	}
+
+	t.Logf("Hover result: %v", hoverResult)
+
+	if hoverResult == "" {
+		return nil, nil
+	}
+
+	var hover lsp.Hover
+	err = json.Unmarshal([]byte(hoverResult), &hover)
+	if err != nil {
+		return nil, errors.Errorf("unmarshalling hover: %w", err)
+	}
+	return &hover, nil
+}
+
+func (s *neovimTestSetup) saveAndQuit() error {
+	outFile := filepath.Join(s.tmpDir, "nvim.out")
+	err := s.nvimInstance.Command("write! " + outFile)
+	if err != nil {
+		return errors.Errorf("failed to write file: %w", err)
+	}
+
+	err = s.nvimInstance.Command("quit!")
+	if err != nil && !strings.Contains(err.Error(), "msgpack/rpc: session closed") {
+		return errors.Errorf("failed to quit neovim: %w", err)
+	}
+
+	return nil
+}
+
+func (s *neovimTestSetup) saveAndQuitWithOutput() (string, error) {
+	err := s.saveAndQuit()
+	if err != nil {
+		return "", errors.Errorf("failed to save and quit: %w", err)
+	}
+
+	outFile := filepath.Join(s.tmpDir, "nvim.out")
+	content, err := os.ReadFile(outFile)
+	if err != nil {
+		return "", errors.Errorf("failed to read output file: %w", err)
+	}
+
+	return string(content), nil
+}
+
 func TestNeovimBasic(t *testing.T) {
+	ctx := context.Background()
+
 	server := lsp.NewServer(
 		parser.NewDefaultTemplateParser(),
 		types.NewDefaultValidator(),
@@ -329,92 +481,53 @@ func TestNeovimBasic(t *testing.T) {
 	)
 
 	files := testFiles{
-		"test.tmpl": "{{ .Value }}",
+		"test.tmpl": "{{- /*gotype: test.Items*/ -}}\n{{ .Value }}",
+		"go.mod":    "module test",
+		"test.go": `
+package test
+type Items struct {
+	Value string
+}`,
 	}
 
 	setup, err := setupNeovimTest(t, server, files)
 	require.NoError(t, err)
 	defer setup.cleanup()
 
-	// Open and edit the test file
+	// // Open test file and set up LSP
 	testFile := filepath.Join(setup.tmpDir, "test.tmpl")
-	t.Log("Opening test file...")
-	err = setup.nvimInstance.Command("edit " + testFile)
+
+	// Test hover at the start of the file
+	hoverResult, err := setup.requestHover(t, ctx, &lsp.HoverParams{
+		TextDocument: lsp.TextDocumentIdentifier{URI: "file://" + testFile},
+		Position:     lsp.Position{Line: 1, Character: 6},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, hoverResult)
+	// Save and quit
+	output, err := setup.saveAndQuitWithOutput()
 	require.NoError(t, err)
 
-	// Set filetype
-	t.Log("Setting filetype...")
-	err = setup.nvimInstance.Command("setfiletype go-template")
-	require.NoError(t, err)
+	// Verify the output
+	require.NotEmpty(t, output, "neovim output should not be empty")
 
-	// Wait for LSP to initialize
-	err = setup.waitForLSP()
-	require.NoError(t, err)
+	require.Equal(t, "**Variable**: Items.Value\n**Type**: string", hoverResult.Contents.Value)
 
-	// Notify LSP server about the file
-	t.Log("Notifying LSP server about file...")
-	err = setup.nvimInstance.Command("lua vim.lsp.buf_attach_client(0, 1)")
-	require.NoError(t, err)
+}
 
-	// Send file contents to LSP server
-	t.Log("Sending file contents to LSP server...")
-	err = setup.nvimInstance.Command(`lua vim.lsp.buf_notify(0, 'textDocument/didOpen', {
-		textDocument = {
-			uri = vim.uri_from_fname(vim.fn.expand('%:p')),
-			languageId = 'go-template',
-			version = 1,
-			text = vim.fn.join(vim.fn.getline(1, '$'), '\n')
-		}
-	})`)
-	require.NoError(t, err)
+// Helper function to convert [][]byte to []string
+func bytesSliceToStringSlice(b [][]byte) []string {
+	s := make([]string, len(b))
+	for i, v := range b {
+		s[i] = string(v)
+	}
+	return s
+}
 
-	// Wait for LSP server to process the file
-	time.Sleep(100 * time.Millisecond)
-
-	// Test hover functionality
-	t.Log("Testing hover...")
-	err = setup.nvimInstance.Command("normal! gg0")
-	require.NoError(t, err)
-
-	// Request hover using request_sync
-	t.Log("Requesting hover...")
-	err = setup.nvimInstance.Command(`lua
-		local params = vim.lsp.util.make_position_params()
-		local result = vim.lsp.buf_request_sync(0, 'textDocument/hover', params, 1000)
-		if result and result[1] then
-			local hover = result[1].result
-			if hover then
-				print("Hover result:", vim.inspect(hover))
-			else
-				print("No hover result")
-			end
-		else
-			print("No response from server")
-		end
-	`)
-	require.NoError(t, err)
-
-	// Wait for hover response
-	time.Sleep(100 * time.Millisecond)
-
-	// Write the file and quit
-	t.Log("Writing file...")
-	err = setup.nvimInstance.Command("write! " + testFile + ".out")
-	require.NoError(t, err)
-
-	t.Log("Quitting neovim...")
-	err = setup.nvimInstance.Command("quit!")
-	if err != nil && !strings.Contains(err.Error(), "msgpack/rpc: session closed") {
-		t.Errorf("unexpected error quitting neovim: %v", err)
+func lastN[T any](vals []T, n int) []T {
+	if len(vals) <= n {
+		return vals
 	}
 
-	// Check if the output file was created
-	outFile := testFile + ".out"
-	_, err = os.Stat(outFile)
-	require.NoError(t, err, "Output file should exist")
-
-	// Read the output file
-	content, err := os.ReadFile(outFile)
-	require.NoError(t, err)
-	require.Equal(t, "{{ .Value }}\n", string(content), "File content should match")
+	return vals[len(vals)-n:]
 }

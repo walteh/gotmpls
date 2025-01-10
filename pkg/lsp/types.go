@@ -2,8 +2,11 @@ package lsp
 
 import (
 	"encoding/json"
+	"strconv"
+	"strings"
 
 	"github.com/rs/zerolog"
+	"gitlab.com/tozd/go/errors"
 )
 
 // LSP types based on the specification
@@ -211,4 +214,45 @@ type MarkupContent struct {
 type Hover struct {
 	Contents MarkupContent `json:"contents"`
 	Range    *Range        `json:"range,omitempty"`
+}
+
+// ParseHover parses a hover result from JSON
+func ParseHover(msg any) (*Hover, error) {
+	if msg == nil {
+		return nil, nil
+	}
+
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		return nil, errors.Errorf("marshalling hover: %w", err)
+	}
+	var hover Hover
+	err = json.Unmarshal(msgBytes, &hover)
+	if err != nil {
+		return nil, errors.Errorf("unmarshalling hover: %w", err)
+	}
+	return &hover, nil
+}
+
+// Helper function to extract numbers from Lua table string
+func extractNumber(str, prefix, suffix string, startFrom ...int) int64 {
+	start := 0
+	if len(startFrom) > 0 {
+		start = startFrom[0]
+	}
+	idx := strings.Index(str[start:], prefix)
+	if idx == -1 {
+		return -1
+	}
+	idx += start + len(prefix)
+	end := strings.Index(str[idx:], suffix)
+	if end == -1 {
+		return -1
+	}
+	num := strings.TrimSpace(str[idx : idx+end])
+	val, err := strconv.ParseInt(num, 10, 64)
+	if err != nil {
+		return -1
+	}
+	return val
 }
