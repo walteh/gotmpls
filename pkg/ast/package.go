@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"gitlab.com/tozd/go/errors"
@@ -12,6 +13,10 @@ import (
 
 // AnalyzePackage implements PackageAnalyzer
 func AnalyzePackage(ctx context.Context, dir string) (*Registry, error) {
+	if strings.HasSuffix(dir, ".tmpl") {
+		dir = filepath.Dir(dir)
+	}
+
 	// Check if go.mod exists
 	modPath := filepath.Join(dir, "go.mod")
 	if _, err := os.Stat(modPath); err != nil {

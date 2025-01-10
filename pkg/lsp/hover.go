@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/sourcegraph/jsonrpc2"
-	"github.com/walteh/go-tmpl-typer/pkg/bridge"
+	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
 	"gitlab.com/tozd/go/errors"
 )
@@ -38,8 +38,13 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 		return nil, nil
 	}
 
+	registry, err := ast.AnalyzePackage(ctx, info.Filename)
+	if err != nil {
+		return nil, errors.Errorf("analyzing package for hover: %w", err)
+	}
+
 	// Get type info
-	typeInfo, err := bridge.ValidateType(ctx, hint.TypePath)
+	typeInfo, err := ast.GenerateTypeInfoFromRegistry(ctx, hint.TypePath, registry)
 	if err != nil {
 		return nil, errors.Errorf("validating type for hover: %w", err)
 	}
@@ -65,10 +70,10 @@ func findTypeHintForPosition(info *parser.TemplateInfo, line, character int) *pa
 	return &info.TypeHints[0]
 }
 
-func formatFieldsMarkdown(fields map[string]types.FieldInfo) string {
+func formatFieldsMarkdown(fields map[string]*ast.FieldInfo) string {
 	var result string
 	for name, field := range fields {
-		result += "- " + name + ": " + field.Type + "\n"
+		result += "- " + name + ": " + field.Type.String() + "\n"
 	}
 	return result
 }

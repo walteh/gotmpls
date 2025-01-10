@@ -20,7 +20,7 @@ func (s *Server) validateDocument(ctx context.Context, uri string, content strin
 		return nil, errors.Errorf("parsing template for validation: %w", err)
 	}
 
-	registry, err := s.server.analyzer.GetPackage(ctx, info.Filename)
+	registry, err := ast.AnalyzePackage(ctx, info.Filename)
 	if err != nil {
 		return nil, errors.Errorf("analyzing package: %w", err)
 	}

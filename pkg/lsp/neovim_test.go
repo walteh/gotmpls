@@ -19,11 +19,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	"github.com/walteh/go-tmpl-typer/pkg/archive"
-	"github.com/walteh/go-tmpl-typer/pkg/ast"
-	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
 	"github.com/walteh/go-tmpl-typer/pkg/lsp"
-	"github.com/walteh/go-tmpl-typer/pkg/parser"
-	"github.com/walteh/go-tmpl-typer/pkg/types"
 	"gitlab.com/tozd/go/errors"
 )
 
@@ -35,22 +31,20 @@ type testFiles map[string]string
 
 // neovimTestSetup contains all the necessary components for a neovim LSP test
 type neovimTestSetup struct {
-	nvimInstance  *nvim.Nvim
-	serverSpawner *lsp.ServerSpawner
-	tmpDir        string
-	cleanup       func()
-	t             *testing.T
+	nvimInstance *nvim.Nvim
+	tmpDir       string
+	cleanup      func()
+	t            *testing.T
 }
 
-func setupNeovimTest(t *testing.T, server *lsp.ServerSpawner, files testFiles) (*neovimTestSetup, error) {
+func setupNeovimTest(t *testing.T, files testFiles) (*neovimTestSetup, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
 	setup := &neovimTestSetup{
-		serverSpawner: server,
-		t:             t,
+		t: t,
 	}
 
-	tmpDir, err := os.MkdirTemp("", "nvim-lspconfig-*")
+	tmpDir, err := os.MkdirTemp("", "nvim-test-*")
 	if err != nil {
 		cancel()
 		return nil, errors.Errorf("failed to create temp dir: %v", err)
@@ -113,7 +107,7 @@ func setupNeovimTest(t *testing.T, server *lsp.ServerSpawner, files testFiles) (
 			t.Log("Verbose logging enabled")
 			loggers = append(loggers, zerolog.NewTestWriter(t))
 		}
-		if err := server.Spawn(ctx, conn, conn, loggers...); err != nil {
+		if err := lsp.Spawn(ctx, conn, conn, loggers...); err != nil {
 			if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
 				serverError <- errors.Errorf("LSP server error: %v", err)
 			}
@@ -504,14 +498,6 @@ func (s *neovimTestSetup) saveAndQuitWithOutput() (string, error) {
 func TestNeovimBasic(t *testing.T) {
 	ctx := context.Background()
 
-	server := lsp.NewServer(
-		parser.NewDefaultTemplateParser(),
-		types.NewDefaultValidator(),
-		ast.NewDefaultPackageAnalyzer(),
-		diagnostic.NewDefaultGenerator(),
-		true,
-	)
-
 	files := testFiles{
 		"test.tmpl": "{{- /*gotype: test.Items*/ -}}\n{{ .Value }}",
 		"go.mod":    "module test",
@@ -522,7 +508,7 @@ type Items struct {
 }`,
 	}
 
-	setup, err := setupNeovimTest(t, server, files)
+	setup, err := setupNeovimTest(t, files)
 	require.NoError(t, err)
 	defer setup.cleanup()
 

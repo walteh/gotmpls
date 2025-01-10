@@ -10,15 +10,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/sourcegraph/jsonrpc2"
-	"github.com/walteh/go-tmpl-typer/pkg/ast"
 )
-
-type ServerSpawner struct {
-	id string
-
-	analyzer ast.PackageAnalyzer
-	debug    bool
-}
 
 type handlerFunc func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error)
 
@@ -53,17 +45,8 @@ func (b *bufferedReadWriteCloser) Close() error {
 	return b.closer.Close()
 }
 
-func NewServer(analyzer ast.PackageAnalyzer, debug bool) *ServerSpawner {
-	return &ServerSpawner{
-		analyzer: analyzer,
-		debug:    debug,
-		id:       xid.New().String(),
-	}
-}
-
 // Server represents an LSP server instance
 type Server struct {
-	server          *ServerSpawner
 	documents       sync.Map // map[string]string
 	workspace       string
 	conn            *jsonrpc2.Conn
@@ -72,17 +55,15 @@ type Server struct {
 	debug           bool
 }
 
-func (s *ServerSpawner) Spawn(ctx context.Context, reader io.Reader, writer io.Writer, extraLogWriters ...io.Writer) error {
+func Spawn(ctx context.Context, reader io.Reader, writer io.Writer, extraLogWriters ...io.Writer) error {
 	zerolog.Ctx(ctx).Info().Msg("starting LSP server - all logging will be redirected to LSP")
 
 	spawn := &Server{
-		server:          s,
 		extraLogWriters: extraLogWriters,
 		id:              xid.New().String(),
 		conn:            nil,
 		documents:       sync.Map{},
 		workspace:       "",
-		debug:           s.debug,
 	}
 
 	// Create a buffered stream with VSCode codec for proper LSP message formatting

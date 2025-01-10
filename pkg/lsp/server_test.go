@@ -6,17 +6,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/lsp"
 )
 
 func TestServer(t *testing.T) {
 	ctx := context.Background()
-
-	server := lsp.NewServer(
-		ast.NewDefaultPackageAnalyzer(),
-		true,
-	)
 
 	t.Run("server initialization", func(t *testing.T) {
 		files := testFiles{
@@ -29,7 +23,7 @@ type Person struct {
 }`,
 		}
 
-		setup, err := setupNeovimTest(t, server, files)
+		setup, err := setupNeovimTest(t, files)
 		require.NoError(t, err, "setup should succeed")
 		defer setup.cleanup()
 
@@ -50,7 +44,7 @@ type Person struct {
 }`,
 		}
 
-		setup, err := setupNeovimTest(t, server, files)
+		setup, err := setupNeovimTest(t, files)
 		require.NoError(t, err, "setup should succeed")
 		defer setup.cleanup()
 
@@ -96,7 +90,7 @@ type Person struct {
 }`,
 		}
 
-		setup, err := setupNeovimTest(t, server, files)
+		setup, err := setupNeovimTest(t, files)
 		require.NoError(t, err, "setup should succeed")
 		defer setup.cleanup()
 
@@ -154,7 +148,7 @@ type Person struct {
 }`,
 		}
 
-		setup, err := setupNeovimTest(t, server, files)
+		setup, err := setupNeovimTest(t, files)
 		require.NoError(t, err, "setup should succeed")
 		defer setup.cleanup()
 
