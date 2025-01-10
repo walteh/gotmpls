@@ -130,3 +130,75 @@ func TestLSPHoverProtocol(t *testing.T) {
 	mockValidator.AssertExpectations(t)
 	mockParser.AssertExpectations(t)
 }
+
+func TestDocumentHandling(t *testing.T) {
+	mockValidator := mockery.NewMockValidator_types(t)
+	mockParser := mockery.NewMockTemplateParser_parser(t)
+	mockAnalyzer := mockery.NewMockPackageAnalyzer_ast(t)
+	mockGenerator := mockery.NewMockGenerator_diagnostic(t)
+	ctx := context.Background()
+
+	t.Run("handles document URIs correctly", func(t *testing.T) {
+		// Create a server with mocked dependencies
+		server := NewServer(mockParser, mockValidator, mockAnalyzer, mockGenerator, true)
+
+		// Test file content
+		const testContent = `{{- /*gotype: example.com/test/types.Person */ -}}
+{{.Name}}`
+
+		// Test both file:// and regular path URIs
+		uris := []string{
+			"file:///test/path/doc.tmpl",
+			"/test/path/doc.tmpl",
+			"test.tmpl",
+		}
+
+		for _, uri := range uris {
+			t.Run(uri, func(t *testing.T) {
+				// Store the document
+				server.documents.Store(uri, testContent)
+
+				// Setup mock expectations
+				mockParser.EXPECT().Parse(mock.Anything, []byte(testContent), uri).Return(&parser.TemplateInfo{
+					TypeHints: []parser.TypeHint{{TypePath: "example.com/test/types.Person"}},
+					Variables: []parser.VariableLocation{{
+						Name:   "Name",
+						Line:   2,
+						Column: 3,
+						EndCol: 7,
+					}},
+				}, nil).Once()
+
+				mockValidator.EXPECT().ValidateType(mock.Anything, "example.com/test/types.Person", mockAnalyzer).Return(&pkg_types.TypeInfo{}, nil).Once()
+				mockValidator.EXPECT().ValidateField(mock.Anything, mock.Anything, "Name").Return(&pkg_types.FieldInfo{
+					Type: types.Typ[types.String],
+				}, nil).Once()
+
+				// Create hover request
+				params := HoverParams{
+					TextDocument: TextDocumentIdentifier{URI: uri},
+					Position:     Position{Line: 1, Character: 4},
+				}
+				paramsBytes, _ := json.Marshal(params)
+				rawParams := json.RawMessage(paramsBytes)
+				req := &jsonrpc2.Request{
+					Method: "textDocument/hover",
+					Params: &rawParams,
+				}
+
+				// Test hover
+				hover, err := server.handleTextDocumentHover(ctx, req)
+				require.NoError(t, err)
+				require.NotNil(t, hover)
+
+				hoverResp, ok := hover.(*Hover)
+				require.True(t, ok)
+				assert.Equal(t, "markdown", hoverResp.Contents.Kind)
+				assert.Contains(t, hoverResp.Contents.Value, "**Variable**: Person.Name")
+			})
+		}
+	})
+
+	mockValidator.AssertExpectations(t)
+	mockParser.AssertExpectations(t)
+}

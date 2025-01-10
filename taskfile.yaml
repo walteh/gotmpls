@@ -38,3 +38,14 @@ tasks:
           - rm -rf out
           - bun install
           - bun run build
+
+    download-nvim-lspconfig:
+        desc: Download nvim-lspconfig and store it in testdata
+        cmds:
+          - mkdir -p pkg/lsp/testdata/gen
+          - rm -f pkg/lsp/testdata/gen/nvim-lspconfig.tar.gz
+          - curl -L https://github.com/neovim/nvim-lspconfig/archive/refs/heads/master.tar.gz -o pkg/lsp/testdata/gen/nvim-lspconfig.tar.gz
+          - cd pkg/lsp/testdata/gen && tar xzf nvim-lspconfig.tar.gz
+          - rm pkg/lsp/testdata/gen/nvim-lspconfig.tar.gz
+        status:
+          - test -d pkg/lsp/testdata/gen/nvim-lspconfig-master

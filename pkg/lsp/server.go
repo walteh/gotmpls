@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/rs/xid"
@@ -207,4 +208,37 @@ func (s *Server) publishDiagnostics(ctx context.Context, uri string, diagnostics
 	}
 
 	return s.conn.Notify(ctx, "textDocument/publishDiagnostics", params)
+}
+
+// normalizeURI ensures consistent URI handling by removing the file:// prefix if present
+// and converting to a clean path
+func (s *Server) normalizeURI(uri string) string {
+	// Remove file:// prefix if present
+	if strings.HasPrefix(uri, "file://") {
+		uri = uri[7:]
+	}
+	// Remove any leading slashes for consistency
+	uri = strings.TrimLeft(uri, "/")
+	return uri
+}
+
+// getDocument retrieves a document from the server's store using a normalized URI
+func (s *Server) getDocument(uri string) (string, bool) {
+	normalizedURI := s.normalizeURI(uri)
+	content, ok := s.documents.Load(normalizedURI)
+	if !ok {
+		// Try with the original URI as fallback
+		content, ok = s.documents.Load(uri)
+	}
+	if !ok {
+		return "", false
+	}
+	text, ok := content.(string)
+	return text, ok
+}
+
+// storeDocument stores a document in the server's store using a normalized URI
+func (s *Server) storeDocument(uri string, content string) {
+	normalizedURI := s.normalizeURI(uri)
+	s.documents.Store(normalizedURI, content)
 }

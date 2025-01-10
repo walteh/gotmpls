@@ -72,23 +72,21 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 		return nil, errors.Errorf("failed to unmarshal hover params: %w", err)
 	}
 
-	content, ok := s.documents.Load(params.TextDocument.URI)
+	text, ok := s.getDocument(params.TextDocument.URI)
 	if !ok {
+		s.debugf(ctx, "document not found: %s", params.TextDocument.URI)
 		return nil, errors.Errorf("document not found: %s", params.TextDocument.URI)
-	}
-
-	text, ok := content.(string)
-	if !ok {
-		return nil, errors.Errorf("invalid document content type")
 	}
 
 	// Let the parser handle all template parsing
 	tmpl, err := s.parser.Parse(ctx, []byte(text), params.TextDocument.URI)
 	if err != nil {
+		s.debugf(ctx, "failed to parse template: %v", err)
 		return nil, errors.Errorf("failed to parse template: %w", err)
 	}
 
 	if len(tmpl.TypeHints) == 0 {
+		s.debugf(ctx, "no type hints found in template")
 		return nil, errors.Errorf("no type hints found in template")
 	}
 
@@ -98,6 +96,7 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 	// Let the validator handle all type validation
 	typeInfo, err := s.validator.ValidateType(ctx, typeHint.TypePath, s.analyzer)
 	if err != nil {
+		s.debugf(ctx, "failed to validate type: %v", err)
 		return nil, errors.Errorf("failed to validate type: %w", err)
 	}
 

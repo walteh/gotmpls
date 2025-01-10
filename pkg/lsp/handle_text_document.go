@@ -20,7 +20,7 @@ func (s *Server) handleTextDocumentDidOpen(ctx context.Context, req *jsonrpc2.Re
 	}
 
 	s.debugf(ctx, "storing document in memory: %s", params.TextDocument.URI)
-	s.documents.Store(params.TextDocument.URI, params.TextDocument.Text)
+	s.storeDocument(params.TextDocument.URI, params.TextDocument.Text)
 	s.debugf(ctx, "document stored successfully, validating...")
 	return s.validateDocument(ctx, params.TextDocument.URI, params.TextDocument.Text)
 }
@@ -37,7 +37,7 @@ func (s *Server) handleTextDocumentDidChange(ctx context.Context, req *jsonrpc2.
 
 	// For now, we'll just use the full content sync
 	if len(params.ContentChanges) > 0 {
-		s.documents.Store(params.TextDocument.URI, params.ContentChanges[0].Text)
+		s.storeDocument(params.TextDocument.URI, params.ContentChanges[0].Text)
 		return s.validateDocument(ctx, params.TextDocument.URI, params.ContentChanges[0].Text)
 	}
 
@@ -54,7 +54,7 @@ func (s *Server) handleTextDocumentDidClose(ctx context.Context, req *jsonrpc2.R
 		return nil, errors.Errorf("failed to unmarshal didClose params: %w", err)
 	}
 
-	s.documents.Delete(params.TextDocument.URI)
+	s.documents.Delete(s.normalizeURI(params.TextDocument.URI))
 	return nil, nil
 }
 
