@@ -13,6 +13,7 @@ code and functions should be written in a way that is delibrtaly easy to test
 unit tests should be written in a way that is easy to understand and easy to write, yet overall increadibly exhaustive primarily by breadth of simple focused tests
 assume one hat at a times (testing, writing code, refactoring) and make sure to check lints and tests before moving between hats
 be extremely careful when modifying \_test.go files and regular go files in the same composer run
+always add messages to tests, like: require.NoError(t, err, "hover request should succeed")
 
 golang mocks:
 always use interfaces and then add them to .mockery.yaml which will generate the mocks in ./gen/mockery by calling "task generate" in the root of the project

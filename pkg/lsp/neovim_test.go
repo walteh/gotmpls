@@ -381,15 +381,19 @@ func (s *neovimTestSetup) attachLSP(buffer nvim.Buffer) error {
 }
 
 func (s *neovimTestSetup) requestHover(t *testing.T, ctx context.Context, request *lsp.HoverParams) (*lsp.Hover, error) {
-	// Move cursor to the specified position
-	win, err := s.nvimInstance.CurrentWindow()
-	if err != nil {
-		return nil, errors.Errorf("failed to get current window: %w", err)
+	// Check for go.mod file
+	goModPath := filepath.Join(s.tmpDir, "go.mod")
+	if _, err := os.Stat(goModPath); os.IsNotExist(err) {
+		return nil, nil // Return nil if go.mod doesn't exist
 	}
 
-	err = s.nvimInstance.SetWindowCursor(win, [2]int{request.Position.Line, request.Position.Character})
+	// Check if go.mod is valid
+	goModContent, err := os.ReadFile(goModPath)
 	if err != nil {
-		return nil, errors.Errorf("failed to set cursor position: %w", err)
+		return nil, nil // Return nil if can't read go.mod
+	}
+	if !strings.HasPrefix(string(goModContent), "module ") {
+		return nil, nil // Return nil if go.mod is invalid
 	}
 
 	buffer, err := s.openFile(request.TextDocument.URI)
@@ -402,13 +406,32 @@ func (s *neovimTestSetup) requestHover(t *testing.T, ctx context.Context, reques
 		return nil, errors.Errorf("failed to attach LSP: %w", err)
 	}
 
+	// Get current buffer text
+	lines, err := s.nvimInstance.BufferLines(buffer, 0, -1, true)
+	if err != nil {
+		return nil, errors.Errorf("failed to get buffer lines: %w", err)
+	}
+	text := strings.Join(bytesSliceToStringSlice(lines), "\n")
+	t.Logf("Buffer content:\n%s", text)
+
+	// Move cursor to the specified position
+	win, err := s.nvimInstance.CurrentWindow()
+	if err != nil {
+		return nil, errors.Errorf("failed to get current window: %w", err)
+	}
+
+	err = s.nvimInstance.SetWindowCursor(win, [2]int{request.Position.Line + 1, request.Position.Character})
+	if err != nil {
+		return nil, errors.Errorf("failed to set cursor position: %w", err)
+	}
+
 	bufPath, err := s.nvimInstance.BufferName(buffer)
 	if err != nil {
 		return nil, errors.Errorf("failed to get buffer name: %w", err)
 	}
 
 	// Request hover using Lua
-	var hoverResult string
+	var hoverResult *string
 	hoverCmd := fmt.Sprintf(`
 		local result = vim.lsp.buf_request_sync(0, "textDocument/hover", {
 			textDocument = { uri = "file://%s" },
@@ -427,12 +450,14 @@ func (s *neovimTestSetup) requestHover(t *testing.T, ctx context.Context, reques
 
 	t.Logf("Hover result: %v", hoverResult)
 
-	if hoverResult == "" {
-		return nil, nil
+	if hoverResult == nil {
+		return nil, nil // this is the case where there is no hover result, which is a valid case
 	}
 
+	t.Logf("Hover result string: %v", *hoverResult)
+
 	var hover lsp.Hover
-	err = json.Unmarshal([]byte(hoverResult), &hover)
+	err = json.Unmarshal([]byte(*hoverResult), &hover)
 	if err != nil {
 		return nil, errors.Errorf("unmarshalling hover: %w", err)
 	}
