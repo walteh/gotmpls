@@ -16,7 +16,7 @@ func TestTemplateParser_Parse(t *testing.T) {
 	tests := []struct {
 		name     string
 		template string
-		want     *parser.TemplateInfo
+		want     *parser.FileInfo
 		wantErr  bool
 	}{
 		{
@@ -25,21 +25,52 @@ func TestTemplateParser_Parse(t *testing.T) {
 {{define "main"}}
 Hello {{.Name}}! You are {{.Age}} years old.
 {{end}}`,
-			want: &parser.TemplateInfo{
-				Filename:  "test.tmpl",
-				Functions: []parser.VariableLocation{},
-				TypeHints: []parser.TypeHint{
+			want: &parser.FileInfo{
+				Filename: "test.tmpl",
+				SourceContent: `{{- /*gotype: github.com/example/types.Config */ -}}
+{{define "main"}}
+Hello {{.Name}}! You are {{.Age}} years old.
+{{end}}`,
+				Blocks: []parser.BlockInfo{
 					{
-						TypePath: "github.com/example/types.Config",
-						Position: position.NewBasicPosition("github.com/example/types.Config", 0),
+						Name:          "test.tmpl",
+						StartPosition: position.RawPosition{Text: "<<SOF>>", Offset: 0},
+						TypeHint: &parser.TypeHint{
+							TypePath: "github.com/example/types.Config",
+							Position: position.RawPosition{
+								Text:   "github.com/example/types.Config",
+								Offset: 14,
+							},
+							StartPosition: position.RawPosition{
+								Text:   "{{- /*gotype: github.com/example/types.Config */ -}}",
+								Offset: 0,
+							},
+							EndPosition: position.RawPosition{
+								Text:   "{{- /*gotype: github.com/example/types.Config */ -}}",
+								Offset: 0,
+							},
+							Scope: "",
+						},
+						Variables:   []parser.VariableLocation{},
+						Functions:   []parser.VariableLocation{},
+						EndPosition: position.RawPosition{Text: "<<EOF>>", Offset: 107},
 					},
-				},
-				Variables: []parser.VariableLocation{
 					{
-						Position: position.NewBasicPosition(".Name", 0),
-					},
-					{
-						Position: position.NewBasicPosition(".Age", 0),
+						Name:          "main",
+						StartPosition: position.RawPosition{Text: "{{define \"main\"}}", Offset: 52},
+						TypeHint:      nil,
+						Variables: []parser.VariableLocation{
+							{
+								Position: position.RawPosition{Text: ".Name", Offset: 65},
+								Scope:    "main",
+							},
+							{
+								Position: position.RawPosition{Text: ".Age", Offset: 85},
+								Scope:    "main",
+							},
+						},
+						Functions:   []parser.VariableLocation{},
+						EndPosition: position.RawPosition{Text: "}}", Offset: 104},
 					},
 				},
 			},
@@ -51,28 +82,66 @@ Hello {{.Name}}! You are {{.Age}} years old.
 {{define "main"}}
 {{printf "Hello %s" .Name | upper}}
 {{end}}`,
-			want: &parser.TemplateInfo{
+			want: &parser.FileInfo{
 				Filename: "test.tmpl",
-				Functions: []parser.VariableLocation{
+				SourceContent: `{{- /*gotype: github.com/example/types.Config */ -}}
+{{define "main"}}
+{{printf "Hello %s" .Name | upper}}
+{{end}}`,
+				Blocks: []parser.BlockInfo{
 					{
-						Position: position.NewBasicPosition("printf", 0),
-						MethodArguments: []types.Type{
-							types.Typ[types.String],
+						Name:          "test.tmpl",
+						StartPosition: position.RawPosition{Text: "<<SOF>>", Offset: 0},
+						TypeHint: &parser.TypeHint{
+							TypePath: "github.com/example/types.Config",
+							Position: position.RawPosition{
+								Text:   "github.com/example/types.Config",
+								Offset: 14,
+							},
+							StartPosition: position.RawPosition{
+								Text:   "{{- /*gotype: github.com/example/types.Config */ -}}",
+								Offset: 0,
+							},
+							EndPosition: position.RawPosition{
+								Text:   "{{- /*gotype: github.com/example/types.Config */ -}}",
+								Offset: 0,
+							},
+							Scope: "",
 						},
+						Variables:   []parser.VariableLocation{},
+						Functions:   []parser.VariableLocation{},
+						EndPosition: position.RawPosition{Text: "<<EOF>>", Offset: 108},
 					},
 					{
-						Position: position.NewBasicPosition("upper", 0),
-					},
-				},
-				TypeHints: []parser.TypeHint{
-					{
-						TypePath: "github.com/example/types.Config",
-						Position: position.NewBasicPosition("github.com/example/types.Config", 0),
-					},
-				},
-				Variables: []parser.VariableLocation{
-					{
-						Position: position.NewBasicPosition(".Name", 0),
+						Name:          "main",
+						StartPosition: position.RawPosition{Text: "{{define \"main\"}}", Offset: 52},
+						TypeHint:      nil,
+						Variables: []parser.VariableLocation{
+							{
+								Position: position.RawPosition{Text: ".Name", Offset: 85},
+								Scope:    "main",
+							},
+						},
+						Functions: []parser.VariableLocation{
+							{
+								Position: position.RawPosition{Text: "printf", Offset: 63},
+								MethodArguments: []types.Type{
+									types.Typ[types.String],
+								},
+								Scope: "main",
+							},
+							{
+								Position: position.RawPosition{Text: "upper", Offset: 92},
+								MethodArguments: []types.Type{
+									&parser.VariableLocation{
+										Position: position.RawPosition{Text: ".Name", Offset: 85},
+										Scope:    "main",
+									},
+								},
+								Scope: "main",
+							},
+						},
+						EndPosition: position.RawPosition{Text: "}}", Offset: 105},
 					},
 				},
 			},
@@ -90,22 +159,40 @@ Hello {{.Name}}! You are {{.Age}} years old.
 		{
 			name:     "method call with pipe to upper",
 			template: `JobZ: {{printf "%s" .GetJob | upper}}`,
-			want: &parser.TemplateInfo{
-				Filename: "test.tmpl",
-				Functions: []parser.VariableLocation{
+			want: &parser.FileInfo{
+				Filename:      "test.tmpl",
+				SourceContent: `JobZ: {{printf "%s" .GetJob | upper}}`,
+				Blocks: []parser.BlockInfo{
 					{
-						Position: position.NewBasicPosition("printf", 0),
-						MethodArguments: []types.Type{
-							types.Typ[types.String],
+						Name:          "test.tmpl",
+						StartPosition: position.RawPosition{Text: "<<SOF>>", Offset: 0},
+						TypeHint:      nil,
+						Variables: []parser.VariableLocation{
+							{
+								Position: position.RawPosition{Text: ".GetJob", Offset: 20},
+								Scope:    "",
+							},
 						},
-					},
-					{
-						Position: position.NewBasicPosition("upper", 0),
-					},
-				},
-				Variables: []parser.VariableLocation{
-					{
-						Position: position.NewBasicPosition(".GetJob", 0),
+						Functions: []parser.VariableLocation{
+							{
+								Position: position.RawPosition{Text: "printf", Offset: 8},
+								MethodArguments: []types.Type{
+									types.Typ[types.String],
+								},
+								Scope: "",
+							},
+							{
+								Position: position.RawPosition{Text: "upper", Offset: 29},
+								MethodArguments: []types.Type{
+									&parser.VariableLocation{
+										Position: position.RawPosition{Text: ".GetJob", Offset: 20},
+										Scope:    "",
+									},
+								},
+								Scope: "",
+							},
+						},
+						EndPosition: position.RawPosition{Text: "<<EOF>>", Offset: 35},
 					},
 				},
 			},
@@ -116,18 +203,39 @@ Hello {{.Name}}! You are {{.Age}} years old.
 			template: `{{- /*gotype: test.Person*/ -}}
 Address:
   Street: {{.Address.Street}}`,
-			want: &parser.TemplateInfo{
-				Filename:  "test.tmpl",
-				Functions: []parser.VariableLocation{},
-				TypeHints: []parser.TypeHint{
+			want: &parser.FileInfo{
+				Filename: "test.tmpl",
+				SourceContent: `{{- /*gotype: test.Person*/ -}}
+Address:
+  Street: {{.Address.Street}}`,
+				Blocks: []parser.BlockInfo{
 					{
-						TypePath: "test.Person",
-						Position: position.NewBasicPosition("test.Person", 14),
-					},
-				},
-				Variables: []parser.VariableLocation{
-					{
-						Position: position.NewBasicPosition(".Address.Street", 34),
+						Name:          "test.tmpl",
+						StartPosition: position.RawPosition{Text: "<<SOF>>", Offset: 0},
+						TypeHint: &parser.TypeHint{
+							TypePath: "test.Person",
+							Position: position.RawPosition{
+								Text:   "test.Person",
+								Offset: 14,
+							},
+							StartPosition: position.RawPosition{
+								Text:   "{{- /*gotype: test.Person*/ -}}",
+								Offset: 0,
+							},
+							EndPosition: position.RawPosition{
+								Text:   "{{- /*gotype: test.Person*/ -}}",
+								Offset: 0,
+							},
+							Scope: "",
+						},
+						Variables: []parser.VariableLocation{
+							{
+								Position: position.RawPosition{Text: ".Address.Street", Offset: 61},
+								Scope:    "",
+							},
+						},
+						Functions:   []parser.VariableLocation{},
+						EndPosition: position.RawPosition{Text: "<<EOF>>", Offset: 77},
 					},
 				},
 			},
@@ -144,7 +252,7 @@ Address:
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
+			assert.EqualExportedValues(t, tt.want, got)
 		})
 	}
 }
