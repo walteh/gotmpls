@@ -6,6 +6,7 @@ import (
 	"go/types"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"text/template"
 	"text/template/parse"
@@ -241,7 +242,7 @@ func Parse(ctx context.Context, content []byte, filename string) (*FileInfo, err
 		}
 		var startPos position.RawPosition
 		if t.Name() == tmpl.ParseName {
-			startPos = position.NewBasicPosition("<<SOF>>", 0)
+			startPos = position.NewBasicPosition("<<SOF>>", -1)
 		} else {
 			startPos, err = UseRegexToFindStartOfBlock(ctx, contentStr, t.Name())
 			if err != nil {
@@ -272,6 +273,11 @@ func Parse(ctx context.Context, content []byte, filename string) (*FileInfo, err
 
 		fileInfo.Blocks = append(fileInfo.Blocks, block)
 	}
+
+	// Sort blocks by start position
+	sort.Slice(fileInfo.Blocks, func(i, j int) bool {
+		return fileInfo.Blocks[i].StartPosition.Offset < fileInfo.Blocks[j].StartPosition.Offset
+	})
 
 	return fileInfo, nil
 }

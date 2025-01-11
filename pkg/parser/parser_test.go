@@ -34,43 +34,43 @@ Hello {{.Name}}! You are {{.Age}} years old.
 				Blocks: []parser.BlockInfo{
 					{
 						Name:          "test.tmpl",
-						StartPosition: position.RawPosition{Text: "<<SOF>>", Offset: 0},
+						StartPosition: position.RawPosition{Text: "<<SOF>>", Offset: -1},
 						TypeHint: &parser.TypeHint{
 							TypePath: "github.com/example/types.Config",
 							Position: position.RawPosition{
 								Text:   "github.com/example/types.Config",
-								Offset: 14,
+								Offset: 4,
 							},
 							StartPosition: position.RawPosition{
-								Text:   "{{- /*gotype: github.com/example/types.Config */ -}}",
-								Offset: 0,
+								Text:   "{{/*gotype: github.com/example/types.Config */}}",
+								Offset: 4,
 							},
 							EndPosition: position.RawPosition{
-								Text:   "{{- /*gotype: github.com/example/types.Config */ -}}",
-								Offset: 0,
+								Text:   "{{/*gotype: github.com/example/types.Config */}}",
+								Offset: 4,
 							},
 							Scope: "",
 						},
 						Variables:   []parser.VariableLocation{},
 						Functions:   []parser.VariableLocation{},
-						EndPosition: position.RawPosition{Text: "<<EOF>>", Offset: 107},
+						EndPosition: position.RawPosition{Text: "<<EOF>>", Offset: 123},
 					},
 					{
 						Name:          "main",
-						StartPosition: position.RawPosition{Text: "{{define \"main\"}}", Offset: 52},
+						StartPosition: position.RawPosition{Text: "{{define \"main\"}}", Offset: 53},
 						TypeHint:      nil,
 						Variables: []parser.VariableLocation{
 							{
-								Position: position.RawPosition{Text: ".Name", Offset: 65},
+								Position: position.RawPosition{Text: ".Name", Offset: 79},
 								Scope:    "main",
 							},
 							{
-								Position: position.RawPosition{Text: ".Age", Offset: 85},
+								Position: position.RawPosition{Text: ".Age", Offset: 98},
 								Scope:    "main",
 							},
 						},
 						Functions:   []parser.VariableLocation{},
-						EndPosition: position.RawPosition{Text: "}}", Offset: 104},
+						EndPosition: position.RawPosition{Text: "}}", Offset: 121},
 					},
 				},
 			},
@@ -91,57 +91,68 @@ Hello {{.Name}}! You are {{.Age}} years old.
 				Blocks: []parser.BlockInfo{
 					{
 						Name:          "test.tmpl",
-						StartPosition: position.RawPosition{Text: "<<SOF>>", Offset: 0},
+						StartPosition: position.RawPosition{Text: "<<SOF>>", Offset: -1},
 						TypeHint: &parser.TypeHint{
 							TypePath: "github.com/example/types.Config",
 							Position: position.RawPosition{
 								Text:   "github.com/example/types.Config",
-								Offset: 14,
+								Offset: 4,
 							},
 							StartPosition: position.RawPosition{
-								Text:   "{{- /*gotype: github.com/example/types.Config */ -}}",
-								Offset: 0,
+								Text:   "{{/*gotype: github.com/example/types.Config */}}",
+								Offset: 4,
 							},
 							EndPosition: position.RawPosition{
-								Text:   "{{- /*gotype: github.com/example/types.Config */ -}}",
-								Offset: 0,
+								Text:   "{{/*gotype: github.com/example/types.Config */}}",
+								Offset: 4,
 							},
 							Scope: "",
 						},
 						Variables:   []parser.VariableLocation{},
 						Functions:   []parser.VariableLocation{},
-						EndPosition: position.RawPosition{Text: "<<EOF>>", Offset: 108},
+						EndPosition: position.RawPosition{Text: "<<EOF>>", Offset: 114},
 					},
 					{
 						Name:          "main",
-						StartPosition: position.RawPosition{Text: "{{define \"main\"}}", Offset: 52},
+						StartPosition: position.RawPosition{Text: "{{define \"main\"}}", Offset: 53},
 						TypeHint:      nil,
 						Variables: []parser.VariableLocation{
 							{
-								Position: position.RawPosition{Text: ".Name", Offset: 85},
+								Position: position.RawPosition{Text: ".Name", Offset: 91},
 								Scope:    "main",
 							},
 						},
 						Functions: []parser.VariableLocation{
 							{
-								Position: position.RawPosition{Text: "printf", Offset: 63},
+								Position: position.RawPosition{Text: "printf", Offset: 73},
 								MethodArguments: []types.Type{
 									types.Typ[types.String],
-								},
-								Scope: "main",
-							},
-							{
-								Position: position.RawPosition{Text: "upper", Offset: 92},
-								MethodArguments: []types.Type{
 									&parser.VariableLocation{
-										Position: position.RawPosition{Text: ".Name", Offset: 85},
+										Position: position.RawPosition{Text: ".Name", Offset: 91},
 										Scope:    "main",
 									},
 								},
 								Scope: "main",
 							},
+							{
+								Position: position.RawPosition{Text: "upper", Offset: 99},
+								MethodArguments: []types.Type{
+									&parser.VariableLocation{
+										Position: position.RawPosition{Text: "printf", Offset: 73},
+										MethodArguments: []types.Type{
+											types.Typ[types.String],
+											&parser.VariableLocation{
+												Position: position.RawPosition{Text: ".Name", Offset: 91},
+												Scope:    "main",
+											},
+										},
+										Scope: "main",
+									},
+								},
+								Scope: "main",
+							},
 						},
-						EndPosition: position.RawPosition{Text: "}}", Offset: 105},
+						EndPosition: position.RawPosition{Text: "}}", Offset: 112},
 					},
 				},
 			},
@@ -165,7 +176,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 				Blocks: []parser.BlockInfo{
 					{
 						Name:          "test.tmpl",
-						StartPosition: position.RawPosition{Text: "<<SOF>>", Offset: 0},
+						StartPosition: position.RawPosition{Text: "<<SOF>>", Offset: -1},
 						TypeHint:      nil,
 						Variables: []parser.VariableLocation{
 							{
@@ -178,12 +189,6 @@ Hello {{.Name}}! You are {{.Age}} years old.
 								Position: position.RawPosition{Text: "printf", Offset: 8},
 								MethodArguments: []types.Type{
 									types.Typ[types.String],
-								},
-								Scope: "",
-							},
-							{
-								Position: position.RawPosition{Text: "upper", Offset: 29},
-								MethodArguments: []types.Type{
 									&parser.VariableLocation{
 										Position: position.RawPosition{Text: ".GetJob", Offset: 20},
 										Scope:    "",
@@ -191,8 +196,25 @@ Hello {{.Name}}! You are {{.Age}} years old.
 								},
 								Scope: "",
 							},
+							{
+								Position: position.RawPosition{Text: "upper", Offset: 30},
+								MethodArguments: []types.Type{
+									&parser.VariableLocation{
+										Position: position.RawPosition{Text: "printf", Offset: 8},
+										MethodArguments: []types.Type{
+											types.Typ[types.String],
+											&parser.VariableLocation{
+												Position: position.RawPosition{Text: ".GetJob", Offset: 20},
+												Scope:    "",
+											},
+										},
+										Scope: "",
+									},
+								},
+								Scope: "",
+							},
 						},
-						EndPosition: position.RawPosition{Text: "<<EOF>>", Offset: 35},
+						EndPosition: position.RawPosition{Text: "<<EOF>>", Offset: 37},
 					},
 				},
 			},
@@ -211,20 +233,20 @@ Address:
 				Blocks: []parser.BlockInfo{
 					{
 						Name:          "test.tmpl",
-						StartPosition: position.RawPosition{Text: "<<SOF>>", Offset: 0},
+						StartPosition: position.RawPosition{Text: "<<SOF>>", Offset: -1},
 						TypeHint: &parser.TypeHint{
 							TypePath: "test.Person",
 							Position: position.RawPosition{
 								Text:   "test.Person",
-								Offset: 14,
+								Offset: 4,
 							},
 							StartPosition: position.RawPosition{
-								Text:   "{{- /*gotype: test.Person*/ -}}",
-								Offset: 0,
+								Text:   "{{/*gotype: test.Person*/}}",
+								Offset: 4,
 							},
 							EndPosition: position.RawPosition{
-								Text:   "{{- /*gotype: test.Person*/ -}}",
-								Offset: 0,
+								Text:   "{{/*gotype: test.Person*/}}",
+								Offset: 4,
 							},
 							Scope: "",
 						},
@@ -235,7 +257,7 @@ Address:
 							},
 						},
 						Functions:   []parser.VariableLocation{},
-						EndPosition: position.RawPosition{Text: "<<EOF>>", Offset: 77},
+						EndPosition: position.RawPosition{Text: "<<EOF>>", Offset: 70},
 					},
 				},
 			},
@@ -288,6 +310,14 @@ Name: {{.Name}}
 		SourceContent: data,
 		Blocks: []parser.BlockInfo{
 			{
+				Name:          "test.tmpl",
+				StartPosition: position.RawPosition{Text: "<<SOF>>", Offset: -1},
+				TypeHint:      nil,
+				Variables:     []parser.VariableLocation{},
+				Functions:     []parser.VariableLocation{},
+				EndPosition:   position.RawPosition{Text: "<<EOF>>", Offset: 441},
+			},
+			{
 				Name:          "header",
 				StartPosition: position.RawPosition{Text: "{{- define \"header\" -}}", Offset: 0},
 				TypeHint:      nil,
@@ -309,8 +339,8 @@ Name: {{.Name}}
 						Offset: 82,
 					},
 					EndPosition: position.RawPosition{
-						Text:   "{{/*gotype: github.com/walteh/go-tmpl-types-vscode/examples/types.Person*/}}Name: {{.Names}}\nAge: {{.Age}}\nAddress:\n  Street: {{.Address.Street}}\n  City: {{.Address.City}}\n\n{{if .HasJob}}\nJob: {{.GetJob | upper}}\n{{end}} \n",
-						Offset: 304,
+						Text:   "{{/*gotype: github.com/walteh/go-tmpl-types-vscode/examples/types.Person*/}}",
+						Offset: 82,
 					},
 					Scope: "person",
 				},
@@ -368,8 +398,8 @@ Name: {{.Name}}
 						Offset: 339,
 					},
 					EndPosition: position.RawPosition{
-						Text:   "{{/*gotype: github.com/walteh/go-tmpl-types-vscode/examples/types.Animal*/}}Name: {{.Name}}\n",
-						Offset: 432,
+						Text:   "{{/*gotype: github.com/walteh/go-tmpl-types-vscode/examples/types.Animal*/}}",
+						Offset: 339,
 					},
 					Scope: "animal",
 				},
@@ -381,14 +411,6 @@ Name: {{.Name}}
 				},
 				Functions:   []parser.VariableLocation{},
 				EndPosition: position.RawPosition{Text: "}}", Offset: 438},
-			},
-			{
-				Name:          "test.tmpl",
-				StartPosition: position.RawPosition{Text: "<<SOF>>", Offset: 0},
-				TypeHint:      nil,
-				Variables:     []parser.VariableLocation{},
-				Functions:     []parser.VariableLocation{},
-				EndPosition:   position.RawPosition{Text: "<<EOF>>", Offset: 441},
 			},
 		},
 	}
