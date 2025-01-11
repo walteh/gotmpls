@@ -62,25 +62,20 @@ func createFuncLocation(fn *parse.IdentifierNode, args []types.Type, scope strin
 // extractTypeHint extracts a type hint from a comment node
 func extractTypeHint(cmt *parse.CommentNode, scope string, parent parse.Node) *TypeHint {
 	text := strings.TrimSpace(cmt.Text)
-	if !strings.HasPrefix(text, "/*gotype:") || !strings.HasSuffix(text, "*/") {
+	text = strings.TrimPrefix(text, "/*")
+	text = strings.TrimSuffix(text, "*/")
+	text = strings.TrimSpace(text)
+	if !strings.HasPrefix(text, "gotype:") {
 		return nil
 	}
 
-	// Extract the type path from between "/*gotype:" and "*/"
-	typePath := strings.TrimSpace(text[9 : len(text)-2])
-	if typePath == "" {
-		return nil
-	}
+	text = strings.TrimPrefix(text, "gotype:")
+	text = strings.TrimSpace(text)
 
 	th := &TypeHint{
-		TypePath: typePath,
-		Position: position.NewBasicPosition(typePath, int(cmt.Pos)),
+		TypePath: text,
+		Position: position.NewBasicPosition(text, int(cmt.Pos)),
 		Scope:    scope,
-	}
-
-	if ln, ok := parent.(*parse.ListNode); ok && len(ln.Nodes) > 0 {
-		th.StartPosition = position.NewBasicPosition(ln.Nodes[0].String(), int(ln.Nodes[0].Position()))
-		th.EndPosition = position.NewBasicPosition(ln.String(), int(ln.Nodes[len(ln.Nodes)-1].Position()))
 	}
 
 	return th
@@ -288,8 +283,13 @@ func Parse(ctx context.Context, content []byte, filename string) (*FileInfo, err
 // - The block cannot be found
 // - The block definition is malformed
 func UseRegexToFindStartOfBlock(ctx context.Context, content string, name string) (position.RawPosition, error) {
+	if strings.Contains(name, `"`) {
+		return position.RawPosition{}, errors.Errorf("block name %q contains quotes", name)
+	}
+
+	quotedName := regexp.QuoteMeta(name)
 	// More precise regex that matches the entire block definition including braces
-	pattern := fmt.Sprintf(`{{-?\s*(?:define|block)\s+"(?:%s)"(?:\s+\.[^}]*)?(?:\s*-?|\s*)}}`, regexp.QuoteMeta(name))
+	pattern := `(?:{{-?\s*(?:define|block)\s+"(?:` + quotedName + `)"(?:\s+\.[^}]*)?(?:\s*-?|\s*)}})`
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		return position.RawPosition{}, errors.Errorf("invalid block name %q: %w", name, err)
@@ -298,7 +298,7 @@ func UseRegexToFindStartOfBlock(ctx context.Context, content string, name string
 	// Find all matches to check for multiple definitions
 	matches := re.FindAllStringIndex(content, -1)
 	if len(matches) == 0 {
-		return position.RawPosition{}, errors.Errorf("block %q not found in template", name)
+		return position.RawPosition{}, errors.Errorf("block %q not found in template", quotedName)
 	}
 	if len(matches) > 1 {
 		// Get the line numbers for each definition for better error reporting
@@ -397,11 +397,9 @@ func (v *VariableLocation) Underlying() types.Type {
 
 // TypeHint represents a type hint comment in the template
 type TypeHint struct {
-	TypePath      string // e.g. "github.com/walteh/minute-api/proto/cmd/protoc-gen-cdk/generator.BuilderConfig"
-	Position      position.RawPosition
-	StartPosition position.RawPosition
-	EndPosition   position.RawPosition
-	Scope         string // The scope of the type hint (e.g., template name or block ID)
+	TypePath string // e.g. "github.com/walteh/minute-api/proto/cmd/protoc-gen-cdk/generator.BuilderConfig"
+	Position position.RawPosition
+	Scope    string // The scope of the type hint (e.g., template name or block ID)
 }
 
 type FileInfo struct {

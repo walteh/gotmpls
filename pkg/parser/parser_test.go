@@ -41,14 +41,6 @@ Hello {{.Name}}! You are {{.Age}} years old.
 								Text:   "github.com/example/types.Config",
 								Offset: 4,
 							},
-							StartPosition: position.RawPosition{
-								Text:   "{{/*gotype: github.com/example/types.Config */}}",
-								Offset: 4,
-							},
-							EndPosition: position.RawPosition{
-								Text:   "{{/*gotype: github.com/example/types.Config */}}",
-								Offset: 4,
-							},
 							Scope: "",
 						},
 						Variables:   []parser.VariableLocation{},
@@ -98,14 +90,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 								Text:   "github.com/example/types.Config",
 								Offset: 4,
 							},
-							StartPosition: position.RawPosition{
-								Text:   "{{/*gotype: github.com/example/types.Config */}}",
-								Offset: 4,
-							},
-							EndPosition: position.RawPosition{
-								Text:   "{{/*gotype: github.com/example/types.Config */}}",
-								Offset: 4,
-							},
+
 							Scope: "",
 						},
 						Variables:   []parser.VariableLocation{},
@@ -240,14 +225,6 @@ Address:
 								Text:   "test.Person",
 								Offset: 4,
 							},
-							StartPosition: position.RawPosition{
-								Text:   "{{/*gotype: test.Person*/}}",
-								Offset: 4,
-							},
-							EndPosition: position.RawPosition{
-								Text:   "{{/*gotype: test.Person*/}}",
-								Offset: 4,
-							},
 							Scope: "",
 						},
 						Variables: []parser.VariableLocation{
@@ -334,14 +311,7 @@ Name: {{.Name}}
 						Text:   "github.com/walteh/go-tmpl-types-vscode/examples/types.Person",
 						Offset: 82,
 					},
-					StartPosition: position.RawPosition{
-						Text:   "{{/*gotype: github.com/walteh/go-tmpl-types-vscode/examples/types.Person*/}}",
-						Offset: 82,
-					},
-					EndPosition: position.RawPosition{
-						Text:   "{{/*gotype: github.com/walteh/go-tmpl-types-vscode/examples/types.Person*/}}",
-						Offset: 82,
-					},
+
 					Scope: "person",
 				},
 				Variables: []parser.VariableLocation{
@@ -391,14 +361,6 @@ Name: {{.Name}}
 					TypePath: "github.com/walteh/go-tmpl-types-vscode/examples/types.Animal",
 					Position: position.RawPosition{
 						Text:   "github.com/walteh/go-tmpl-types-vscode/examples/types.Animal",
-						Offset: 339,
-					},
-					StartPosition: position.RawPosition{
-						Text:   "{{/*gotype: github.com/walteh/go-tmpl-types-vscode/examples/types.Animal*/}}",
-						Offset: 339,
-					},
-					EndPosition: position.RawPosition{
-						Text:   "{{/*gotype: github.com/walteh/go-tmpl-types-vscode/examples/types.Animal*/}}",
 						Offset: 339,
 					},
 					Scope: "animal",
@@ -547,9 +509,9 @@ func TestUseRegexToFindStartOfBlock(t *testing.T) {
 			content: `{{define "header\"quote"}}
 	Some content
 {{end}}`,
-			blockName:  `header"quote`,
-			wantText:   `{{define "header\"quote"}}`,
-			wantOffset: 0,
+			blockName:   `header"quote`,
+			wantErr:     true,
+			errContains: `block name "header\"quote" contains quotes`,
 		},
 		{
 			name: "block with unicode name",
@@ -600,9 +562,11 @@ func TestUseRegexToFindStartOfBlock(t *testing.T) {
 }}
 	Some content
 {{end}}`,
-			blockName:   "header",
-			wantErr:     true,
-			errContains: `block "header" not found in template`,
+			blockName: "header",
+			wantText: `{{define 
+"header"
+}}`,
+			wantOffset: 0,
 		},
 		{
 			name: "block with HTML-like content",
