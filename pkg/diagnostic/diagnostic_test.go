@@ -16,21 +16,18 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 	tests := []struct {
 		name     string
 		template string
-		typePath string
 		want     []*diagnostic.Diagnostic
 		wantErr  bool
 	}{
 		{
 			name:     "valid template",
-			template: "Hello {{.Name}}!",
-			typePath: "github.com/example/types.Person",
+			template: "{{/*gotype: github.com/example/types.Person*/}}Hello {{.Name}}!",
 			want:     nil,
 			wantErr:  false,
 		},
 		{
 			name:     "invalid field",
-			template: "Hello {{.NonExistent}}!",
-			typePath: "github.com/example/types.Person",
+			template: "{{/*gotype: github.com/example/types.Person*/}}Hello {{.NonExistent}}!",
 			want: []*diagnostic.Diagnostic{
 				{
 					Message:  "field NonExistent not found in type Person",
@@ -41,8 +38,7 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 		},
 		{
 			name:     "invalid type path",
-			template: "Hello {{.Name}}!",
-			typePath: "invalid.Type",
+			template: "{{/*gotype: invalid.Type*/}}Hello {{.Name}}!",
 			want:     nil,
 			wantErr:  true,
 		},
@@ -50,6 +46,9 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
+			ctx := context.Background()
+
 			// Create a mock registry
 			registry := ast.NewRegistry()
 			pkg := types.NewPackage("github.com/example/types", "types")
@@ -69,7 +68,7 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 			scope := pkg.Scope()
 			scope.Insert(named.Obj())
 
-			got, err := diagnostic.GetDiagnostics(context.Background(), tt.template, tt.typePath, registry)
+			got, err := diagnostic.GetDiagnostics(ctx, tt.template, registry)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -81,10 +80,10 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 				return
 			}
 
-			require.Equal(t, len(tt.want), len(got))
+			require.Equal(t, len(tt.want), len(got), "diagnostics count mismatch")
 			for i, want := range tt.want {
 				assert.Equal(t, want.Message, got[i].Message, "message mismatch")
-				assert.Equal(t, want.Location.Text(), got[i].Location.Text(), "location mismatch")
+				assert.Equal(t, want.Location.Text, got[i].Location.Text, "location mismatch")
 			}
 		})
 	}
