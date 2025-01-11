@@ -61,7 +61,7 @@ type Person struct {
 		require.Equal(t, 1, hoverResult.Range.Start.Line, "range should start on line 1")
 		require.Equal(t, 1, hoverResult.Range.End.Line, "range should end on line 1")
 		require.Equal(t, 3, hoverResult.Range.Start.Character, "range should start at the beginning of .Name")
-		require.Equal(t, 8, hoverResult.Range.End.Character, "range should end at the end of .Name")
+		require.Equal(t, 7, hoverResult.Range.End.Character, "range should end at the end of .Name")
 
 		// Test hover in second file
 		file2 := filepath.Join(setup.tmpDir, "file2.tmpl")
@@ -76,7 +76,7 @@ type Person struct {
 		require.Equal(t, 1, hoverResult.Range.Start.Line, "range should start on line 1")
 		require.Equal(t, 1, hoverResult.Range.End.Line, "range should end on line 1")
 		require.Equal(t, 3, hoverResult.Range.Start.Character, "range should start at the beginning of .Age")
-		require.Equal(t, 7, hoverResult.Range.End.Character, "range should end at the end of .Age")
+		require.Equal(t, 6, hoverResult.Range.End.Character, "range should end at the end of .Age")
 	})
 
 	t.Run("server handles file changes", func(t *testing.T) {
@@ -108,7 +108,7 @@ type Person struct {
 		require.Equal(t, 1, hoverResult.Range.Start.Line, "range should start on line 1")
 		require.Equal(t, 1, hoverResult.Range.End.Line, "range should end on line 1")
 		require.Equal(t, 3, hoverResult.Range.Start.Character, "range should start at the beginning of .Name")
-		require.Equal(t, 8, hoverResult.Range.End.Character, "range should end at the end of .Name")
+		require.Equal(t, 7, hoverResult.Range.End.Character, "range should end at the end of .Name")
 
 		// Save current file before making changes
 		err = setup.nvimInstance.Command("w")
@@ -163,7 +163,7 @@ type Person struct {
 			{5, "before address", false},
 			{12, "start of Address", true},
 			{19, "middle of Street", true},
-			{25, "after Street", false},
+			{28, "after Street", false},
 		}
 
 		for _, pos := range positions {

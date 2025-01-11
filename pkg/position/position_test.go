@@ -2,7 +2,6 @@ package position_test
 
 import (
 	"testing"
-	"text/template/parse"
 
 	"github.com/walteh/go-tmpl-typer/pkg/position"
 )
@@ -11,64 +10,64 @@ func TestGetLineAndColumn(t *testing.T) {
 	tests := []struct {
 		name     string
 		text     string
-		pos      parse.Pos
+		pos      position.RawPosition
 		wantLine int
 		wantCol  int
 	}{
 		{
 			name:     "empty text",
 			text:     "",
-			pos:      parse.Pos(0),
-			wantLine: 1,
-			wantCol:  1,
+			pos:      position.RawPosition{Offset: 0},
+			wantLine: 0,
+			wantCol:  0,
 		},
 		{
 			name:     "single line, first position",
 			text:     "Hello, World! ",
-			pos:      parse.Pos(2),
-			wantLine: 1,
-			wantCol:  3,
+			pos:      position.RawPosition{Offset: 2},
+			wantLine: 0,
+			wantCol:  2,
 		},
 		{
 			name:     "single line, middle position",
 			text:     "Hello, World!",
-			pos:      parse.Pos(7),
-			wantLine: 1,
-			wantCol:  8,
+			pos:      position.RawPosition{Offset: 7},
+			wantLine: 0,
+			wantCol:  7,
 		},
 		{
 			name:     "multiple lines, first line",
 			text:     "Hello\nWorld\nTest",
-			pos:      parse.Pos(3),
-			wantLine: 1,
-			wantCol:  4,
+			pos:      position.RawPosition{Offset: 3},
+			wantLine: 0,
+			wantCol:  3,
 		},
 		{
 			name:     "multiple lines, second line",
 			text:     "Hello\nWorld\nTest zzz",
-			pos:      parse.Pos(8),
-			wantLine: 2,
-			wantCol:  3,
+			pos:      position.RawPosition{Offset: 8},
+			wantLine: 1,
+			wantCol:  2,
 		},
 		{
 			name:     "multiple lines with varying lengths",
 			text:     "Hello, World!\nThis is a test\nShort\nLonger line here zzz",
-			pos:      parse.Pos(16),
-			wantLine: 2,
-			wantCol:  3,
+			pos:      position.RawPosition{Offset: 16},
+			wantLine: 1,
+			wantCol:  2,
 		},
 		{
 			name:     "broken example",
 			text:     "{{- /*gotype: test.Person*/ -}}\nAddress:\n  Street: {{.Address.Street}}",
-			pos:      parse.Pos(61),
-			wantLine: 3,
-			wantCol:  21,
+			pos:      position.RawPosition{Offset: 61},
+			wantLine: 2,
+			wantCol:  20,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotLine, gotCol := position.GetLineAndColumn(tt.text, tt.pos)
+			gotLine, gotCol := tt.pos.GetLineAndColumn(tt.text)
 			if gotLine != tt.wantLine || gotCol != tt.wantCol {
 				t.Errorf("GetLineAndColumn() = (%v, %v), want (%v, %v)", gotLine, gotCol, tt.wantLine, tt.wantCol)
 			}

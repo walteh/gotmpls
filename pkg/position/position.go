@@ -87,14 +87,14 @@ func (p RawPosition) HasRangeOverlapWith(start RawPosition) bool {
 }
 
 // GetLineAndColumn calculates the line and column number for a given position in the text
-// pos is 0-based, but we return 1-based line and column numbers as per editor/IDE conventions
+// Returns zero-based line and column numbers
 func (p RawPosition) GetLineAndColumn(text string) (line, col int) {
 	if p.Offset == 0 {
-		return 1, 1
+		return 0, 0
 	}
 
 	// Count newlines up to pos to get line number
-	line = 1 // Start at line 1
+	line = 0 // Start at line 0
 	lastNewline := -1
 	for i := 0; i < p.Offset; i++ {
 		if text[i] == '\n' {
@@ -103,18 +103,25 @@ func (p RawPosition) GetLineAndColumn(text string) (line, col int) {
 		}
 	}
 
-	// Column is just the distance from the last newline + 1 (for 1-based column)
-	col = p.Offset - lastNewline
+	// Column is just the distance from the last newline
+	col = p.Offset - lastNewline - 1
 
 	return line, col
+}
+
+func (p RawPosition) GetEndPosition() RawPosition {
+	return RawPosition{
+		Text:   "",
+		Offset: p.Offset + p.Length(),
+	}
 }
 
 // GetLineColumnRange calculates the line/column range for a RawPosition
 func (p RawPosition) GetRange(fileText string) Range {
 	startLine, startCol := p.GetLineAndColumn(fileText)
-	endLine, endCol := p.GetLineAndColumn(fileText)
+	endLine, endCol := p.GetEndPosition().GetLineAndColumn(fileText)
 	return Range{
-		Start: Place{Line: startLine, Character: startCol},
+		Start: Place{Line: startLine, Character: startCol + 1},
 		End:   Place{Line: endLine, Character: endCol},
 	}
 }
