@@ -153,7 +153,7 @@ func TestSample1(t *testing.T) {
 # Person Information
 {{- end -}}
 
-{{template "headerzzz"}}
+{{define "person"}}
 {{- /*gotype: github.com/walteh/go-tmpl-types-vscode/examples/types.Person*/ -}}
 
 Name: {{.Names}}
@@ -164,15 +164,23 @@ Address:
 
 {{if .HasJob}}
 Job: {{.GetJob | upper}}
-{{end}} `
+{{end}} 
+{{end}}
+
+{{define "animal"}}
+{{- /*gotype: github.com/walteh/go-tmpl-types-vscode/examples/types.Animal*/ -}}
+
+Name: {{.Name}}
+{{end}}
+`
 
 	want := &parser.TemplateInfo{
 		Filename: "test.tmpl",
 		TypeHints: []parser.TypeHint{
 			{
-				TypePath:      "github.com/walteh/go-tmpl-types-vscode/examples/types.Person",
-				Position:      position.NewBasicPosition("github.com/walteh/go-tmpl-types-vscode/examples/types.Person", 0),
-				BlockPosition: position.NewBasicPosition("test.tmpl", 0),
+				TypePath: "github.com/walteh/go-tmpl-types-vscode/examples/types.Person",
+				Position: position.NewBasicPosition("github.com/walteh/go-tmpl-types-vscode/examples/types.Person", 0),
+				// BlockPosition: position.NewBasicPosition("test.tmpl", 0),
 			},
 		},
 		Variables: []parser.VariableLocation{
@@ -192,7 +200,7 @@ Job: {{.GetJob | upper}}
 				Position: position.NewBasicPosition(".HasJob", 265),
 			},
 			{
-				Position: position.NewBasicPosition(".GetJob", 282),
+				Position: position.NewBasicPosition(".GetJob", 284),
 			},
 		},
 		Functions: []parser.VariableLocation{
@@ -200,7 +208,7 @@ Job: {{.GetJob | upper}}
 				Position: position.NewBasicPosition("upper", 292),
 				MethodArguments: []types.Type{
 					&parser.VariableLocation{
-						Position: position.NewBasicPosition(".GetJob", 282),
+						Position: position.NewBasicPosition(".GetJob", 284),
 					},
 				},
 			},

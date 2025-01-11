@@ -3,7 +3,6 @@ package parser
 import (
 	"context"
 	"go/types"
-	"regexp"
 	"strings"
 	"text/template"
 	"text/template/parse"
@@ -21,7 +20,7 @@ func ParseTree(name, text string) (map[string]*parse.Tree, error) {
 	return treeSet, err
 }
 
-var typeHintRegex = regexp.MustCompile(`{{-?\s*/\*gotype:\s*([^*]+)\s*\*/\s*-?}}`)
+// var typeHintRegex = regexp.MustCompile(`{{-?\s*/\*gotype:\s*([^*]+)\s*\*/\s*-?}}`)
 
 // Parse implements TemplateParser
 func Parse(ctx context.Context, content []byte, filename string) (*TemplateInfo, error) {
@@ -42,6 +41,7 @@ func Parse(ctx context.Context, content []byte, filename string) (*TemplateInfo,
 	tmpl.Tree = parse.New(filename)
 
 	tmpl.Mode = tmpl.Mode | parse.Mode(parse.ParseComments)
+	tmpl.Mode = tmpl.Mode | parse.Mode(parse.SkipFuncCheck)
 
 	// Parse the template
 	trees, err := ParseTree(filename, contentStr)
@@ -109,12 +109,18 @@ func Parse(ctx context.Context, content []byte, filename string) (*TemplateInfo,
 			return nil
 		}
 
-		return &TypeHint{
-			TypePath:      typePath,
-			Position:      position.NewBasicPosition(typePath, int(cmt.Pos)),
-			Scope:         scope,
-			BlockPosition: position.NewBasicPosition(parent.String(), int(parent.Position())),
+		th := &TypeHint{
+			TypePath: typePath,
+			Position: position.NewBasicPosition(typePath, int(cmt.Pos)),
+			Scope:    scope,
 		}
+
+		if ln, ok := parent.(*parse.ListNode); ok {
+			th.StartPosition = position.NewBasicPosition(ln.Nodes[0].String(), int(ln.Nodes[0].Position()))
+			th.EndPosition = position.NewBasicPosition(parent.Text, int(ln.Nodes[len(ln.Nodes)-1].Position()))
+		}
+
+		return th
 	}
 
 	// Walk the AST and collect variables, functions, and type hints
@@ -322,8 +328,21 @@ func (v *VariableLocation) Underlying() types.Type {
 
 // TypeHint represents a type hint comment in the template
 type TypeHint struct {
-	TypePath      string // e.g. "github.com/walteh/minute-api/proto/cmd/protoc-gen-cdk/generator.BuilderConfig"
-	Position      position.RawPosition
-	Scope         string // The scope of the type hint (e.g., template name or block ID)
-	BlockPosition position.RawPosition
+	TypePath string // e.g. "github.com/walteh/minute-api/proto/cmd/protoc-gen-cdk/generator.BuilderConfig"
+	Position position.RawPosition
+	Scope    string // The scope of the type hint (e.g., template name or block ID)
+}
+
+type FileInfo struct {
+	Filename      string
+	SourceContent string
+	Blocks        []BlockInfo
+}
+
+type BlockInfo struct {
+	StartPosition position.RawPosition
+	EndPosition   position.RawPosition
+	TypeHint      *TypeHint
+	Variables     []VariableLocation
+	Functions     []VariableLocation
 }
