@@ -41,7 +41,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 								Text:   "github.com/example/types.Config",
 								Offset: 4,
 							},
-							Scope: "",
+							Scope: "test.tmpl",
 						},
 						Variables:   []parser.VariableLocation{},
 						Functions:   []parser.VariableLocation{},
@@ -53,11 +53,11 @@ Hello {{.Name}}! You are {{.Age}} years old.
 						TypeHint:      nil,
 						Variables: []parser.VariableLocation{
 							{
-								Position: position.RawPosition{Text: ".Name", Offset: 79},
+								Position: position.RawPosition{Text: ".Name", Offset: 78},
 								Scope:    "main",
 							},
 							{
-								Position: position.RawPosition{Text: ".Age", Offset: 98},
+								Position: position.RawPosition{Text: ".Age", Offset: 97},
 								Scope:    "main",
 							},
 						},
@@ -91,7 +91,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 								Offset: 4,
 							},
 
-							Scope: "",
+							Scope: "test.tmpl",
 						},
 						Variables:   []parser.VariableLocation{},
 						Functions:   []parser.VariableLocation{},
@@ -103,7 +103,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 						TypeHint:      nil,
 						Variables: []parser.VariableLocation{
 							{
-								Position: position.RawPosition{Text: ".Name", Offset: 91},
+								Position: position.RawPosition{Text: ".Name", Offset: 90},
 								Scope:    "main",
 							},
 						},
@@ -113,7 +113,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 								MethodArguments: []types.Type{
 									types.Typ[types.String],
 									&parser.VariableLocation{
-										Position: position.RawPosition{Text: ".Name", Offset: 91},
+										Position: position.RawPosition{Text: ".Name", Offset: 90},
 										Scope:    "main",
 									},
 								},
@@ -127,7 +127,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 										MethodArguments: []types.Type{
 											types.Typ[types.String],
 											&parser.VariableLocation{
-												Position: position.RawPosition{Text: ".Name", Offset: 91},
+												Position: position.RawPosition{Text: ".Name", Offset: 90},
 												Scope:    "main",
 											},
 										},
@@ -165,8 +165,8 @@ Hello {{.Name}}! You are {{.Age}} years old.
 						TypeHint:      nil,
 						Variables: []parser.VariableLocation{
 							{
-								Position: position.RawPosition{Text: ".GetJob", Offset: 20},
-								Scope:    "",
+								Position: position.RawPosition{Text: ".GetJob", Offset: 19},
+								Scope:    "test.tmpl",
 							},
 						},
 						Functions: []parser.VariableLocation{
@@ -175,11 +175,11 @@ Hello {{.Name}}! You are {{.Age}} years old.
 								MethodArguments: []types.Type{
 									types.Typ[types.String],
 									&parser.VariableLocation{
-										Position: position.RawPosition{Text: ".GetJob", Offset: 20},
-										Scope:    "",
+										Position: position.RawPosition{Text: ".GetJob", Offset: 19},
+										Scope:    "test.tmpl",
 									},
 								},
-								Scope: "",
+								Scope: "test.tmpl",
 							},
 							{
 								Position: position.RawPosition{Text: "upper", Offset: 30},
@@ -189,14 +189,14 @@ Hello {{.Name}}! You are {{.Age}} years old.
 										MethodArguments: []types.Type{
 											types.Typ[types.String],
 											&parser.VariableLocation{
-												Position: position.RawPosition{Text: ".GetJob", Offset: 20},
-												Scope:    "",
+												Position: position.RawPosition{Text: ".GetJob", Offset: 19},
+												Scope:    "test.tmpl",
 											},
 										},
-										Scope: "",
+										Scope: "test.tmpl",
 									},
 								},
-								Scope: "",
+								Scope: "test.tmpl",
 							},
 						},
 						EndPosition: position.RawPosition{Text: "<<EOF>>", Offset: 37},
@@ -221,16 +221,16 @@ Address:
 						StartPosition: position.RawPosition{Text: "<<SOF>>", Offset: -1},
 						TypeHint: &parser.TypeHint{
 							TypePath: "test.Person",
+							Scope:    "test.tmpl",
 							Position: position.RawPosition{
-								Text:   "test.Person",
 								Offset: 4,
+								Text:   "test.Person",
 							},
-							Scope: "",
 						},
 						Variables: []parser.VariableLocation{
 							{
-								Position: position.RawPosition{Text: ".Address.Street", Offset: 61},
-								Scope:    "",
+								Position: position.RawPosition{Text: ".Address.Street", Offset: 52},
+								Scope:    "test.tmpl",
 							},
 						},
 						Functions:   []parser.VariableLocation{},
@@ -316,27 +316,27 @@ Name: {{.Name}}
 				},
 				Variables: []parser.VariableLocation{
 					{
-						Position: position.RawPosition{Text: ".Names", Offset: 168},
+						Position: position.RawPosition{Text: ".Names", Offset: 167},
 						Scope:    "person",
 					},
 					{
-						Position: position.RawPosition{Text: ".Age", Offset: 184},
+						Position: position.RawPosition{Text: ".Age", Offset: 183},
 						Scope:    "person",
 					},
 					{
-						Position: position.RawPosition{Text: ".Address.Street", Offset: 220},
+						Position: position.RawPosition{Text: ".Address.Street", Offset: 211},
 						Scope:    "person",
 					},
 					{
-						Position: position.RawPosition{Text: ".Address.City", Offset: 248},
+						Position: position.RawPosition{Text: ".Address.City", Offset: 239},
 						Scope:    "person",
 					},
 					{
-						Position: position.RawPosition{Text: ".HasJob", Offset: 262},
+						Position: position.RawPosition{Text: ".HasJob", Offset: 261},
 						Scope:    "person",
 					},
 					{
-						Position: position.RawPosition{Text: ".GetJob", Offset: 279},
+						Position: position.RawPosition{Text: ".GetJob", Offset: 278},
 						Scope:    "person",
 					},
 				},
@@ -345,7 +345,7 @@ Name: {{.Name}}
 						Position: position.RawPosition{Text: "upper", Offset: 289},
 						MethodArguments: []types.Type{
 							&parser.VariableLocation{
-								Position: position.RawPosition{Text: ".GetJob", Offset: 279},
+								Position: position.RawPosition{Text: ".GetJob", Offset: 278},
 								Scope:    "person",
 							},
 						},
@@ -367,7 +367,7 @@ Name: {{.Name}}
 				},
 				Variables: []parser.VariableLocation{
 					{
-						Position: position.RawPosition{Text: ".Name", Offset: 425},
+						Position: position.RawPosition{Text: ".Name", Offset: 424},
 						Scope:    "animal",
 					},
 				},
