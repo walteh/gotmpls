@@ -12,7 +12,7 @@ import (
 // ValidateField validates a field access on a type
 func GenerateFieldInfoFromPosition(ctx context.Context, typeInfo *TypeInfo, pos position.RawPosition) (*FieldInfo, error) {
 	// Split the field path into components
-	parts := strings.Split(pos.Text(), ".")
+	parts := strings.Split(pos.Text, ".")
 
 	// Start with the root type info
 	currentType := typeInfo

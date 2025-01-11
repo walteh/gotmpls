@@ -75,3 +75,84 @@ func TestGetLineAndColumn(t *testing.T) {
 		})
 	}
 }
+
+func TestRawPosition(t *testing.T) {
+	tests := []struct {
+		name     string
+		pos      position.RawPosition
+		wantText string
+		wantID   string
+	}{
+		{
+			name: "basic position",
+			pos: position.RawPosition{
+				Text:   "test",
+				Offset: 10,
+			},
+			wantText: "test",
+			wantID:   "test@10",
+		},
+		{
+			name: "empty text",
+			pos: position.RawPosition{
+				Text:   "",
+				Offset: 0,
+			},
+			wantText: "",
+			wantID:   "@0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.pos.Text; got != tt.wantText {
+				t.Errorf("RawPosition.Text = %v, want %v", got, tt.wantText)
+			}
+			if got := tt.pos.ID(); got != tt.wantID {
+				t.Errorf("RawPosition.ID() = %v, want %v", got, tt.wantID)
+			}
+		})
+	}
+}
+
+func TestHasRangeOverlap(t *testing.T) {
+	tests := []struct {
+		name      string
+		pos       position.RawPosition
+		start     position.RawPosition
+		wantMatch bool
+	}{
+		{
+			name: "overlapping ranges",
+			pos: position.RawPosition{
+				Text:   "test",
+				Offset: 5,
+			},
+			start: position.RawPosition{
+				Text:   "testing",
+				Offset: 3,
+			},
+			wantMatch: true,
+		},
+		{
+			name: "non-overlapping ranges",
+			pos: position.RawPosition{
+				Text:   "test",
+				Offset: 10,
+			},
+			start: position.RawPosition{
+				Text:   "test",
+				Offset: 0,
+			},
+			wantMatch: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.pos.HasRangeOverlapWith(tt.start); got != tt.wantMatch {
+				t.Errorf("HasRangeOverlapWith() = %v, want %v", got, tt.wantMatch)
+			}
+		})
+	}
+}

@@ -17,42 +17,78 @@ type Location struct {
 }
 
 // RawPosition represents a position in the source text
-type RawPosition interface {
+type RawPosition struct {
 	// Offset is the byte offset in the source text
-	Offset() int
+	Offset int
 	// Text is the actual text at this position
-	Text() string
+	Text string
 }
 
 // ID returns a unique identifier for this position based on offset and text
-func PositionID(p RawPosition) string {
-	return fmt.Sprintf("%s@%d", p.Text(), p.Offset())
+func (p *RawPosition) ID() string {
+	return fmt.Sprintf("%s@%d", p.Text, p.Offset)
 }
 
 // GetLength returns the length of the text at this position
-func PositionLength(p RawPosition) int {
-	return len(p.Text())
+func (p *RawPosition) Length() int {
+	return len(p.Text)
 }
 
-func FromLineAndColumn(line, col int, text, fileText string) *BasicPosition {
+func NewBasicPosition(text string, offset int) RawPosition {
+	return RawPosition{Text: text, Offset: offset}
+}
+
+// func hackGetLineTextFromParsePos(pos parse.Pos) (int, string) {
+// 	// Access the unexported skipCaller field
+// 	v := reflect.ValueOf(pos).Elem() // Get the value of the pointer
+// 	field := v.FieldByName("line")
+// 	fieldText := v.FieldByName("text")
+
+// 	if field.IsValid() && field.CanAddr() {
+// 		// Use unsafe to bypass field access restrictions
+// 		return int(field.Int()), fieldText.String()
+// 	}
+
+// 	return 0, ""
+// }
+
+// func NewParserPosition(text string, pos parse.Pos) RawPosition {
+// 	line, text := hackGetLineTextFromParsePos(pos)
+// 	return RawPosition{Text: text, Offset: line}
+// }
+
+func NewRawPositionFromLineAndColumn(line, col int, text, fileText string) RawPosition {
 	split := strings.Split(fileText, "\n")
 	offset := 0
 	for i := 0; i < line-1; i++ {
 		offset += len(split[i]) + 1
 	}
 	offset += col
-	return NewBasicPosition(text, offset)
+	return RawPosition{Text: text, Offset: offset}
 }
 
-func HasRangeOverlap(pos RawPosition, start RawPosition) bool {
-	startOffset := start.Offset()
-	endOffset := startOffset + PositionLength(start)
+func NewIdentifierNodePosition(node *parse.IdentifierNode) RawPosition {
+	return RawPosition{
+		Text:   node.String(),
+		Offset: int(node.Position()),
+	}
+}
 
-	posOffset := pos.Offset()
-	posEndOffset := posOffset + PositionLength(pos)
+func NewFieldNodePosition(node *parse.FieldNode) RawPosition {
+	return RawPosition{
+		Text:   node.String(),
+		Offset: int(node.Position()),
+	}
+}
+
+func (p RawPosition) HasRangeOverlapWith(start RawPosition) bool {
+	startOffset := start.Offset
+	endOffset := startOffset + start.Length()
+
+	posOffset := p.Offset
+	posEndOffset := posOffset + p.Length()
 
 	return posOffset >= startOffset && posOffset <= endOffset || posEndOffset >= startOffset && posEndOffset <= endOffset
-
 }
 
 // GetLineAndColumn calculates the line and column number for a given position in the text
@@ -79,87 +115,17 @@ func GetLineAndColumn(text string, pos parse.Pos) (line, col int) {
 }
 
 // GetLineColumnRange calculates the line/column range for a RawPosition
-func GetLocation(pos RawPosition, fileText string) Location {
-	startLine, startCol := GetLineAndColumn(fileText, parse.Pos(pos.Offset()))
-	endLine, endCol := GetLineAndColumn(fileText, parse.Pos(pos.Offset()+PositionLength(pos)))
+func (p RawPosition) GetLocation(fileText string) Location {
+	startLine, startCol := GetLineAndColumn(fileText, parse.Pos(p.Offset))
+	endLine, endCol := GetLineAndColumn(fileText, parse.Pos(p.Offset+p.Length()))
 	return Location{
 		Start: Place{Line: startLine, Character: startCol},
 		End:   Place{Line: endLine, Character: endCol},
 	}
 }
 
-type IdentifierNodePosition struct {
-	identifierNode *parse.IdentifierNode
-}
-
-var _ RawPosition = &IdentifierNodePosition{}
-
-func (me *IdentifierNodePosition) Offset() int {
-	return int(me.identifierNode.Position())
-}
-
-func (me *IdentifierNodePosition) Text() string {
-	return me.identifierNode.String()
-}
-
-// func NewIdentifierNodePosition(node *parse.IdentifierNode) *IdentifierNodePosition {
-// 	return &IdentifierNodePosition{
-// 		identifierNode: node,
-// 	}
-// }
-
-func NewIdentifierNodePosition(node *parse.IdentifierNode) *BasicPosition {
-	return NewBasicPosition(node.String(), int(node.Position()))
-}
-
-type BasicPosition struct {
-	text   string
-	offset int
-}
-
-func NewBasicPosition(text string, offset int) *BasicPosition {
-	return &BasicPosition{
-		text:   text,
-		offset: offset,
-	}
-}
-
-var _ RawPosition = &BasicPosition{}
-
-func (me *BasicPosition) Offset() int {
-	return me.offset
-}
-
-func (me *BasicPosition) Text() string {
-	return me.text
-}
-
-type FieldNodePosition struct {
-	fieldNode *parse.FieldNode
-}
-
-var _ RawPosition = &FieldNodePosition{}
-
-func (me *FieldNodePosition) Offset() int {
-	return int(me.fieldNode.Position())
-}
-
-func (me *FieldNodePosition) Text() string {
-	return me.fieldNode.String()
-}
-
-// func NewFieldNodePosition(node *parse.FieldNode) *FieldNodePosition {
-// 	return &FieldNodePosition{
-// 		fieldNode: node,
-// 	}
-// }
-
-func NewFieldNodePosition(node *parse.FieldNode) *BasicPosition {
-	return NewBasicPosition(node.String(), int(node.Position()))
-}
-
-func RawPositionToString(pos RawPosition) string {
-	return fmt.Sprintf("%s@%d", pos.Text(), pos.Offset())
+func (p RawPosition) String() string {
+	return fmt.Sprintf("%s@%d", p.Text, p.Offset)
 }
 
 type RawPositionArray []RawPosition
@@ -167,11 +133,7 @@ type RawPositionArray []RawPosition
 func (me RawPositionArray) ToStrings() []string {
 	var texts []string
 	for _, pos := range me {
-		texts = append(texts, RawPositionToString(pos))
+		texts = append(texts, pos.String())
 	}
 	return texts
-}
-
-func ConvertToBasicPosition(pos RawPosition) *BasicPosition {
-	return NewBasicPosition(pos.Text(), pos.Offset())
 }

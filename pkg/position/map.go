@@ -1,33 +1,28 @@
 package position
 
 type PositionsSeenMap struct {
-	positions map[positionKey]RawPosition
+	positions map[RawPosition]RawPosition
 }
 
 func NewPositionsSeenMap() *PositionsSeenMap {
 	return &PositionsSeenMap{
-		positions: make(map[positionKey]RawPosition),
+		positions: make(map[RawPosition]RawPosition),
 	}
 }
 
-type positionKey struct {
-	str string
-	num int
-}
-
 func (me PositionsSeenMap) Add(pos RawPosition) {
-	me.positions[positionKey{str: pos.Text(), num: pos.Offset()}] = pos
+	me.positions[pos] = pos
 }
 
 func (me PositionsSeenMap) Has(pos RawPosition) bool {
-	_, ok := me.positions[positionKey{str: pos.Text(), num: pos.Offset()}]
+	_, ok := me.positions[pos]
 	return ok
 }
 
 func (me PositionsSeenMap) PositionsWithText(text string) RawPositionArray {
 	var positions []RawPosition
 	for _, pos := range me.positions {
-		if pos.Text() == text {
+		if pos.Text == text {
 			positions = append(positions, pos)
 		}
 	}
