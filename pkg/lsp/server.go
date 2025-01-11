@@ -55,21 +55,28 @@ type Server struct {
 	debug           bool
 }
 
-func Spawn(ctx context.Context, reader io.Reader, writer io.Writer, extraLogWriters ...io.Writer) error {
-	zerolog.Ctx(ctx).Info().Msg("starting LSP server - all logging will be redirected to LSP")
-
-	spawn := &Server{
+func NewServer(ctx context.Context, extraLogWriters ...io.Writer) *Server {
+	return &Server{
 		extraLogWriters: extraLogWriters,
 		id:              xid.New().String(),
 		conn:            nil,
 		documents:       sync.Map{},
 		workspace:       "",
 	}
+}
+
+func Spawn(ctx context.Context, reader io.Reader, writer io.Writer, extraLogWriters ...io.Writer) error {
+	server := NewServer(ctx, extraLogWriters...)
+	return server.Run(ctx, reader, writer, extraLogWriters...)
+}
+
+func (s *Server) Run(ctx context.Context, reader io.Reader, writer io.Writer, extraLogWriters ...io.Writer) error {
+	zerolog.Ctx(ctx).Info().Msg("starting LSP server - all logging will be redirected to LSP")
 
 	// Create a buffered stream with VSCode codec for proper LSP message formatting
 	stream := jsonrpc2.NewBufferedStream(newBufferedReadWriteCloser(reader, writer), jsonrpc2.VSCodeObjectCodec{})
-	conn := jsonrpc2.NewConn(ctx, stream, spawn)
-	spawn.conn = conn
+	conn := jsonrpc2.NewConn(ctx, stream, s)
+	s.conn = conn
 
 	// Wait for either the connection to be closed or the context to be done
 	select {

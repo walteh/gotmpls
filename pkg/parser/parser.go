@@ -8,9 +8,18 @@ import (
 	"text/template"
 	"text/template/parse"
 
+	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/position"
 	"gitlab.com/tozd/go/errors"
 )
+
+func ParseTree(name, text string) (map[string]*parse.Tree, error) {
+	treeSet := make(map[string]*parse.Tree)
+	t := parse.New(name)
+	t.Mode = t.Mode | parse.Mode(parse.ParseComments)
+	_, err := t.Parse(text, "{{", "}}", treeSet, ast.Builtins(), ast.Extras())
+	return treeSet, err
+}
 
 var typeHintRegex = regexp.MustCompile(`{{-?\s*/\*gotype:\s*([^*]+)\s*\*/\s*-?}}`)
 
@@ -22,30 +31,7 @@ func Parse(ctx context.Context, content []byte, filename string) (*TemplateInfo,
 		Filename:  filename,
 		Variables: make([]VariableLocation, 0),
 		Functions: make([]VariableLocation, 0),
-		TypeHints: nil,
-	}
-
-	// Helper function to extract type hints from a template text
-	extractTypeHints := func(text string, scope string) []TypeHint {
-		var hints []TypeHint
-		matches := typeHintRegex.FindAllStringSubmatchIndex(text, -1)
-		for _, match := range matches {
-			if len(match) >= 4 {
-				typePath := strings.TrimSpace(text[match[2]:match[3]])
-				hints = append(hints, TypeHint{
-					TypePath: typePath,
-					Position: position.NewBasicPosition(typePath, match[2]),
-					Scope:    scope,
-				})
-			}
-		}
-		return hints
-	}
-
-	// Extract type hints from the entire template content first
-	hints := extractTypeHints(contentStr, "")
-	if len(hints) > 0 {
-		info.TypeHints = hints
+		TypeHints: make([]TypeHint, 0),
 	}
 
 	// Create a template with all necessary functions to avoid parsing errors
@@ -53,10 +39,20 @@ func Parse(ctx context.Context, content []byte, filename string) (*TemplateInfo,
 		"upper": strings.ToUpper,
 	})
 
+	tmpl.Tree = parse.New(filename)
+
+	tmpl.Mode = tmpl.Mode | parse.Mode(parse.ParseComments)
+
 	// Parse the template
-	parsedTmpl, err := tmpl.Parse(contentStr)
+	trees, err := ParseTree(filename, contentStr)
 	if err != nil {
 		return nil, errors.Errorf("failed to parse template: %w", err)
+	}
+
+	for name, tree := range trees {
+		if _, err := tmpl.AddParseTree(name, tree); err != nil {
+			return nil, err
+		}
 	}
 
 	// Track seen variables and functions to avoid duplicates but maintain references
@@ -100,15 +96,39 @@ func Parse(ctx context.Context, content []byte, filename string) (*TemplateInfo,
 		return item
 	}
 
+	// Helper function to extract type hints from text
+	extractTypeHint := func(cmt *parse.CommentNode, scope string, parent parse.Node) *TypeHint {
+		text := strings.TrimSpace(cmt.Text)
+		if !strings.HasPrefix(text, "/*gotype:") || !strings.HasSuffix(text, "*/") {
+			return nil
+		}
+
+		// Extract the type path from between "/*gotype:" and "*/"
+		typePath := strings.TrimSpace(text[9 : len(text)-2])
+		if typePath == "" {
+			return nil
+		}
+
+		return &TypeHint{
+			TypePath:      typePath,
+			Position:      position.NewBasicPosition(typePath, int(cmt.Pos)),
+			Scope:         scope,
+			BlockPosition: position.NewBasicPosition(parent.String(), int(parent.Position())),
+		}
+	}
+
 	// Walk the AST and collect variables, functions, and type hints
-	var walk func(node parse.Node, scope string) error
-	walk = func(node parse.Node, scope string) error {
+	var walk func(node parse.Node, scope string, parent parse.Node) error
+	walk = func(node parse.Node, scope string, parent parse.Node) error {
 		if node == nil {
 			return nil
 		}
 
 		switch n := node.(type) {
-
+		case *parse.CommentNode:
+			if hint := extractTypeHint(n, scope, parent); hint != nil {
+				info.TypeHints = append(info.TypeHints, *hint)
+			}
 		case *parse.ActionNode:
 			if n.Pipe != nil {
 				// Only handle variables that are direct references (not part of a pipe operation)
@@ -118,7 +138,7 @@ func Parse(ctx context.Context, content []byte, filename string) (*TemplateInfo,
 					}
 				}
 			}
-			if err := walk(n.Pipe, scope); err != nil {
+			if err := walk(n.Pipe, scope, node); err != nil {
 				return err
 			}
 		case *parse.IfNode:
@@ -132,23 +152,23 @@ func Parse(ctx context.Context, content []byte, filename string) (*TemplateInfo,
 					}
 				}
 			}
-			if err := walk(n.Pipe, scope); err != nil {
+			if err := walk(n.Pipe, scope, node); err != nil {
 				return err
 			}
 			// Handle the body of the if statement
-			if err := walk(n.List, scope); err != nil {
+			if err := walk(n.List, scope, node); err != nil {
 				return err
 			}
 			// Handle the else clause if it exists
 			if n.ElseList != nil {
-				if err := walk(n.ElseList, scope); err != nil {
+				if err := walk(n.ElseList, scope, node); err != nil {
 					return err
 				}
 			}
 		case *parse.ListNode:
 			if n != nil {
-				for _, node := range n.Nodes {
-					if err := walk(node, scope); err != nil {
+				for _, z := range n.Nodes {
+					if err := walk(z, scope, node); err != nil {
 						return err
 					}
 				}
@@ -196,7 +216,7 @@ func Parse(ctx context.Context, content []byte, filename string) (*TemplateInfo,
 			}
 		case *parse.TemplateNode:
 			// Handle template nodes (e.g., {{template "header"}})
-			if err := walk(n.Pipe, scope); err != nil {
+			if err := walk(n.Pipe, scope, node); err != nil {
 				return err
 			}
 		case *parse.TextNode:
@@ -209,15 +229,35 @@ func Parse(ctx context.Context, content []byte, filename string) (*TemplateInfo,
 		return nil
 	}
 
+	// Helper function to extract type hints from a template text
+	// extractTypeHints := func(text string, scope string) []TypeHint {
+	// 	var hints []TypeHint
+	// 	matches := typeHintRegex.FindAllStringSubmatchIndex(text, -1)
+	// 	for _, match := range matches {
+	// 		if len(match) >= 4 {
+	// 			typePath := strings.TrimSpace(text[match[2]:match[3]])
+	// 			hints = append(hints, TypeHint{
+	// 				TypePath: typePath,
+	// 				Position: position.NewBasicPosition(typePath, match[2]),
+	// 				Scope:    scope,
+	// 			})
+	// 		}
+	// 	}
+	// 	return hints
+	// }
+
 	// Walk through all templates in the common.tmpl map
-	for _, t := range parsedTmpl.Templates() {
+	for _, t := range tmpl.Templates() {
+
 		if t.Tree != nil {
 			// Only use template name as scope for defined templates
 			currentScope := ""
 			if t.Name() != "" && t.Name() != t.ParseName {
 				currentScope = t.Name()
 			}
-			if err := walk(t.Tree.Root, currentScope); err != nil {
+			// str := t.Tree.Root.String()
+			// info.TypeHints = append(info.TypeHints, extractTypeHints(str, currentScope)...)
+			if err := walk(t.Tree.Root, currentScope, nil); err != nil {
 				return nil, errors.Errorf("failed to walk template %s: %w", t.Name(), err)
 			}
 		}
@@ -282,7 +322,8 @@ func (v *VariableLocation) Underlying() types.Type {
 
 // TypeHint represents a type hint comment in the template
 type TypeHint struct {
-	TypePath string // e.g. "github.com/walteh/minute-api/proto/cmd/protoc-gen-cdk/generator.BuilderConfig"
-	Position position.RawPosition
-	Scope    string // The scope of the type hint (e.g., template name or block ID)
+	TypePath      string // e.g. "github.com/walteh/minute-api/proto/cmd/protoc-gen-cdk/generator.BuilderConfig"
+	Position      position.RawPosition
+	Scope         string // The scope of the type hint (e.g., template name or block ID)
+	BlockPosition position.RawPosition
 }

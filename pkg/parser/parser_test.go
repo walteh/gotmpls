@@ -30,17 +30,15 @@ Hello {{.Name}}! You are {{.Age}} years old.
 				TypeHints: []parser.TypeHint{
 					{
 						TypePath: "github.com/example/types.Config",
-						Position: position.NewBasicPosition("github.com/example/types.Config", 14),
+						Position: position.NewBasicPosition("github.com/example/types.Config", 0),
 					},
 				},
 				Variables: []parser.VariableLocation{
 					{
-						Position: position.NewBasicPosition(".Name", 79),
-						Scope:    "main",
+						Position: position.NewBasicPosition(".Name", 0),
 					},
 					{
-						Position: position.NewBasicPosition(".Age", 98),
-						Scope:    "main",
+						Position: position.NewBasicPosition(".Age", 0),
 					},
 				},
 			},
@@ -56,44 +54,24 @@ Hello {{.Name}}! You are {{.Age}} years old.
 				Filename: "test.tmpl",
 				Functions: []parser.VariableLocation{
 					{
-						Position: position.NewBasicPosition("printf", 73),
+						Position: position.NewBasicPosition("printf", 0),
 						MethodArguments: []types.Type{
 							types.Typ[types.String],
-							&parser.VariableLocation{
-								Position: position.NewBasicPosition(".Name", 91),
-								Scope:    "main",
-							},
 						},
-						Scope: "main",
 					},
 					{
-						Position: position.NewBasicPosition("upper", 99),
-						MethodArguments: []types.Type{
-							&parser.VariableLocation{
-								Position: position.NewBasicPosition("printf", 73),
-								MethodArguments: []types.Type{
-									types.Typ[types.String],
-									&parser.VariableLocation{
-										Position: position.NewBasicPosition(".Name", 91),
-										Scope:    "main",
-									},
-								},
-								Scope: "main",
-							},
-						},
-						Scope: "main",
+						Position: position.NewBasicPosition("upper", 0),
 					},
 				},
 				TypeHints: []parser.TypeHint{
 					{
 						TypePath: "github.com/example/types.Config",
-						Position: position.NewBasicPosition("github.com/example/types.Config", 14),
+						Position: position.NewBasicPosition("github.com/example/types.Config", 0),
 					},
 				},
 				Variables: []parser.VariableLocation{
 					{
-						Position: position.NewBasicPosition(".Name", 91),
-						Scope:    "main",
+						Position: position.NewBasicPosition(".Name", 0),
 					},
 				},
 			},
@@ -115,32 +93,18 @@ Hello {{.Name}}! You are {{.Age}} years old.
 				Filename: "test.tmpl",
 				Functions: []parser.VariableLocation{
 					{
-						Position: position.NewBasicPosition("printf", 8),
+						Position: position.NewBasicPosition("printf", 0),
 						MethodArguments: []types.Type{
 							types.Typ[types.String],
-							&parser.VariableLocation{
-								Position: position.NewBasicPosition(".GetJob", 20),
-							},
 						},
 					},
 					{
-						Position: position.NewBasicPosition("upper", 30),
-						MethodArguments: []types.Type{
-							&parser.VariableLocation{
-								Position: position.NewBasicPosition("printf", 8),
-								MethodArguments: []types.Type{
-									types.Typ[types.String],
-									&parser.VariableLocation{
-										Position: position.NewBasicPosition(".GetJob", 20),
-									},
-								},
-							},
-						},
+						Position: position.NewBasicPosition("upper", 0),
 					},
 				},
 				Variables: []parser.VariableLocation{
 					{
-						Position: position.NewBasicPosition(".GetJob", 20),
+						Position: position.NewBasicPosition(".GetJob", 0),
 					},
 				},
 			},
@@ -162,7 +126,7 @@ Address:
 				},
 				Variables: []parser.VariableLocation{
 					{
-						Position: position.NewBasicPosition(".Address.Street", 61),
+						Position: position.NewBasicPosition(".Address.Street", 34),
 					},
 				},
 			},
@@ -185,12 +149,12 @@ Address:
 }
 
 func TestSample1(t *testing.T) {
-	data := `{{- /*gotype: github.com/walteh/go-tmpl-types-vscode/examples/types.Person */ -}}
-{{- define "header" -}}
+	data := `{{- define "header" -}}
 # Person Information
 {{- end -}}
 
-{{template "header"}}
+{{template "headerzzz"}}
+{{- /*gotype: github.com/walteh/go-tmpl-types-vscode/examples/types.Person*/ -}}
 
 Name: {{.Names}}
 Age: {{.Age}}
@@ -206,8 +170,9 @@ Job: {{.GetJob | upper}}
 		Filename: "test.tmpl",
 		TypeHints: []parser.TypeHint{
 			{
-				TypePath: "github.com/walteh/go-tmpl-types-vscode/examples/types.Person",
-				Position: position.NewBasicPosition("github.com/walteh/go-tmpl-types-vscode/examples/types.Person", 14),
+				TypePath:      "github.com/walteh/go-tmpl-types-vscode/examples/types.Person",
+				Position:      position.NewBasicPosition("github.com/walteh/go-tmpl-types-vscode/examples/types.Person", 0),
+				BlockPosition: position.NewBasicPosition("test.tmpl", 0),
 			},
 		},
 		Variables: []parser.VariableLocation{

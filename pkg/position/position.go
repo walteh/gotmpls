@@ -2,6 +2,7 @@ package position
 
 import (
 	"fmt"
+	"strings"
 	"text/template/parse"
 )
 
@@ -31,6 +32,27 @@ func PositionID(p RawPosition) string {
 // GetLength returns the length of the text at this position
 func PositionLength(p RawPosition) int {
 	return len(p.Text())
+}
+
+func FromLineAndColumn(line, col int, text, fileText string) *BasicPosition {
+	split := strings.Split(fileText, "\n")
+	offset := 0
+	for i := 0; i < line-1; i++ {
+		offset += len(split[i]) + 1
+	}
+	offset += col
+	return NewBasicPosition(text, offset)
+}
+
+func HasRangeOverlap(pos RawPosition, start RawPosition) bool {
+	startOffset := start.Offset()
+	endOffset := startOffset + PositionLength(start)
+
+	posOffset := pos.Offset()
+	posEndOffset := posOffset + PositionLength(pos)
+
+	return posOffset >= startOffset && posOffset <= endOffset || posEndOffset >= startOffset && posEndOffset <= endOffset
+
 }
 
 // GetLineAndColumn calculates the line and column number for a given position in the text
