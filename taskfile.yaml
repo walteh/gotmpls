@@ -6,7 +6,10 @@
 version: 3
 tasks:
     generate:
-        cmd: mockery
+        cmds:
+          - mockery
+          - find ./gen/mockery -type f -not -mmin -1 -delete
+
         generates:
           - ./gen/mockery/*.go
         sources:

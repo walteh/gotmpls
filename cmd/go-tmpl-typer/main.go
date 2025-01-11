@@ -5,8 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	get_completions "github.com/walteh/go-tmpl-typer/cmd/go-tmpl-typer/get-completions"
-	get_diagnostics "github.com/walteh/go-tmpl-typer/cmd/go-tmpl-typer/get-diagnostics"
+
 	serve_lsp "github.com/walteh/go-tmpl-typer/cmd/go-tmpl-typer/serve-lsp"
 	"gitlab.com/tozd/go/errors"
 )
@@ -24,8 +23,6 @@ func run() error {
 		Short: "A tool for type checking go templates",
 	}
 
-	rootCmd.AddCommand(get_completions.NewGetCompletionsCommand())
-	rootCmd.AddCommand(get_diagnostics.NewGetDiagnosticsCommand())
 	rootCmd.AddCommand(serve_lsp.NewServeLSPCommand())
 
 	if err := rootCmd.ExecuteContext(context.Background()); err != nil {

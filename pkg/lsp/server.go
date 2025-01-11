@@ -225,7 +225,7 @@ func (s *Server) getDocument(uri string) (string, bool) {
 	content, ok := s.documents.Load(normalizedURI)
 	if !ok {
 		// Try with the original URI as fallback
-		content, ok = s.documents.Load(uri)
+		content, ok = s.documents.Load("file://" + uri)
 	}
 	if !ok {
 		return "", false

@@ -48,27 +48,22 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 
 	for _, block := range info.Blocks {
 
-		zerolog.Ctx(ctx).Debug().Msgf("checking block %s against type hint %s (vars: %d)", block.Name, block.TypeHint.TypePath, len(block.Variables))
 		if block.TypeHint == nil {
 			continue
 		}
 
-		var typeInfo *ast.TypeInfo
-		tinfoFound := false
+		zerolog.Ctx(ctx).Debug().Msgf("checking block %s against type hint %s (vars: %d)", block.Name, block.TypeHint.TypePath, len(block.Variables))
+
+		typeInfo, err := ast.GenerateTypeInfoFromRegistry(ctx, block.TypeHint.TypePath, registry)
+		if err != nil {
+			return nil, errors.Errorf("validating type for hover: %w", err)
+		}
 
 		for _, variable := range block.Variables {
 			zerolog.Ctx(ctx).Debug().Msgf("checking overlap of [%s:%d] with [%s:%d]", pos.Text, pos.Offset, variable.Position.Text, variable.Position.Offset)
 			if pos.HasRangeOverlapWith(variable.Position) {
-				zerolog.Ctx(ctx).Debug().Msgf("variable %s at %v overlaps with position %v", variable.Name(), variable.Position, pos)
-				if !tinfoFound {
-					// Get type info
-					typeInfo, err = ast.GenerateTypeInfoFromRegistry(ctx, block.TypeHint.TypePath, registry)
-					if err != nil {
-						return nil, errors.Errorf("validating type for hover: %w", err)
 
-					}
-					tinfoFound = true
-				}
+				zerolog.Ctx(ctx).Debug().Msgf("variable %s at %v overlaps with position %v", variable.Name(), variable.Position, pos)
 
 				// Get field info
 				fieldInfo, err := ast.GenerateFieldInfoFromPosition(ctx, typeInfo, variable.Position)
@@ -82,6 +77,22 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 					Contents: MarkupContent{
 						Kind:  "markdown",
 						Value: FormatHoverResponse(typeInfo.Name, variable.Position.Text, fieldInfo.Type.String()),
+					},
+					Range: &ranged,
+				}, nil
+			}
+		}
+
+		for _, function := range block.Functions {
+			zerolog.Ctx(ctx).Debug().Msgf("checking overlap of [%s:%d] with [%s:%d]", pos.Text, pos.Offset, function.Position.Text, function.Position.Offset)
+			if pos.HasRangeOverlapWith(function.Position) {
+				zerolog.Ctx(ctx).Debug().Msgf("function %s at %v overlaps with position %v", function.Name(), function.Position, pos)
+
+				ranged := RangeFromGoTmplTyperRange(function.Position.GetRange(content))
+				return &Hover{
+					Contents: MarkupContent{
+						Kind:  "markdown",
+						Value: FormatHoverResponse(typeInfo.Name, function.Position.Text, function.String()),
 					},
 					Range: &ranged,
 				}, nil

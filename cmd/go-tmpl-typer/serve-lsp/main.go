@@ -5,11 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/walteh/go-tmpl-typer/pkg/ast"
-	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
 	"github.com/walteh/go-tmpl-typer/pkg/lsp"
-	"github.com/walteh/go-tmpl-typer/pkg/parser"
-	"github.com/walteh/go-tmpl-typer/pkg/types"
 	"gitlab.com/tozd/go/errors"
 )
 
@@ -36,16 +32,10 @@ func NewServeLSPCommand() *cobra.Command {
 
 func (me *Handler) Run(ctx context.Context) error {
 	// Create a new LSP server with all the components it needs
-	server := lsp.NewServer(
-		parser.NewDefaultTemplateParser(),
-		types.NewDefaultValidator(),
-		ast.NewDefaultPackageAnalyzer(),
-		diagnostic.NewDefaultGenerator(),
-		me.debug,
-	)
+	server := lsp.NewServer(ctx)
 
 	// Start the server using stdin/stdout
-	if err := server.Spawn(ctx, os.Stdin, os.Stdout); err != nil {
+	if err := server.Run(ctx, os.Stdin, os.Stdout); err != nil {
 		return errors.Errorf("failed to start language server: %w", err)
 	}
 
