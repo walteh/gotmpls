@@ -51,7 +51,7 @@ func NewRawPositionFromLineAndColumn(line, col int, text, fileText string) RawPo
 func NewIdentifierNodePosition(node *parse.IdentifierNode) RawPosition {
 	return RawPosition{
 		Text:   node.String(),
-		Offset: int(node.Position()),
+		Offset: int(node.Position() - 1),
 	}
 }
 
@@ -83,7 +83,7 @@ func (p RawPosition) HasRangeOverlapWith(start RawPosition) bool {
 
 	// Two ranges overlap if one range's start position is before the other range's end position
 	// AND its end position is after the other range's start position
-	return startOffset < posEndOffset && endOffset > posOffset
+	return (startOffset < posEndOffset || startOffset == posEndOffset) && (endOffset > posOffset || endOffset == posOffset)
 }
 
 // GetLineAndColumn calculates the line and column number for a given position in the text
@@ -104,7 +104,7 @@ func (p RawPosition) GetLineAndColumn(text string) (line, col int) {
 	}
 
 	// Column is just the distance from the last newline
-	col = p.Offset - lastNewline - 1
+	col = p.Offset - lastNewline
 
 	return line, col
 }
@@ -121,7 +121,7 @@ func (p RawPosition) GetRange(fileText string) Range {
 	startLine, startCol := p.GetLineAndColumn(fileText)
 	endLine, endCol := p.GetEndPosition().GetLineAndColumn(fileText)
 	return Range{
-		Start: Place{Line: startLine, Character: startCol + 1},
+		Start: Place{Line: startLine, Character: startCol},
 		End:   Place{Line: endLine, Character: endCol},
 	}
 }
