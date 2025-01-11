@@ -112,7 +112,7 @@ func TestRawPosition_HasRangeOverlapWith(t *testing.T) {
 		message  string
 	}{
 		{
-			name: "exact match",
+			name: "positions_with_exact_same_range_should_overlap",
 			pos: position.RawPosition{
 				Text:   "test",
 				Offset: 10,
@@ -125,7 +125,7 @@ func TestRawPosition_HasRangeOverlapWith(t *testing.T) {
 			message:  "positions with exact same range should overlap",
 		},
 		{
-			name: "complete containment",
+			name: "position_contained_within_another_should_overlap",
 			pos: position.RawPosition{
 				Text:   "test",
 				Offset: 11,
@@ -138,7 +138,7 @@ func TestRawPosition_HasRangeOverlapWith(t *testing.T) {
 			message:  "position contained within another should overlap",
 		},
 		{
-			name: "partial overlap at start",
+			name: "positions_overlapping_at_start_should_overlap",
 			pos: position.RawPosition{
 				Text:   "test",
 				Offset: 8,
@@ -151,7 +151,7 @@ func TestRawPosition_HasRangeOverlapWith(t *testing.T) {
 			message:  "positions overlapping at start should overlap",
 		},
 		{
-			name: "partial overlap at end",
+			name: "positions_overlapping_at_end_should_overlap",
 			pos: position.RawPosition{
 				Text:   "test",
 				Offset: 14,
@@ -164,7 +164,7 @@ func TestRawPosition_HasRangeOverlapWith(t *testing.T) {
 			message:  "positions overlapping at end should overlap",
 		},
 		{
-			name: "no overlap - before",
+			name: "positions_before_each_other_should_not_overlap",
 			pos: position.RawPosition{
 				Text:   "test",
 				Offset: 5,
@@ -177,7 +177,7 @@ func TestRawPosition_HasRangeOverlapWith(t *testing.T) {
 			message:  "positions before each other should not overlap",
 		},
 		{
-			name: "no overlap - after",
+			name: "positions_after_each_other_should_not_overlap",
 			pos: position.RawPosition{
 				Text:   "test",
 				Offset: 15,
@@ -190,7 +190,7 @@ func TestRawPosition_HasRangeOverlapWith(t *testing.T) {
 			message:  "positions after each other should not overlap",
 		},
 		{
-			name: "adjacent - touching",
+			name: "adjacent_positions_should_overlap_when_touching",
 			pos: position.RawPosition{
 				Text:   "test",
 				Offset: 14,
@@ -203,7 +203,7 @@ func TestRawPosition_HasRangeOverlapWith(t *testing.T) {
 			message:  "adjacent positions should overlap when they touch",
 		},
 		{
-			name: "zero-length text",
+			name: "zero_length_position_should_overlap_with_position_at_same_offset",
 			pos: position.RawPosition{
 				Text:   "",
 				Offset: 10,
@@ -216,7 +216,7 @@ func TestRawPosition_HasRangeOverlapWith(t *testing.T) {
 			message:  "zero-length position should overlap with position at same offset",
 		},
 		{
-			name: "both zero-length text",
+			name: "zero_length_positions_at_same_offset_should_overlap",
 			pos: position.RawPosition{
 				Text:   "",
 				Offset: 10,
@@ -229,7 +229,7 @@ func TestRawPosition_HasRangeOverlapWith(t *testing.T) {
 			message:  "zero-length positions at same offset should overlap",
 		},
 		{
-			name: "last_is_zero_length",
+			name: "zero_length_position_at_end_should_overlap_with_range",
 			pos: position.RawPosition{
 				Text:   "hooplah",
 				Offset: 46,
@@ -242,7 +242,7 @@ func TestRawPosition_HasRangeOverlapWith(t *testing.T) {
 			message:  "zero-length position should overlap with range containing its offset",
 		},
 		{
-			name: "first_is_zero_length",
+			name: "zero_length_position_at_start_should_overlap_with_range",
 			pos: position.RawPosition{
 				Text:   "",
 				Offset: 49,
@@ -255,7 +255,7 @@ func TestRawPosition_HasRangeOverlapWith(t *testing.T) {
 			message:  "zero-length position should overlap with range containing its offset",
 		},
 		{
-			name: "last_is_one_length",
+			name: "single_character_position_at_end_should_overlap_with_range",
 			pos: position.RawPosition{
 				Text:   "hooplah",
 				Offset: 46,
@@ -268,7 +268,7 @@ func TestRawPosition_HasRangeOverlapWith(t *testing.T) {
 			message:  "single-character position should overlap with range containing its offset",
 		},
 		{
-			name: "first_is_one_length",
+			name: "single_character_position_at_start_should_overlap_with_range",
 			pos: position.RawPosition{
 				Text:   "f",
 				Offset: 49,
@@ -279,6 +279,98 @@ func TestRawPosition_HasRangeOverlapWith(t *testing.T) {
 			},
 			expected: true,
 			message:  "single-character position should overlap with range containing its offset",
+		},
+		// Additional edge cases
+		{
+			name: "zero_length_position_just_before_range_should_not_overlap",
+			pos: position.RawPosition{
+				Text:   "",
+				Offset: 9,
+			},
+			start: position.RawPosition{
+				Text:   "test",
+				Offset: 10,
+			},
+			expected: false,
+			message:  "zero-length position just before range should not overlap",
+		},
+		{
+			name: "zero_length_position_just_after_range_should_not_overlap",
+			pos: position.RawPosition{
+				Text:   "",
+				Offset: 15,
+			},
+			start: position.RawPosition{
+				Text:   "test",
+				Offset: 10,
+			},
+			expected: false,
+			message:  "zero-length position just after range should not overlap",
+		},
+		{
+			name: "position_completely_containing_another_should_overlap",
+			pos: position.RawPosition{
+				Text:   "abcdefghijk",
+				Offset: 5,
+			},
+			start: position.RawPosition{
+				Text:   "defg",
+				Offset: 8,
+			},
+			expected: true,
+			message:  "position completely containing another should overlap",
+		},
+		{
+			name: "position_at_exact_end_of_range_should_overlap",
+			pos: position.RawPosition{
+				Text:   "",
+				Offset: 14,
+			},
+			start: position.RawPosition{
+				Text:   "test",
+				Offset: 10,
+			},
+			expected: true,
+			message:  "position at exact end of range should overlap",
+		},
+		{
+			name: "position_at_exact_start_of_range_should_overlap",
+			pos: position.RawPosition{
+				Text:   "",
+				Offset: 10,
+			},
+			start: position.RawPosition{
+				Text:   "test",
+				Offset: 10,
+			},
+			expected: true,
+			message:  "position at exact start of range should overlap",
+		},
+		{
+			name: "overlapping_ranges_with_different_lengths_should_overlap",
+			pos: position.RawPosition{
+				Text:   "abcdef",
+				Offset: 10,
+			},
+			start: position.RawPosition{
+				Text:   "cdefgh",
+				Offset: 12,
+			},
+			expected: true,
+			message:  "overlapping ranges with different lengths should overlap",
+		},
+		{
+			name: "ranges_touching_at_single_point_should_overlap",
+			pos: position.RawPosition{
+				Text:   "abc",
+				Offset: 10,
+			},
+			start: position.RawPosition{
+				Text:   "def",
+				Offset: 13,
+			},
+			expected: true,
+			message:  "ranges touching at single point should overlap",
 		},
 	}
 
@@ -286,6 +378,9 @@ func TestRawPosition_HasRangeOverlapWith(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.pos.HasRangeOverlapWith(tt.start)
 			assert.Equal(t, tt.expected, result, tt.message)
+			// Test symmetry - overlap should work both ways
+			reverse := tt.start.HasRangeOverlapWith(tt.pos)
+			assert.Equal(t, tt.expected, reverse, tt.message+" (reverse check)")
 		})
 	}
 }
