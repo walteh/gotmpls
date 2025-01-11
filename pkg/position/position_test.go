@@ -422,13 +422,13 @@ func TestNewRawPositionFromLineAndColumn(t *testing.T) {
 			name: "template example",
 			line: 2,
 			col:  12,
-			text: ".",
+			text: "",
 			fileText: `{{- /*gotype: test.Person*/ -}}
 Address:
   Street: {{.Address.Street}}`,
 			want: position.RawPosition{
 				Text:   "",
-				Offset: 61,
+				Offset: 53,
 			},
 		},
 	}
