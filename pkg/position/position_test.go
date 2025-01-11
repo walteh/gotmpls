@@ -156,3 +156,293 @@ func TestHasRangeOverlap(t *testing.T) {
 		})
 	}
 }
+
+func TestRawPosition_HasRangeOverlapWith(t *testing.T) {
+	tests := []struct {
+		name     string
+		pos      position.RawPosition
+		start    position.RawPosition
+		expected bool
+	}{
+		{
+			name: "exact match",
+			pos: position.RawPosition{
+				Text:   "test",
+				Offset: 10,
+			},
+			start: position.RawPosition{
+				Text:   "test",
+				Offset: 10,
+			},
+			expected: true,
+		},
+		{
+			name: "complete containment",
+			pos: position.RawPosition{
+				Text:   "test",
+				Offset: 11,
+			},
+			start: position.RawPosition{
+				Text:   "testing",
+				Offset: 10,
+			},
+			expected: true,
+		},
+		{
+			name: "partial overlap at start",
+			pos: position.RawPosition{
+				Text:   "test",
+				Offset: 8,
+			},
+			start: position.RawPosition{
+				Text:   "testing",
+				Offset: 10,
+			},
+			expected: true,
+		},
+		{
+			name: "partial overlap at end",
+			pos: position.RawPosition{
+				Text:   "test",
+				Offset: 14,
+			},
+			start: position.RawPosition{
+				Text:   "testing",
+				Offset: 10,
+			},
+			expected: true,
+		},
+		{
+			name: "no overlap - before",
+			pos: position.RawPosition{
+				Text:   "test",
+				Offset: 5,
+			},
+			start: position.RawPosition{
+				Text:   "test",
+				Offset: 10,
+			},
+			expected: false,
+		},
+		{
+			name: "no overlap - after",
+			pos: position.RawPosition{
+				Text:   "test",
+				Offset: 15,
+			},
+			start: position.RawPosition{
+				Text:   "test",
+				Offset: 10,
+			},
+			expected: false,
+		},
+		{
+			name: "adjacent - no overlap",
+			pos: position.RawPosition{
+				Text:   "test",
+				Offset: 14,
+			},
+			start: position.RawPosition{
+				Text:   "test",
+				Offset: 10,
+			},
+			expected: false,
+		},
+		{
+			name: "zero-length text",
+			pos: position.RawPosition{
+				Text:   "",
+				Offset: 10,
+			},
+			start: position.RawPosition{
+				Text:   "test",
+				Offset: 10,
+			},
+			expected: true,
+		},
+		{
+			name: "both zero-length text",
+			pos: position.RawPosition{
+				Text:   "",
+				Offset: 10,
+			},
+			start: position.RawPosition{
+				Text:   "",
+				Offset: 10,
+			},
+			expected: true,
+		},
+
+		{
+			name: "last_is_zero_length",
+			pos: position.RawPosition{
+				Text:   "hooplah",
+				Offset: 46,
+			},
+			start: position.RawPosition{
+				Text:   "",
+				Offset: 49,
+			},
+			expected: true,
+		},
+		{
+			name: "first_is_zero_length",
+			pos: position.RawPosition{
+				Text:   "",
+				Offset: 49,
+			},
+			start: position.RawPosition{
+				Text:   "hooplah",
+				Offset: 46,
+			},
+			expected: true,
+		},
+		{
+			name: "last_is_one_length",
+			pos: position.RawPosition{
+				Text:   "hooplah",
+				Offset: 46,
+			},
+			start: position.RawPosition{
+				Text:   "f",
+				Offset: 49,
+			},
+			expected: true,
+		},
+		{
+			name: "first_is_one_length",
+			pos: position.RawPosition{
+				Text:   "f",
+				Offset: 49,
+			},
+			start: position.RawPosition{
+				Text:   "hooplah",
+				Offset: 46,
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.pos.HasRangeOverlapWith(tt.start)
+			if result != tt.expected {
+				t.Errorf("HasRangeOverlapWith() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNewRawPositionFromLineAndColumn(t *testing.T) {
+	tests := []struct {
+		name     string
+		line     int
+		col      int
+		text     string
+		fileText string
+		want     position.RawPosition
+	}{
+		{
+			name:     "first line, first character",
+			line:     0,
+			col:      0,
+			text:     "H",
+			fileText: "Hello\nWorld\nTest",
+			want: position.RawPosition{
+				Text:   "H",
+				Offset: 0,
+			},
+		},
+		{
+			name:     "first line, middle character",
+			line:     0,
+			col:      2,
+			text:     "l",
+			fileText: "Hello\nWorld\nTest",
+			want: position.RawPosition{
+				Text:   "l",
+				Offset: 2,
+			},
+		},
+		{
+			name:     "second line, first character",
+			line:     1,
+			col:      0,
+			text:     "W",
+			fileText: "Hello\nWorld\nTest",
+			want: position.RawPosition{
+				Text:   "W",
+				Offset: 6,
+			},
+		},
+		{
+			name:     "last line, last character",
+			line:     2,
+			col:      3,
+			text:     "t",
+			fileText: "Hello\nWorld\nTest",
+			want: position.RawPosition{
+				Text:   "t",
+				Offset: 15,
+			},
+		},
+		{
+			name:     "empty line",
+			line:     1,
+			col:      0,
+			text:     "",
+			fileText: "Hello\n\nTest",
+			want: position.RawPosition{
+				Text:   "",
+				Offset: 6,
+			},
+		},
+		{
+			name:     "line with spaces",
+			line:     1,
+			col:      2,
+			text:     "x",
+			fileText: "Hello\n  World\nTest",
+			want: position.RawPosition{
+				Text:   "x",
+				Offset: 8,
+			},
+		},
+		{
+			name:     "template example",
+			line:     2,
+			col:      20,
+			text:     "t",
+			fileText: "{{- /*gotype: test.Person*/ -}}\nAddress:\n  Street: {{.Address.Street}}",
+			want: position.RawPosition{
+				Text:   "t",
+				Offset: 61,
+			},
+		},
+		{
+			name: "template example",
+			line: 2,
+			col:  12,
+			text: ".",
+			fileText: `{{- /*gotype: test.Person*/ -}}
+Address:
+  Street: {{.Address.Street}}`,
+			want: position.RawPosition{
+				Text:   "",
+				Offset: 61,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := position.NewRawPositionFromLineAndColumn(tt.line, tt.col, tt.text, tt.fileText)
+			if got.Offset != tt.want.Offset {
+				t.Errorf("NewRawPositionFromLineAndColumn() Offset = %v, want %v", got.Offset, tt.want.Offset)
+			}
+			if got.Text != tt.want.Text {
+				t.Errorf("NewRawPositionFromLineAndColumn() Text = %v, want %v", got.Text, tt.want.Text)
+			}
+		})
+	}
+}

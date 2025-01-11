@@ -50,8 +50,9 @@ func GenerateFieldInfoFromPosition(ctx context.Context, typeInfo *TypeInfo, pos 
 			for i := 0; i < structType.NumFields(); i++ {
 				f := structType.Field(i)
 				currentType.Fields[f.Name()] = &FieldInfo{
-					Name: f.Name(),
-					Type: f.Type(),
+					Name:     f.Name(),
+					Type:     f.Type(),
+					FullName: f.String(),
 				}
 			}
 		}
@@ -103,8 +104,9 @@ func GenerateTypeInfoFromRegistry(ctx context.Context, typePath string, r *Regis
 	for i := 0; i < structType.NumFields(); i++ {
 		field := structType.Field(i)
 		typeInfo.Fields[field.Name()] = &FieldInfo{
-			Name: field.Name(),
-			Type: field.Type(),
+			Name:     field.Name(),
+			Type:     field.Type(),
+			FullName: field.String(),
 		}
 	}
 
@@ -112,8 +114,9 @@ func GenerateTypeInfoFromRegistry(ctx context.Context, typePath string, r *Regis
 	for i := 0; i < namedType.NumMethods(); i++ {
 		method := namedType.Method(i)
 		typeInfo.Fields[method.Name()] = &FieldInfo{
-			Name: method.Name(),
-			Type: method.Type(),
+			Name:     method.Name(),
+			Type:     method.Type(),
+			FullName: method.FullName(),
 		}
 	}
 

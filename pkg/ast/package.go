@@ -2,6 +2,7 @@ package ast
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,7 +21,15 @@ func AnalyzePackage(ctx context.Context, dir string) (*Registry, error) {
 	// Check if go.mod exists
 	modPath := filepath.Join(dir, "go.mod")
 	if _, err := os.Stat(modPath); err != nil {
-		return nil, errors.Errorf("no packages found in directory: %s (missing go.mod)", dir)
+		filesSeen := []string{}
+		filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			filesSeen = append(filesSeen, path)
+			return nil
+		})
+		return nil, errors.Errorf("no packages found in directory: %s (missing go.mod) files seen: %v", dir, filesSeen)
 	}
 
 	zerolog.Ctx(ctx).Debug().Msgf("analyzing packages in directory: %s\n", dir)

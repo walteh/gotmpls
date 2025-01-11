@@ -11,6 +11,7 @@ import (
 	"text/template"
 	"text/template/parse"
 
+	"github.com/rs/zerolog"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/position"
 	"gitlab.com/tozd/go/errors"
@@ -60,7 +61,7 @@ func createFuncLocation(fn *parse.IdentifierNode, args []types.Type, scope strin
 }
 
 // extractTypeHint extracts a type hint from a comment node
-func extractTypeHint(cmt *parse.CommentNode, scope string, parent parse.Node) *TypeHint {
+func extractTypeHint(cmt *parse.CommentNode, scope string) *TypeHint {
 	text := strings.TrimSpace(cmt.Text)
 	text = strings.TrimPrefix(text, "/*")
 	text = strings.TrimSuffix(text, "*/")
@@ -82,14 +83,14 @@ func extractTypeHint(cmt *parse.CommentNode, scope string, parent parse.Node) *T
 }
 
 // walkNode processes a single node in the AST
-func (block *BlockInfo) walkNode(node parse.Node, scope string, parent parse.Node, seenVars, seenFuncs *position.PositionsSeenMap) error {
+func (block *BlockInfo) walkNode(ctx context.Context, node parse.Node, scope string, parent parse.Node, seenVars, seenFuncs *position.PositionsSeenMap) error {
 	if node == nil {
 		return nil
 	}
 
 	switch n := node.(type) {
 	case *parse.CommentNode:
-		if hint := extractTypeHint(n, scope, parent); hint != nil {
+		if hint := extractTypeHint(n, scope); hint != nil {
 			if block.TypeHint != nil {
 				return errors.New("multiple type hints found")
 			}
@@ -101,12 +102,13 @@ func (block *BlockInfo) walkNode(node parse.Node, scope string, parent parse.Nod
 			if len(n.Pipe.Cmds) == 1 && len(n.Pipe.Cmds[0].Args) == 1 {
 				if field, ok := n.Pipe.Cmds[0].Args[0].(*parse.FieldNode); ok {
 					if item := createVarLocation(field, scope, seenVars); item != nil {
+						zerolog.Ctx(ctx).Debug().Msgf("adding variable %s in position %s to block %s", item.Name(), item.Position.ID(), block.Name)
 						block.Variables = append(block.Variables, *item)
 					}
 				}
 			}
 		}
-		if err := block.walkNode(n.Pipe, scope, node, seenVars, seenFuncs); err != nil {
+		if err := block.walkNode(ctx, n.Pipe, scope, node, seenVars, seenFuncs); err != nil {
 			return err
 		}
 	case *parse.IfNode:
@@ -122,21 +124,21 @@ func (block *BlockInfo) walkNode(node parse.Node, scope string, parent parse.Nod
 				}
 			}
 		}
-		if err := block.walkNode(n.Pipe, scope, node, seenVars, seenFuncs); err != nil {
+		if err := block.walkNode(ctx, n.Pipe, scope, node, seenVars, seenFuncs); err != nil {
 			return err
 		}
-		if err := block.walkNode(n.List, scope, node, seenVars, seenFuncs); err != nil {
+		if err := block.walkNode(ctx, n.List, scope, node, seenVars, seenFuncs); err != nil {
 			return err
 		}
 		if n.ElseList != nil {
-			if err := block.walkNode(n.ElseList, scope, node, seenVars, seenFuncs); err != nil {
+			if err := block.walkNode(ctx, n.ElseList, scope, node, seenVars, seenFuncs); err != nil {
 				return err
 			}
 		}
 	case *parse.ListNode:
 		if n != nil {
 			for _, z := range n.Nodes {
-				if err := block.walkNode(z, scope, node, seenVars, seenFuncs); err != nil {
+				if err := block.walkNode(ctx, z, scope, node, seenVars, seenFuncs); err != nil {
 					return err
 				}
 			}
@@ -187,7 +189,7 @@ func (block *BlockInfo) walkNode(node parse.Node, scope string, parent parse.Nod
 			}
 		}
 	case *parse.TemplateNode:
-		if err := block.walkNode(n.Pipe, scope, node, seenVars, seenFuncs); err != nil {
+		if err := block.walkNode(ctx, n.Pipe, scope, node, seenVars, seenFuncs); err != nil {
 			return err
 		}
 	}
@@ -259,10 +261,14 @@ func Parse(ctx context.Context, content []byte, filename string) (*FileInfo, err
 		scope := ""
 		if t.Name() != "" && t.Name() != t.ParseName {
 			scope = t.Name()
+		} else {
+			scope = t.ParseName
 		}
 
+		zerolog.Ctx(ctx).Debug().Msgf("block %s scope: %s", t.Name(), scope)
+
 		// Process the template's AST
-		if err := block.walkNode(t.Tree.Root, scope, nil, seenVars, seenFuncs); err != nil {
+		if err := block.walkNode(ctx, t.Tree.Root, scope, nil, seenVars, seenFuncs); err != nil {
 			return nil, errors.Errorf("failed to walk template %s: %w", t.Name(), err)
 		}
 

@@ -12,6 +12,7 @@ type TypeInfo struct {
 
 // FieldInfo represents information about a struct field
 type FieldInfo struct {
-	Name string
-	Type types.Type
+	Name     string
+	Type     types.Type
+	FullName string
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/sourcegraph/jsonrpc2"
+	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
 )
 
 type handlerFunc func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error)
@@ -175,29 +176,32 @@ func (s *Server) router(method string) handlerFunc {
 	}
 }
 
-func (s *Server) publishDiagnostics(ctx context.Context, uri string, diagnostics []Diagnostic) error {
+func (s *Server) publishDiagnostics(ctx context.Context, uri string, content string, diagnostics []*diagnostic.Diagnostic) error {
 	params := &PublishDiagnosticsParams{
 		URI:         uri,
-		Diagnostics: diagnostics,
+		Diagnostics: make([]Diagnostic, len(diagnostics)),
+	}
+	for i, d := range diagnostics {
+		params.Diagnostics[i] = DiagnosticFromGoTmplTyperDiagnostic(d, content)
 	}
 
-	if s.debug {
-		s.debugf(ctx, "publishing %d diagnostics for %s", len(diagnostics), uri)
-		for _, d := range diagnostics {
-			severity := "unknown"
-			switch d.Severity {
-			case 1:
-				severity = "error"
-			case 2:
-				severity = "warning"
-			case 3:
-				severity = "information"
-			case 4:
-				severity = "hint"
-			}
-			s.debugf(ctx, "  - %s at %v: %s", severity, d.Range, d.Message)
-		}
-	}
+	// if s.debug {
+	// 	s.debugf(ctx, "publishing %d diagnostics for %s", len(diagnostics), uri)
+	// 	for _, d := range diagnostics {
+	// 		severity := "unknown"
+	// 		switch d.Severity {
+	// 		case 1:
+	// 			severity = "error"
+	// 		case 2:
+	// 			severity = "warning"
+	// 		case 3:
+	// 			severity = "information"
+	// 		case 4:
+	// 			severity = "hint"
+	// 		}
+	// 		s.debugf(ctx, "  - %s at %v: %s", severity, d.Range, d.Message)
+	// 	}
+	// }
 
 	return s.conn.Notify(ctx, "textDocument/publishDiagnostics", params)
 }
@@ -205,12 +209,13 @@ func (s *Server) publishDiagnostics(ctx context.Context, uri string, diagnostics
 // normalizeURI ensures consistent URI handling by removing the file:// prefix if present
 // and converting to a clean path
 func (s *Server) normalizeURI(uri string) string {
-	// Remove file:// prefix if present
-	if strings.HasPrefix(uri, "file://") {
-		uri = uri[7:]
-	}
-	// Remove any leading slashes for consistency
-	uri = strings.TrimLeft(uri, "/")
+
+	uri = strings.TrimPrefix(uri, "file://")
+	// remove the file:/private prefix
+	uri = strings.TrimPrefix(uri, "file:")
+
+	// // Remove any leading slashes for consistency
+	// uri = strings.TrimLeft(uri, "/")
 	return uri
 }
 
