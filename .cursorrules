@@ -8,12 +8,14 @@ always assume that broken imports are because the reference need to be adjusted,
 never directly modify go.mod or go.sum files, always use go mod tidy and go mod init to update them (or other commands that are appropriate)
 
 golang testing:
+test case names should always not contain spaces or special characters (ex: "test_case_name")
 always use testify/assert for assertions, testify/require for checking errors and testify/mock for creating mocks
 code and functions should be written in a way that is delibrtaly easy to test
 unit tests should be written in a way that is easy to understand and easy to write, yet overall increadibly exhaustive primarily by breadth of simple focused tests
 assume one hat at a times (testing, writing code, refactoring) and make sure to check lints and tests before moving between hats
 be extremely careful when modifying \_test.go files and regular go files in the same composer run
 always add messages to tests, like: require.NoError(t, err, "hover request should succeed")
+
 
 golang mocks:
 always use interfaces and then add them to .mockery.yaml which will generate the mocks in ./gen/mockery by calling "task generate" in the root of the project

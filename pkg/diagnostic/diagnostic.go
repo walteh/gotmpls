@@ -44,7 +44,7 @@ func GetDiagnosticsFromParsed(ctx context.Context, nodes *parser.FileInfo, regis
 		}
 
 		// Get type information
-		typeInfo, err := ast.GenerateTypeInfoFromRegistry(ctx, block.TypeHint.TypePath, registry)
+		typeInfo, err := ast.BuildTypeHintDefinitionFromRegistry(ctx, block.TypeHint.TypePath, registry)
 		if err != nil {
 			return nil, errors.Errorf("validating type: %w", err)
 		}

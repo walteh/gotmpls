@@ -11,12 +11,12 @@ import (
 	"github.com/walteh/go-tmpl-typer/pkg/position"
 )
 
-func createTestTypeInfo(t *testing.T) *ast.TypeInfo {
+func createTestTypeInfo(t *testing.T) *ast.TypeHintDefinition {
 	// Create a mock package
 	pkg := types.NewPackage("test", "test")
 
 	// Create the main type info
-	return &ast.TypeInfo{
+	return &ast.TypeHintDefinition{
 		Name: "Person",
 		Fields: map[string]*ast.FieldInfo{
 			"Name": {
@@ -121,13 +121,13 @@ func TestGenerateTypeInfoFromRegistry(t *testing.T) {
 		name     string
 		typePath string
 		wantErr  bool
-		check    func(*testing.T, *ast.TypeInfo)
+		check    func(*testing.T, *ast.TypeHintDefinition)
 	}{
 		{
 			name:     "valid type",
 			typePath: "github.com/example/types.Person",
 			wantErr:  false,
-			check: func(t *testing.T, info *ast.TypeInfo) {
+			check: func(t *testing.T, info *ast.TypeHintDefinition) {
 				require.NotNil(t, info.Fields["Name"])
 				assert.Equal(t, "string", info.Fields["Name"].Type.String())
 				assert.Equal(t, "int", info.Fields["Age"].Type.String())
@@ -154,7 +154,7 @@ func TestGenerateTypeInfoFromRegistry(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			typeInfo, err := ast.GenerateTypeInfoFromRegistry(ctx, tt.typePath, (*ast.Registry)(registry))
+			typeInfo, err := ast.BuildTypeHintDefinitionFromRegistry(ctx, tt.typePath, (*ast.Registry)(registry))
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, typeInfo)
