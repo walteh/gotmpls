@@ -31,7 +31,13 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 			want: []*diagnostic.Diagnostic{
 				{
 					Message:  "field NonExistent not found in type Person",
-					Location: position.NewBasicPosition(".NonExistent", 0),
+					Location: position.NewBasicPosition(".NonExistent", 54),
+					Severity: diagnostic.SeverityError,
+				},
+				{
+					Message:  "type hint successfully loaded: github.com/example/types.Person",
+					Location: position.NewBasicPosition("github.com/example/types.Person", 11),
+					Severity: diagnostic.SeverityInformation,
 				},
 			},
 			wantErr: false,
@@ -81,10 +87,8 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 			}
 
 			require.Equal(t, len(tt.want), len(got), "diagnostics count mismatch")
-			for i, want := range tt.want {
-				assert.Equal(t, want.Message, got[i].Message, "message mismatch")
-				assert.Equal(t, want.Location.Text, got[i].Location.Text, "location mismatch")
-			}
+			require.ElementsMatch(t, tt.want, got, "diagnostics mismatch")
+
 		})
 	}
 }

@@ -12,6 +12,17 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+const loadMode = packages.NeedName |
+	packages.NeedFiles |
+	packages.NeedCompiledGoFiles |
+	packages.NeedImports |
+	packages.NeedDeps |
+	packages.NeedTypes |
+	packages.NeedSyntax |
+	packages.NeedTypesInfo |
+	packages.NeedEmbedFiles |
+	packages.NeedModule
+
 // AnalyzePackage implements PackageAnalyzer
 func AnalyzePackage(ctx context.Context, dir string) (*Registry, error) {
 	if strings.HasSuffix(dir, ".tmpl") {
@@ -42,7 +53,7 @@ func AnalyzePackage(ctx context.Context, dir string) (*Registry, error) {
 	zerolog.Ctx(ctx).Debug().Msgf("go.mod content:\n%s\n", string(modContent))
 
 	cfg := &packages.Config{
-		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedModule | packages.NeedImports | packages.NeedDeps,
+		Mode: loadMode,
 		Dir:  dir,
 		Env:  append(os.Environ(), "GO111MODULE=on"),
 	}

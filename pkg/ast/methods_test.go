@@ -12,25 +12,25 @@ func TestGetBuiltinMethod(t *testing.T) {
 		name     string
 		method   string
 		wantName string
-		wantType string
+		wantType types.Type
 	}{
 		{
 			name:     "upper method",
 			method:   "upper",
 			wantName: "upper",
-			wantType: "string",
+			wantType: types.Typ[types.String],
 		},
 		{
 			name:     "and method",
-			method:   "and",
-			wantName: "and",
-			wantType: "bool",
+			method:   "canBeNil",
+			wantName: "canBeNil",
+			wantType: types.Typ[types.Bool],
 		},
 		{
 			name:     "non-existent method",
 			method:   "nonexistent",
 			wantName: "",
-			wantType: "",
+			wantType: nil,
 		},
 	}
 
@@ -45,13 +45,8 @@ func TestGetBuiltinMethod(t *testing.T) {
 			assert.NotNil(t, method, "method should exist")
 			assert.Equal(t, tt.wantName, method.Name, "method name should match")
 
-			if tt.wantType != "" {
-				switch tt.wantType {
-				case "string":
-					assert.Equal(t, types.Typ[types.String], method.Parameters[0], "parameter type should be string")
-				case "bool":
-					assert.Equal(t, types.Typ[types.Bool], method.Parameters[0], "parameter type should be bool")
-				}
+			if tt.wantType != nil {
+				assert.Equal(t, tt.wantType, method.Results[0], "return type should match")
 			}
 		})
 	}

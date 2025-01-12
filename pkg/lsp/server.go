@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"io"
+	"os"
 	"strings"
 	"sync"
 
@@ -99,7 +100,7 @@ func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.
 
 	ctx = zerolog.Ctx(ctx).With().Str("method", req.Method).Logger().WithContext(ctx)
 
-	handler := s.router(req.Method)
+	handler := s.router(ctx, req.Method)
 	if handler == nil {
 		if s.debug {
 			s.debugf(ctx, "unhandled method: %s", req.Method)
@@ -133,14 +134,18 @@ func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.
 	}
 }
 
-func (s *Server) router(method string) handlerFunc {
+func (s *Server) router(ctx context.Context, method string) handlerFunc {
+	zerolog.Ctx(ctx).Info().Str("method", method).Msg("routing request")
 	switch method {
-	case "initialize":
+	case "initialize", "initialized":
 		return s.handleInitialize
-	case "initialized":
-		return func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
-			return nil, nil
-		}
+	// case "initialized":
+	// 	return func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
+	// 		s.debugf(ctx, "initialized")
+
+	// 		zerolog.Ctx(ctx).Info().Str("params", string(*req.Params)).Msg("initialized")
+	// 		return nil, nil
+	// 	}
 	case "shutdown":
 		return func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
 			return nil, nil
@@ -228,8 +233,22 @@ func (s *Server) getDocument(uri string) (string, bool) {
 		content, ok = s.documents.Load("file://" + uri)
 	}
 	if !ok {
-		return "", false
+
+		// try filesystem
+
+		file, err := os.Open(normalizedURI)
+		if err != nil {
+			return "", false
+		}
+		defer file.Close()
+		contentz, err := io.ReadAll(file)
+		if err != nil {
+			return "", false
+		}
+		content = string(contentz)
+		s.documents.Store(normalizedURI, content)
 	}
+
 	text, ok := content.(string)
 	return text, ok
 }

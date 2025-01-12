@@ -119,7 +119,7 @@ func DiagnosticFromGoTmplTyperDiagnostic(d *diagnostic.Diagnostic, content strin
 	r := d.Location.GetRange(content)
 	return Diagnostic{
 		Range:    RangeFromGoTmplTyperRange(r),
-		Severity: int(SeverityError),
+		Severity: int(d.Severity),
 		Message:  d.Message,
 	}
 }

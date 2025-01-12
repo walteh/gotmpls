@@ -20,7 +20,7 @@ import (
 func ParseTree(name, text string) (map[string]*parse.Tree, error) {
 	treeSet := make(map[string]*parse.Tree)
 	t := parse.New(name)
-	t.Mode = t.Mode | parse.Mode(parse.ParseComments)
+	t.Mode = parse.ParseComments | parse.SkipFuncCheck
 	_, err := t.Parse(text, "{{", "}}", treeSet, ast.Builtins(), ast.Extras())
 	return treeSet, err
 }
@@ -73,9 +73,11 @@ func extractTypeHint(cmt *parse.CommentNode, scope string) *TypeHint {
 	text = strings.TrimPrefix(text, "gotype:")
 	text = strings.TrimSpace(text)
 
+	indexOfText := strings.Index(cmt.Text, text)
+
 	th := &TypeHint{
 		TypePath: text,
-		Position: position.NewBasicPosition(text, int(cmt.Pos)),
+		Position: position.NewBasicPosition(text, int(cmt.Pos)+indexOfText-1),
 		Scope:    scope,
 	}
 
@@ -213,8 +215,7 @@ func Parse(ctx context.Context, content []byte, filename string) (*FileInfo, err
 	})
 
 	tmpl.Tree = parse.New(filename)
-	tmpl.Mode = tmpl.Mode | parse.Mode(parse.ParseComments)
-	tmpl.Mode = tmpl.Mode | parse.Mode(parse.SkipFuncCheck)
+	tmpl.Mode = parse.ParseComments | parse.SkipFuncCheck
 
 	// Parse the template
 	trees, err := ParseTree(filename, contentStr)

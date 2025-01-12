@@ -39,7 +39,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 							TypePath: "github.com/example/types.Config",
 							Position: position.RawPosition{
 								Text:   "github.com/example/types.Config",
-								Offset: 4,
+								Offset: 13,
 							},
 							Scope: "test.tmpl",
 						},
@@ -88,7 +88,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 							TypePath: "github.com/example/types.Config",
 							Position: position.RawPosition{
 								Text:   "github.com/example/types.Config",
-								Offset: 4,
+								Offset: 13,
 							},
 
 							Scope: "test.tmpl",
@@ -223,7 +223,7 @@ Address:
 							TypePath: "test.Person",
 							Scope:    "test.tmpl",
 							Position: position.RawPosition{
-								Offset: 4,
+								Offset: 13,
 								Text:   "test.Person",
 							},
 						},
@@ -309,7 +309,7 @@ Name: {{.Name}}
 					TypePath: "github.com/walteh/go-tmpl-types-vscode/examples/types.Person",
 					Position: position.RawPosition{
 						Text:   "github.com/walteh/go-tmpl-types-vscode/examples/types.Person",
-						Offset: 82,
+						Offset: 91,
 					},
 
 					Scope: "person",
@@ -361,7 +361,7 @@ Name: {{.Name}}
 					TypePath: "github.com/walteh/go-tmpl-types-vscode/examples/types.Animal",
 					Position: position.RawPosition{
 						Text:   "github.com/walteh/go-tmpl-types-vscode/examples/types.Animal",
-						Offset: 339,
+						Offset: 348,
 					},
 					Scope: "animal",
 				},
