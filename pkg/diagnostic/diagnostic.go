@@ -18,10 +18,10 @@ type Diagnostic struct {
 
 // Severity levels for diagnostics using bit flags
 const (
-	SeverityError       = 1 << iota // 1
-	SeverityWarning                 // 2
-	SeverityInformation             // 4
-	SeverityHint                    // 8
+	SeverityError       = 1
+	SeverityWarning     = 2
+	SeverityInformation = 3
+	SeverityHint        = 4
 )
 
 // Example usage:
@@ -63,11 +63,16 @@ func GetDiagnosticsFromParsed(ctx context.Context, nodes *parser.FileInfo, regis
 		}
 
 		// Validate function calls
-		// for _, functionCall := range block.Functions {
-		// 	// check if function is defined
-
-		// 	// check if its args are correct
-		// }
+		for _, functionCall := range block.Functions {
+			_, err := ast.GenerateFunctionCallInfoFromPosition(ctx, functionCall.Position)
+			if err != nil {
+				diagnostics = append(diagnostics, &Diagnostic{
+					Message:  err.Error(),
+					Location: functionCall.Position,
+					Severity: SeverityError,
+				})
+			}
+		}
 	}
 
 	return diagnostics, nil

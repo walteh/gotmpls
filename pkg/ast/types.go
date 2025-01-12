@@ -6,17 +6,16 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/walteh/go-tmpl-typer/pkg/astreflect"
 	"github.com/walteh/go-tmpl-typer/pkg/position"
 	"gitlab.com/tozd/go/errors"
 )
 
 // TypeHintDefinition represents information about a Go type
 type TypeHintDefinition struct {
-	Name    string
-	Type    types.Type
-	Reflect reflect.Type
-	Fields  map[string]*FieldInfo
+	Name string
+	Type types.Type
+	// Reflect reflect.Type
+	Fields map[string]*FieldInfo
 }
 
 // FieldInfo represents information about a struct field
@@ -29,15 +28,15 @@ type FieldInfo struct {
 
 // createFieldInfo creates a new FieldInfo from a types.Object (can be Var or Func)
 func createFieldInfo(obj types.Object) (*FieldInfo, error) {
-	reflectType, err := astreflect.AST2Reflect(obj.Type())
-	if err != nil {
-		return nil, errors.Errorf("failed to reflect field %s: %w", obj.Name(), err)
-	}
+	// reflectType, err := astreflect.AST2Reflect(obj.Type())
+	// if err != nil {
+	// 	return nil, errors.Errorf("failed to reflect field %s: %w", obj.Name(), err)
+	// }
 
 	return &FieldInfo{
-		Name:     obj.Name(),
-		Type:     obj.Type(),
-		Reflect:  reflectType,
+		Name: obj.Name(),
+		Type: obj.Type(),
+		// Reflect:  reflectType,
 		FullName: obj.String(),
 	}, nil
 }
@@ -73,6 +72,9 @@ func createTypeInfoFromStruct(name string, obj types.Type, strict bool) (*TypeHi
 			if err != nil {
 				return nil, errors.Errorf("failed to create field info for %s: %w", field.Name(), err)
 			}
+			if _, ok := typeInfo.Fields[field.Name()]; ok {
+				return nil, errors.Errorf("name conflict: %s already exists in type %s", field.Name(), name)
+			}
 			typeInfo.Fields[field.Name()] = fieldInfo
 		}
 	}
@@ -84,6 +86,9 @@ func createTypeInfoFromStruct(name string, obj types.Type, strict bool) (*TypeHi
 			methodInfo, err := createFieldInfo(method)
 			if err != nil {
 				return nil, errors.Errorf("failed to create method info for %s: %w", method.Name(), err)
+			}
+			if _, ok := typeInfo.Fields[method.Name()]; ok {
+				return nil, errors.Errorf("name conflict: %s already exists in type %s", method.Name(), name)
 			}
 			typeInfo.Fields[method.Name()] = methodInfo
 		}
@@ -120,6 +125,48 @@ func GenerateFieldInfoFromPosition(ctx context.Context, typeInfo *TypeHintDefini
 	}
 
 	return currentField, nil
+}
+
+type FunctionCallInfo struct {
+	Name    string
+	Args    []*types.Var
+	Results []*types.Var
+}
+
+func GenerateFunctionCallInfoFromPosition(ctx context.Context, pos position.RawPosition) (*TemplateMethodInfo, error) {
+
+	method := BuiltinTemplateMethods[pos.Text]
+	if method == nil {
+		return nil, errors.Errorf("method %s not found", pos.Text)
+	}
+
+	// methodType, ok := method.Type.(*types.Func)
+	// if !ok {
+	// 	return nil, errors.Errorf("expected method %s to be a function, got %s", pos.Text, methodType.Type().String())
+	// }
+
+	// signature, ok := method..(*types.Signature)
+	// if !ok {
+	// 	return nil, errors.Errorf("expected method %s to have a signature, got %s", pos.Text, method.Type.String())
+	// }
+	return method, nil
+	// input := []*types.Var{}
+	// output := []*types.Var{}
+
+	// for i := 0; i < signature.Params().Len(); i++ {
+	// 	input = append(input, signature.Params().At(i))
+	// }
+
+	// for i := 0; i < signature.Results().Len(); i++ {
+	// 	output = append(output, signature.Results().At(i))
+	// }
+
+	// return &FunctionCallInfo{
+	// 	Name:    pos.Text,
+	// 	Args:    input,
+	// 	Results: output,
+	// }, nil
+
 }
 
 func BuildTypeHintDefinitionFromRegistry(ctx context.Context, typePath string, r *Registry) (*TypeHintDefinition, error) {

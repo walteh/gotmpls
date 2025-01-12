@@ -3,6 +3,7 @@ package lsp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -54,6 +55,22 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 
 		zerolog.Ctx(ctx).Debug().Msgf("checking block %s against type hint %s (vars: %d)", block.Name, block.TypeHint.TypePath, len(block.Variables))
 
+		for _, function := range block.Functions {
+			zerolog.Ctx(ctx).Debug().Msgf("checking overlap of [%s:%d] with [%s:%d]", pos.Text, pos.Offset, function.Position.Text, function.Position.Offset)
+			if pos.HasRangeOverlapWith(function.Position) {
+				zerolog.Ctx(ctx).Debug().Msgf("function %s at %v overlaps with position %v", function.Name(), function.Position, pos)
+
+				ranged := RangeFromGoTmplTyperRange(function.Position.GetRange(content))
+				return &Hover{
+					Contents: MarkupContent{
+						Kind:  "markdown",
+						Value: FormatHoverResponse(function.Name(), function.String()),
+					},
+					Range: &ranged,
+				}, nil
+			}
+		}
+
 		typeInfo, err := ast.BuildTypeHintDefinitionFromRegistry(ctx, block.TypeHint.TypePath, registry)
 		if err != nil {
 			return nil, errors.Errorf("validating type for hover: %w", err)
@@ -76,23 +93,7 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 				return &Hover{
 					Contents: MarkupContent{
 						Kind:  "markdown",
-						Value: FormatHoverResponse(typeInfo.Name, variable.Position.Text, fieldInfo.Type.String()),
-					},
-					Range: &ranged,
-				}, nil
-			}
-		}
-
-		for _, function := range block.Functions {
-			zerolog.Ctx(ctx).Debug().Msgf("checking overlap of [%s:%d] with [%s:%d]", pos.Text, pos.Offset, function.Position.Text, function.Position.Offset)
-			if pos.HasRangeOverlapWith(function.Position) {
-				zerolog.Ctx(ctx).Debug().Msgf("function %s at %v overlaps with position %v", function.Name(), function.Position, pos)
-
-				ranged := RangeFromGoTmplTyperRange(function.Position.GetRange(content))
-				return &Hover{
-					Contents: MarkupContent{
-						Kind:  "markdown",
-						Value: FormatHoverResponse(typeInfo.Name, function.Position.Text, function.String()),
+						Value: FormatHoverResponse(fmt.Sprintf("%s%s", typeInfo.Name, variable.Position.Text), fieldInfo.Type.String()),
 					},
 					Range: &ranged,
 				}, nil
@@ -167,8 +168,8 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 // 	return nil, nil
 // }
 
-func FormatHoverResponse(typeName, fieldPath, fieldType string) string {
-	fieldPath = strings.TrimPrefix(fieldPath, ".")
+func FormatHoverResponse(typeName, fieldType string) string {
+	typeName = strings.TrimPrefix(typeName, ".")
 
-	return "**Variable**: " + typeName + "." + fieldPath + "\n**Type**: " + fieldType
+	return "**Variable**: " + typeName + "\n**Type**: " + fieldType
 }
