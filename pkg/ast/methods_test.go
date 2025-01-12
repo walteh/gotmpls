@@ -15,19 +15,19 @@ func TestGetBuiltinMethod(t *testing.T) {
 		wantType types.Type
 	}{
 		{
-			name:     "upper method",
+			name:     "upper_method",
 			method:   "upper",
 			wantName: "upper",
 			wantType: types.Typ[types.String],
 		},
 		{
-			name:     "and method",
-			method:   "canBeNil",
-			wantName: "canBeNil",
+			name:     "not_method",
+			method:   "not",
+			wantName: "not",
 			wantType: types.Typ[types.Bool],
 		},
 		{
-			name:     "non-existent method",
+			name:     "non_existent_method",
 			method:   "nonexistent",
 			wantName: "",
 			wantType: nil,

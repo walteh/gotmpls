@@ -1,9 +1,10 @@
 package ast
 
 import (
-	"fmt"
 	"go/types"
 	"reflect"
+
+	"github.com/walteh/go-tmpl-typer/pkg/astreflect"
 )
 
 // TemplateMethodInfo represents information about a template method
@@ -11,21 +12,6 @@ type TemplateMethodInfo struct {
 	Name       string
 	Parameters []types.Type
 	Results    []types.Type
-}
-
-// convertType converts a reflect.Type to a types.Type
-func convertType(t reflect.Type) types.Type {
-	fmt.Println("t", t.Kind(), t.String())
-	switch t.Kind() {
-	case reflect.Bool:
-		return types.Typ[types.Bool]
-	case reflect.Int:
-		return types.Typ[types.Int]
-	case reflect.String:
-		return types.Typ[types.String]
-	default:
-		return types.NewInterfaceType(nil, nil)
-	}
 }
 
 // generateBuiltinTemplateMethods generates the BuiltinTemplateMethods map using reflection
@@ -44,10 +30,6 @@ func generateBuiltinTemplateMethods() map[string]*TemplateMethodInfo {
 			continue
 		}
 
-		if name == "and" {
-			fmt.Println("hello")
-		}
-
 		info := &TemplateMethodInfo{
 			Name:       name,
 			Parameters: make([]types.Type, fnType.NumIn()),
@@ -56,12 +38,12 @@ func generateBuiltinTemplateMethods() map[string]*TemplateMethodInfo {
 
 		// Convert parameter types
 		for i := 0; i < fnType.NumIn(); i++ {
-			info.Parameters[i] = convertType(fnType.In(i))
+			info.Parameters[i] = astreflect.Reflect2AST(fnType.In(i))
 		}
 
 		// Convert result types
 		for i := 0; i < fnType.NumOut(); i++ {
-			info.Results[i] = convertType(fnType.Out(i))
+			info.Results[i] = astreflect.Reflect2AST(fnType.Out(i))
 		}
 
 		methods[name] = info

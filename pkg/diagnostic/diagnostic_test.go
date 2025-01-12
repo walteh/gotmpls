@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
 	"github.com/walteh/go-tmpl-typer/pkg/position"
@@ -22,8 +23,14 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 		{
 			name:     "valid template",
 			template: "{{/*gotype: github.com/example/types.Person*/}}Hello {{.Name}}!",
-			want:     nil,
-			wantErr:  false,
+			want: []*diagnostic.Diagnostic{
+				{
+					Message:  "type hint successfully loaded: github.com/example/types.Person",
+					Location: position.NewBasicPosition("github.com/example/types.Person", 11),
+					Severity: diagnostic.SeverityInformation,
+				},
+			},
+			wantErr: false,
 		},
 		{
 			name:     "invalid field",
@@ -45,7 +52,7 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 		{
 			name:     "invalid type path",
 			template: "{{/*gotype: invalid.Type*/}}Hello {{.Name}}!",
-			want:     nil,
+			want:     []*diagnostic.Diagnostic{},
 			wantErr:  true,
 		},
 	}
@@ -81,13 +88,9 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			if tt.want == nil {
-				assert.Empty(t, got)
-				return
-			}
 
-			require.Equal(t, len(tt.want), len(got), "diagnostics count mismatch")
-			require.ElementsMatch(t, tt.want, got, "diagnostics mismatch")
+			assert.Equal(t, len(tt.want), len(got), "diagnostics count mismatch")
+			assert.ElementsMatch(t, tt.want, got, "diagnostics mismatch")
 
 		})
 	}
