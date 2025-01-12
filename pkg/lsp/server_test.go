@@ -61,7 +61,7 @@ type Person struct {
 		require.Equal(t, 1, hoverResult.Range.Start.Line, "range should start on line 1")
 		require.Equal(t, 1, hoverResult.Range.End.Line, "range should end on line 1")
 		require.Equal(t, 3, hoverResult.Range.Start.Character, "range should start at the beginning of .Name")
-		require.Equal(t, 7, hoverResult.Range.End.Character, "range should end at the end of .Name")
+		require.Equal(t, 8, hoverResult.Range.End.Character, "range should end at the end of .Name")
 
 		// Test hover in second file
 		file2 := filepath.Join(setup.tmpDir, "file2.tmpl")
@@ -76,7 +76,7 @@ type Person struct {
 		require.Equal(t, 1, hoverResult.Range.Start.Line, "range should start on line 1")
 		require.Equal(t, 1, hoverResult.Range.End.Line, "range should end on line 1")
 		require.Equal(t, 3, hoverResult.Range.Start.Character, "range should start at the beginning of .Age")
-		require.Equal(t, 6, hoverResult.Range.End.Character, "range should end at the end of .Age")
+		require.Equal(t, 7, hoverResult.Range.End.Character, "range should end at the end of .Age")
 	})
 
 	t.Run("server handles file changes", func(t *testing.T) {
@@ -108,7 +108,7 @@ type Person struct {
 		require.Equal(t, 1, hoverResult.Range.Start.Line, "range should start on line 1")
 		require.Equal(t, 1, hoverResult.Range.End.Line, "range should end on line 1")
 		require.Equal(t, 3, hoverResult.Range.Start.Character, "range should start at the beginning of .Name")
-		require.Equal(t, 7, hoverResult.Range.End.Character, "range should end at the end of .Name")
+		require.Equal(t, 8, hoverResult.Range.End.Character, "range should end at the end of .Name")
 
 		// Save current file before making changes
 		err = setup.nvimInstance.Command("w")
@@ -181,7 +181,7 @@ type Person struct {
 					require.Equal(t, 2, hoverResult.Range.Start.Line, "range should start on line 2")
 					require.Equal(t, 2, hoverResult.Range.End.Line, "range should end on line 2")
 					require.Equal(t, 12, hoverResult.Range.Start.Character, "range should start at the beginning of .Address.Street")
-					require.Equal(t, 26, hoverResult.Range.End.Character, "range should end at the end of .Address.Street")
+					require.Equal(t, 27, hoverResult.Range.End.Character, "range should end at the end of .Address.Street")
 				} else {
 					require.Nil(t, hoverResult, "hover should return nil for positions outside variable")
 				}

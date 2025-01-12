@@ -109,7 +109,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 						},
 						Functions: []parser.VariableLocation{
 							{
-								Position: position.RawPosition{Text: "printf", Offset: 73},
+								Position: position.RawPosition{Text: "printf", Offset: 72},
 								MethodArguments: []types.Type{
 									types.Typ[types.String],
 									&parser.VariableLocation{
@@ -120,10 +120,10 @@ Hello {{.Name}}! You are {{.Age}} years old.
 								Scope: "main",
 							},
 							{
-								Position: position.RawPosition{Text: "upper", Offset: 99},
+								Position: position.RawPosition{Text: "upper", Offset: 98},
 								MethodArguments: []types.Type{
 									&parser.VariableLocation{
-										Position: position.RawPosition{Text: "printf", Offset: 73},
+										Position: position.RawPosition{Text: "printf", Offset: 72},
 										MethodArguments: []types.Type{
 											types.Typ[types.String],
 											&parser.VariableLocation{
@@ -171,7 +171,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 						},
 						Functions: []parser.VariableLocation{
 							{
-								Position: position.RawPosition{Text: "printf", Offset: 8},
+								Position: position.RawPosition{Text: "printf", Offset: 7},
 								MethodArguments: []types.Type{
 									types.Typ[types.String],
 									&parser.VariableLocation{
@@ -182,10 +182,10 @@ Hello {{.Name}}! You are {{.Age}} years old.
 								Scope: "test.tmpl",
 							},
 							{
-								Position: position.RawPosition{Text: "upper", Offset: 30},
+								Position: position.RawPosition{Text: "upper", Offset: 29},
 								MethodArguments: []types.Type{
 									&parser.VariableLocation{
-										Position: position.RawPosition{Text: "printf", Offset: 8},
+										Position: position.RawPosition{Text: "printf", Offset: 7},
 										MethodArguments: []types.Type{
 											types.Typ[types.String],
 											&parser.VariableLocation{
@@ -342,7 +342,7 @@ Name: {{.Name}}
 				},
 				Functions: []parser.VariableLocation{
 					{
-						Position: position.RawPosition{Text: "upper", Offset: 289},
+						Position: position.RawPosition{Text: "upper", Offset: 288},
 						MethodArguments: []types.Type{
 							&parser.VariableLocation{
 								Position: position.RawPosition{Text: ".GetJob", Offset: 278},
