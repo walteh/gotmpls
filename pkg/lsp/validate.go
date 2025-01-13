@@ -21,7 +21,7 @@ func (s *Server) validateDocument(ctx context.Context, uri string, content strin
 		return nil, errors.Errorf("analyzing package: %w", err)
 	}
 
-	nodes, err := parser.Parse(ctx, []byte(content), uri)
+	nodes, err := parser.Parse(ctx, uri, []byte(content))
 	if err != nil {
 		return nil, errors.Errorf("parsing template for validation: %w", err)
 	}

@@ -12,17 +12,35 @@ import (
 	"text/template/parse"
 
 	"github.com/rs/zerolog"
-	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/position"
 	"gitlab.com/tozd/go/errors"
 )
 
-func ParseTree(name, text string) (map[string]*parse.Tree, error) {
+func ParseTree(name string, text []byte) (map[string]*parse.Tree, error) {
 	treeSet := make(map[string]*parse.Tree)
 	t := parse.New(name)
 	t.Mode = parse.ParseComments | parse.SkipFuncCheck
-	_, err := t.Parse(text, "{{", "}}", treeSet, ast.Builtins(), ast.Extras())
+	_, err := t.Parse(string(text), "{{", "}}", treeSet)
 	return treeSet, err
+}
+
+func ParseStringToRawTemplate(ctx context.Context, fileName string, content []byte) (*template.Template, error) {
+	tmpl := template.New(fileName)
+	tmpl.Tree = parse.New(fileName)
+	tmpl.Mode = parse.ParseComments | parse.SkipFuncCheck
+
+	treeSet, err := ParseTree(fileName, content)
+	if err != nil {
+		return nil, errors.Errorf("failed to parse template: %w", err)
+	}
+
+	for name, tree := range treeSet {
+		if _, err := tmpl.AddParseTree(name, tree); err != nil {
+			return nil, err
+		}
+	}
+
+	return tmpl, nil
 }
 
 // createVarLocation creates a new variable location and adds it to the seen map
@@ -43,7 +61,7 @@ func createVarLocation(field *parse.FieldNode, scope string, seenVars *position.
 }
 
 // createFuncLocation creates a new function location and adds it to the seen map
-func createFuncLocation(fn *parse.IdentifierNode, args []types.Type, scope string, seenFuncs *position.PositionsSeenMap) *VariableLocation {
+func createFuncLocation(fn *parse.IdentifierNode, args []VariableLocationOrType, scope string, seenFuncs *position.PositionsSeenMap) *VariableLocation {
 	pos := position.NewIdentifierNodePosition(fn)
 
 	if seenFuncs.Has(pos) {
@@ -51,9 +69,9 @@ func createFuncLocation(fn *parse.IdentifierNode, args []types.Type, scope strin
 	}
 
 	item := &VariableLocation{
-		Position:        pos,
-		MethodArguments: args,
-		Scope:           scope,
+		Position:      pos,
+		PipeArguments: args,
+		Scope:         scope,
 	}
 
 	seenFuncs.Add(pos)
@@ -147,13 +165,13 @@ func (block *BlockInfo) walkNode(ctx context.Context, node parse.Node, scope str
 		}
 	case *parse.PipeNode:
 		if n != nil {
-			var lastResult types.Type
+			var lastResult *VariableLocationOrType
 
 			for i, cmd := range n.Cmds {
-				args := make([]types.Type, 0)
+				args := make([]VariableLocationOrType, 0)
 
 				if i > 0 && lastResult != nil {
-					args = append(args, lastResult)
+					args = append(args, *lastResult)
 				} else {
 					for j, arg := range cmd.Args {
 						if j == 0 {
@@ -163,28 +181,31 @@ func (block *BlockInfo) walkNode(ctx context.Context, node parse.Node, scope str
 						case *parse.FieldNode:
 							item := createVarLocation(v, scope, seenVars)
 							if item != nil {
+								ivlt := VariableLocationOrType{Variable: item}
 								block.Variables = append(block.Variables, *item)
-								args = append(args, item)
-								lastResult = item
+								args = append(args, ivlt)
+								lastResult = &ivlt
 							}
 						case *parse.StringNode:
-							args = append(args, types.Typ[types.String])
+							args = append(args, VariableLocationOrType{Type: types.Typ[types.String]})
 						}
 					}
 				}
 
 				if len(cmd.Args) > 0 {
 					if fn, ok := cmd.Args[0].(*parse.IdentifierNode); ok {
-						item := createFuncLocation(fn, args, scope, seenFuncs)
+						allArgs := []VariableLocationOrType{}
+						allArgs = append(allArgs, args...)
+						item := createFuncLocation(fn, allArgs, scope, seenFuncs)
 						if item != nil {
 							block.Functions = append(block.Functions, *item)
-							lastResult = item
+							lastResult = &VariableLocationOrType{Variable: item}
 						}
 					} else if field, ok := cmd.Args[0].(*parse.FieldNode); ok {
 						item := createVarLocation(field, scope, seenVars)
 						if item != nil {
 							block.Variables = append(block.Variables, *item)
-							lastResult = item
+							lastResult = &VariableLocationOrType{Variable: item}
 						}
 					}
 				}
@@ -199,31 +220,37 @@ func (block *BlockInfo) walkNode(ctx context.Context, node parse.Node, scope str
 	return nil
 }
 
+// func ParseRegistry(ctx context.Context, data *ast.Registry) ([]*ParsedTemplateFile, error) {
+// 	for _, pkg := range data.Packages {
+
+// 		for _, file := range pkg.Templates {
+// 			fileInfo := &ParsedTemplateFile{
+// 				Filename:      file.Name(),
+// 				SourceContent: file.Content,
+// 				Blocks:        make([]BlockInfo, 0),
+// 			}
+// 		}
+
+// 	}
+// }
+
+func Parse(ctx context.Context, fileName string, content []byte) (*ParsedTemplateFile, error) {
+	tmpl, err := ParseStringToRawTemplate(ctx, fileName, content)
+	if err != nil {
+		return nil, errors.Errorf("parsing template %s: %w", fileName, err)
+	}
+	return ParseRawTemplate(ctx, content, tmpl)
+}
+
 // Parse parses a template file and returns FileInfo containing all blocks and their information
-func Parse(ctx context.Context, content []byte, filename string) (*FileInfo, error) {
+func ParseRawTemplate(ctx context.Context, content []byte, tmpl *template.Template) (*ParsedTemplateFile, error) {
 	contentStr := string(content)
 
-	fileInfo := &FileInfo{
-		Filename:      filename,
+	var err error
+	fileInfo := &ParsedTemplateFile{
+		Filename:      tmpl.Name(),
 		SourceContent: contentStr,
 		Blocks:        make([]BlockInfo, 0),
-	}
-
-	// Create a template with all necessary functions to avoid parsing errors
-	tmpl := template.New(filename)
-	tmpl.Tree = parse.New(filename)
-	tmpl.Mode = parse.ParseComments | parse.SkipFuncCheck
-
-	// Parse the template
-	trees, err := ParseTree(filename, contentStr)
-	if err != nil {
-		return nil, errors.Errorf("failed to parse template: %w", err)
-	}
-
-	for name, tree := range trees {
-		if _, err := tmpl.AddParseTree(name, tree); err != nil {
-			return nil, err
-		}
 	}
 
 	// Track seen variables and functions to avoid duplicates
@@ -345,22 +372,24 @@ func hackGetEndPositionForBlock(t *parse.Tree) position.RawPosition {
 	panic("failed to find end position for block")
 }
 
-// TemplateInfo contains information about a parsed template
-type TemplateInfo struct {
-	Variables []VariableLocation
-	Functions []VariableLocation
-	TypeHints []TypeHint
-	Filename  string
-}
+// // TemplateInfo contains information about a parsed template
+// type TemplateInfo struct {
+// 	Variables []VariableLocation
+// 	Functions []VariableLocation
+// 	TypeHints []TypeHint
+// 	Filename  string
+// }
 
-var _ types.Type = &VariableLocation{}
+type VariableLocationOrType struct {
+	Variable *VariableLocation
+	Type     types.Type
+}
 
 // VariableLocation represents a variable usage in a template
 type VariableLocation struct {
-	Position        position.RawPosition
-	MethodArguments []types.Type
-	// ReturnType      types.Type
-	Scope string // The scope of the variable (e.g., template name or block ID)
+	Position      position.RawPosition
+	PipeArguments []VariableLocationOrType // either a VariableLocation or some other types.Type
+	Scope         string                   // The scope of the variable (e.g., template name or block ID)
 }
 
 // Name returns the short name of the variable (last part after dot)
@@ -377,11 +406,6 @@ func (v *VariableLocation) LongName() string {
 // String implements types.Type - returns the short name
 func (v *VariableLocation) String() string {
 	return v.Name()
-}
-
-// Underlying implements types.Type
-func (v *VariableLocation) Underlying() types.Type {
-	return nil
 }
 
 // type ArgumentRef struct {
@@ -407,7 +431,7 @@ type TypeHint struct {
 	Scope    string // The scope of the type hint (e.g., template name or block ID)
 }
 
-type FileInfo struct {
+type ParsedTemplateFile struct {
 	Filename      string
 	SourceContent string
 	Blocks        []BlockInfo
@@ -430,4 +454,36 @@ type BlockInfo struct {
 	Functions     []VariableLocation
 	EndPosition   position.RawPosition
 	node          *template.Template
+}
+
+type PipedArgument struct {
+	Variable  *VariableLocation
+	Results   []types.Type
+	Arguments []PipedArgumentOrType
+}
+
+type PipedArgumentOrType struct {
+	PipedArgument *PipedArgument
+	Type          types.Type
+}
+
+func (me *VariableLocation) GetPipedArguments(getReturnTypes func(VariableLocationOrType) []types.Type) *PipedArgument {
+	results := getReturnTypes(VariableLocationOrType{Variable: me})
+	args := []PipedArgumentOrType{}
+	for _, arg := range me.PipeArguments {
+		if arg.Variable != nil {
+			args = append(args, PipedArgumentOrType{
+				PipedArgument: arg.Variable.GetPipedArguments(getReturnTypes),
+			})
+		} else if arg.Type != nil {
+			args = append(args, PipedArgumentOrType{
+				Type: arg.Type,
+			})
+		}
+	}
+	return &PipedArgument{
+		Results:   results,
+		Arguments: args,
+		Variable:  me,
+	}
 }

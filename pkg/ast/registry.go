@@ -6,7 +6,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"text/template"
 
 	"github.com/rs/zerolog"
 	"gitlab.com/tozd/go/errors"
@@ -16,25 +15,25 @@ import (
 // Registry manages Go package and type information
 type Registry struct {
 	// Types maps fully qualified type paths to their package information
-	Packages []*PackageWithTemplates
+	Packages []*PackageWithTemplateFiles
 	// Error encountered during type resolution, if any
 	Err error
 }
 
 // NewRegistry creates a new Registry
-func NewRegistry(pkgWithTemplatesList []*PackageWithTemplates) *Registry {
+func NewRegistry(pkgWithTemplateFilesList []*PackageWithTemplateFiles) *Registry {
 	return &Registry{
-		Packages: pkgWithTemplatesList,
+		Packages: pkgWithTemplateFilesList,
 	}
 }
 
 func NewEmptyRegistry() *Registry {
 	return &Registry{
-		Packages: []*PackageWithTemplates{},
+		Packages: []*PackageWithTemplateFiles{},
 	}
 }
 
-func (r *Registry) AddPackage(pkg *PackageWithTemplates) {
+func (r *Registry) AddPackage(pkg *PackageWithTemplateFiles) {
 	r.Packages = append(r.Packages, pkg)
 }
 
@@ -45,31 +44,35 @@ type InMemoryPackageOpts struct {
 	Types         []*types.TypeName
 }
 
-func (r *PackageWithTemplates) MustAddAndParseTemplates(ctx context.Context, files map[string]string) {
-	err := r.AddAndParseTemplates(ctx, files)
-	if err != nil {
-		panic(err)
-	}
+func (r *PackageWithTemplateFiles) AddTemplateFile(name string, content string) {
+	r.TemplateFiles[name] = content
 }
 
-func (r *PackageWithTemplates) AddAndParseTemplates(ctx context.Context, files map[string]string) error {
-	for name, file := range files {
-		tmpl, err := ParseTemplate(ctx, name, file)
-		if err != nil {
-			return errors.Errorf("parsing in memory template %s: %w", name, err)
-		}
-		r.Templates[name] = tmpl
-	}
-	return nil
-}
+// func (r *PackageWithTemplates) MustAddAndParseTemplates(ctx context.Context, files map[string]string) {
+// 	err := r.AddAndParseTemplates(ctx, files)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// }
 
-func (r *PackageWithTemplates) AddTypes(types []*types.TypeName) {
+// func (r *PackageWithTemplateFiles) AddAndParseTemplates(ctx context.Context, files map[string]string) error {
+// 	for name, file := range files {
+// 		tmplo, err := parser.Parse(ctx, name, []byte(file))
+// 		if err != nil {
+// 			return errors.Errorf("parsing in memory template %s: %w", name, err)
+// 		}
+// 		r.Templates[name] = tmplo
+// 	}
+// 	return nil
+// }
+
+func (r *PackageWithTemplateFiles) AddTypes(types []*types.TypeName) {
 	for _, obj := range types {
 		r.Package.Types.Scope().Insert(obj)
 	}
 }
 
-func (r *PackageWithTemplates) AddStruct(name string, fieldMap map[string]types.Type) *types.Named {
+func (r *PackageWithTemplateFiles) AddStruct(name string, fieldMap map[string]types.Type) *types.Named {
 	fields := make([]*types.Var, 0, len(fieldMap))
 	for name, fieldType := range fieldMap {
 		fields = append(fields, types.NewField(0, r.Package.Types, name, fieldType, false))
@@ -88,7 +91,17 @@ func (r *PackageWithTemplates) AddStruct(name string, fieldMap map[string]types.
 	return named
 }
 
-func (r *Registry) AddInMemoryPackageForTesting(ctx context.Context, path string) *PackageWithTemplates {
+func (r *Registry) GetTemplateFile(name string) (string, *PackageWithTemplateFiles, bool) {
+	for _, pkg := range r.Packages {
+		if content, ok := pkg.TemplateFiles[name]; ok {
+			return content, pkg, true
+		}
+	}
+
+	return "", nil, false
+}
+
+func (r *Registry) AddInMemoryPackageForTesting(ctx context.Context, path string) *PackageWithTemplateFiles {
 	name := filepath.Base(path)
 	pkg := packages.Package{
 		PkgPath: path,
@@ -97,14 +110,14 @@ func (r *Registry) AddInMemoryPackageForTesting(ctx context.Context, path string
 
 	pkg.Types = types.NewPackage(path, name)
 
-	pkgWithTemplates := &PackageWithTemplates{
-		Package:   &pkg,
-		Templates: map[string]*template.Template{},
+	pkgWithTemplateFiles := &PackageWithTemplateFiles{
+		Package:       &pkg,
+		TemplateFiles: map[string]string{},
 	}
 
-	r.Packages = append(r.Packages, pkgWithTemplates)
+	r.Packages = append(r.Packages, pkgWithTemplateFiles)
 
-	return pkgWithTemplates
+	return pkgWithTemplateFiles
 }
 
 // GetPackage returns a package by name

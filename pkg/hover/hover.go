@@ -4,6 +4,7 @@ package hover
 import (
 	"context"
 	"fmt"
+	"go/types"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -22,7 +23,7 @@ type HoverInfo struct {
 }
 
 // FormatHoverResponse formats a hover response for a variable or function
-func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation, method *ast.TemplateMethodInfo) (*HoverInfo, error) {
+func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation, method *ast.TemplateMethodInfo, typeResolver func(parser.VariableLocationOrType) []types.Type) (*HoverInfo, error) {
 	if variable == nil {
 		return nil, errors.New("variable cannot be nil")
 	}
@@ -35,14 +36,18 @@ func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation,
 		sb.WriteString("### Template Function\n\n")
 
 		// Visual representation of the chain
-		if len(variable.MethodArguments) > 0 {
+		if len(variable.PipeArguments) > 0 {
+
+			piped := variable.GetPipedArguments(typeResolver)
 			// Show input chain
-			for i, arg := range variable.MethodArguments {
+			for i, arg := range piped.Arguments {
 				if i > 0 {
 					sb.WriteString("    │\n")
 				}
-				if vl, ok := arg.(*parser.VariableLocation); ok {
-					sb.WriteString(vl.Position.Text + "\n")
+				if arg.PipedArgument != nil {
+					sb.WriteString(arg.PipedArgument.Variable.Position.Text + "\n")
+				} else if arg.Type != nil {
+					sb.WriteString(arg.Type.String() + "\n")
 				}
 			}
 			sb.WriteString("    │\n    ▼\n")
@@ -64,16 +69,25 @@ func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation,
 
 		// Return values
 		if len(method.Results) > 0 {
-			if len(method.Results) == 1 {
-				sb.WriteString(fmt.Sprintf(" %s", method.Results[0].String()))
-			} else {
-				sb.WriteString(" (")
-				results := make([]string, len(method.Results))
-				for i, result := range method.Results {
-					results[i] = result.String()
+			if len(variable.PipeArguments) > 0 {
+				sb.WriteString(" -> ")
+				piped := variable.GetPipedArguments(typeResolver)
+
+				for _, arg := range piped.Results {
+					sb.WriteString(arg.String() + " ")
 				}
-				sb.WriteString(strings.Join(results, ", "))
-				sb.WriteString(")")
+			} else {
+				if len(method.Results) == 1 {
+					sb.WriteString(fmt.Sprintf(" %s", method.Results[0].String()))
+				} else {
+					sb.WriteString(" (")
+					results := make([]string, len(method.Results))
+					for i, result := range method.Results {
+						results[i] = result.String()
+					}
+					sb.WriteString(strings.Join(results, ", "))
+					sb.WriteString(")")
+				}
 			}
 		}
 		sb.WriteString("\n```\n\n")
@@ -84,7 +98,7 @@ func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation,
 
 		// Build the example usage string
 		usage := variable.Position.Text
-		if len(variable.MethodArguments) > 0 {
+		if len(variable.PipeArguments) > 0 {
 			usage += " | " + method.Name
 		}
 		sb.WriteString(usage + "\n```")
@@ -100,7 +114,7 @@ func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation,
 	}, nil
 }
 
-func BuildHoverResponseFromParse(ctx context.Context, info *parser.FileInfo, hoverPosition position.RawPosition) (*HoverInfo, error) {
+func BuildHoverResponseFromParse(ctx context.Context, info *parser.ParsedTemplateFile, hoverPosition position.RawPosition, typeResolver func(parser.VariableLocationOrType) []types.Type) (*HoverInfo, error) {
 	for _, block := range info.Blocks {
 		if block.TypeHint == nil {
 			continue
@@ -117,7 +131,7 @@ func BuildHoverResponseFromParse(ctx context.Context, info *parser.FileInfo, hov
 					return nil, errors.Errorf("generating function call info: %w", err)
 				}
 
-				hoverInfo, err := FormatHoverResponse(ctx, &function, method)
+				hoverInfo, err := FormatHoverResponse(ctx, &function, method, typeResolver)
 				if err != nil {
 					return nil, errors.Errorf("formatting hover response: %w", err)
 				}
@@ -131,7 +145,7 @@ func BuildHoverResponseFromParse(ctx context.Context, info *parser.FileInfo, hov
 			if hoverPosition.HasRangeOverlapWith(variable.Position) {
 				zerolog.Ctx(ctx).Debug().Msgf("variable %s at %v overlaps with position %v", variable.Name(), variable.Position, hoverPosition)
 
-				hoverInfo, err := FormatHoverResponse(ctx, &variable, nil)
+				hoverInfo, err := FormatHoverResponse(ctx, &variable, nil, typeResolver)
 				if err != nil {
 					return nil, errors.Errorf("formatting hover response: %w", err)
 				}

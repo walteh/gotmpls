@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"text/template"
-	"text/template/parse"
 
 	"github.com/rs/zerolog"
 	"gitlab.com/tozd/go/errors"
@@ -27,10 +25,16 @@ const loadMode = packages.NeedName |
 	packages.NeedTypesSizes |
 	packages.NeedTarget
 
-type PackageWithTemplates struct {
-	Package   *packages.Package
-	Templates map[string]*template.Template
-}
+// type TemplateWithContent struct {
+// 	*template.Template
+// 	Content string
+// 	Parsed  *parser.ParsedTemplateFile
+// }
+
+// type PackageWithTemplates struct {
+// 	Package   *packages.Package
+// 	Templates map[string]*parser.ParsedTemplateFile
+// }
 
 type PackageWithTemplateFiles struct {
 	Package       *packages.Package
@@ -132,33 +136,6 @@ func LoadPackageTypesFromFs(ctx context.Context, dir string) ([]*PackageWithTemp
 	return pkgWithTemplateFilesList, nil
 }
 
-func ParseTree(name, text string) (map[string]*parse.Tree, error) {
-	treeSet := make(map[string]*parse.Tree)
-	t := parse.New(name)
-	t.Mode = parse.ParseComments | parse.SkipFuncCheck
-	_, err := t.Parse(text, "{{", "}}", treeSet)
-	return treeSet, err
-}
-
-func ParseTemplate(ctx context.Context, fileName, content string) (*template.Template, error) {
-	tmpl := template.New(fileName)
-	tmpl.Tree = parse.New(fileName)
-	tmpl.Mode = parse.ParseComments | parse.SkipFuncCheck
-
-	treeSet, err := ParseTree(fileName, content)
-	if err != nil {
-		return nil, errors.Errorf("failed to parse template: %w", err)
-	}
-
-	for name, tree := range treeSet {
-		if _, err := tmpl.AddParseTree(name, tree); err != nil {
-			return nil, err
-		}
-	}
-
-	return tmpl, nil
-}
-
 // func LoadTemplatesFromFs(ctx context.Context, dir string) (map[string]*template.Template, error) {
 
 // 	files, err := filepath.Glob(filepath.Join(dir, "**", "*.tmpl"))
@@ -190,25 +167,25 @@ func AnalyzePackage(ctx context.Context, dir string) (*Registry, error) {
 		return nil, errors.Errorf("failed to load package: %w", err)
 	}
 
-	pkgWithTemplatesList := []*PackageWithTemplates{}
+	// pkgWithTemplateFilesList := []*PackageWithTemplateFiles{}
 
-	for _, pkgWithTemplateFiles := range pkgWithTemplateFilesList {
-		pkgWithTemplates := &PackageWithTemplates{
-			Package: pkgWithTemplateFiles.Package,
-		}
+	// for _, pkgWithTemplateFiles := range pkgWithTemplateFilesList {
+	// 	pkgWithTemplateFiles := &PackageWithTemplateFiles{
+	// 		Package: pkgWithTemplateFiles.Package,
+	// 	}
 
-		for fileName, content := range pkgWithTemplateFiles.TemplateFiles {
-			tmpl, err := ParseTemplate(ctx, fileName, content)
-			if err != nil {
-				return nil, errors.Errorf("failed to parse template: %w", err)
-			}
-			pkgWithTemplates.Templates[fileName] = tmpl
-		}
+	// 	for fileName, content := range pkgWithTemplateFiles.TemplateFiles {
+	// 		// tmpl, err := parser.Parse(ctx, fileName, []byte(content))
+	// 		// if err != nil {
+	// 		// 	return nil, errors.Errorf("failed to parse template: %w", err)
+	// 		// }
+	// 		pkgWithTemplateFiles.TemplateFiles[fileName] = content
+	// 	}
 
-		pkgWithTemplatesList = append(pkgWithTemplatesList, pkgWithTemplates)
-	}
+	// 	pkgWithTemplateFilesList = append(pkgWithTemplateFilesList, pkgWithTemplateFiles)
+	// }
 
-	registry := NewRegistry(pkgWithTemplatesList)
+	registry := NewRegistry(pkgWithTemplateFilesList)
 
 	return registry, nil
 }

@@ -16,7 +16,7 @@ func TestTemplateParser_Parse(t *testing.T) {
 	tests := []struct {
 		name     string
 		template string
-		want     *parser.FileInfo
+		want     *parser.ParsedTemplateFile
 		wantErr  bool
 	}{
 		{
@@ -25,7 +25,7 @@ func TestTemplateParser_Parse(t *testing.T) {
 {{define "main"}}
 Hello {{.Name}}! You are {{.Age}} years old.
 {{end}}`,
-			want: &parser.FileInfo{
+			want: &parser.ParsedTemplateFile{
 				Filename: "test.tmpl",
 				SourceContent: `{{- /*gotype: github.com/example/types.Config */ -}}
 {{define "main"}}
@@ -74,7 +74,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 {{define "main"}}
 {{printf "Hello %s" .Name | upper}}
 {{end}}`,
-			want: &parser.FileInfo{
+			want: &parser.ParsedTemplateFile{
 				Filename: "test.tmpl",
 				SourceContent: `{{- /*gotype: github.com/example/types.Config */ -}}
 {{define "main"}}
@@ -110,28 +110,38 @@ Hello {{.Name}}! You are {{.Age}} years old.
 						Functions: []parser.VariableLocation{
 							{
 								Position: position.RawPosition{Text: "printf", Offset: 72},
-								MethodArguments: []types.Type{
-									types.Typ[types.String],
-									&parser.VariableLocation{
-										Position: position.RawPosition{Text: ".Name", Offset: 90},
-										Scope:    "main",
+								PipeArguments: []parser.VariableLocationOrType{
+									{
+										Type: types.Typ[types.String],
+									},
+									{
+										Variable: &parser.VariableLocation{
+											Position: position.RawPosition{Text: ".Name", Offset: 90},
+											Scope:    "main",
+										},
 									},
 								},
 								Scope: "main",
 							},
 							{
 								Position: position.RawPosition{Text: "upper", Offset: 98},
-								MethodArguments: []types.Type{
-									&parser.VariableLocation{
-										Position: position.RawPosition{Text: "printf", Offset: 72},
-										MethodArguments: []types.Type{
-											types.Typ[types.String],
-											&parser.VariableLocation{
-												Position: position.RawPosition{Text: ".Name", Offset: 90},
-												Scope:    "main",
+								PipeArguments: []parser.VariableLocationOrType{
+									{
+										Variable: &parser.VariableLocation{
+											Position: position.RawPosition{Text: "printf", Offset: 72},
+											PipeArguments: []parser.VariableLocationOrType{
+												{
+													Type: types.Typ[types.String],
+												},
+												{
+													Variable: &parser.VariableLocation{
+														Position: position.RawPosition{Text: ".Name", Offset: 90},
+														Scope:    "main",
+													},
+												},
 											},
+											Scope: "main",
 										},
-										Scope: "main",
 									},
 								},
 								Scope: "main",
@@ -155,7 +165,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 		{
 			name:     "method call with pipe to upper",
 			template: `JobZ: {{printf "%s" .GetJob | upper}}`,
-			want: &parser.FileInfo{
+			want: &parser.ParsedTemplateFile{
 				Filename:      "test.tmpl",
 				SourceContent: `JobZ: {{printf "%s" .GetJob | upper}}`,
 				Blocks: []parser.BlockInfo{
@@ -172,28 +182,39 @@ Hello {{.Name}}! You are {{.Age}} years old.
 						Functions: []parser.VariableLocation{
 							{
 								Position: position.RawPosition{Text: "printf", Offset: 7},
-								MethodArguments: []types.Type{
-									types.Typ[types.String],
-									&parser.VariableLocation{
-										Position: position.RawPosition{Text: ".GetJob", Offset: 19},
-										Scope:    "test.tmpl",
+								PipeArguments: []parser.VariableLocationOrType{
+									{
+										Type: types.Typ[types.String],
+									},
+									{
+										Variable: &parser.VariableLocation{
+											Position: position.RawPosition{Text: ".GetJob", Offset: 19},
+											Scope:    "test.tmpl",
+										},
 									},
 								},
+
 								Scope: "test.tmpl",
 							},
 							{
 								Position: position.RawPosition{Text: "upper", Offset: 29},
-								MethodArguments: []types.Type{
-									&parser.VariableLocation{
-										Position: position.RawPosition{Text: "printf", Offset: 7},
-										MethodArguments: []types.Type{
-											types.Typ[types.String],
-											&parser.VariableLocation{
-												Position: position.RawPosition{Text: ".GetJob", Offset: 19},
-												Scope:    "test.tmpl",
+								PipeArguments: []parser.VariableLocationOrType{
+									{
+										Variable: &parser.VariableLocation{
+											Position: position.RawPosition{Text: "printf", Offset: 7},
+											PipeArguments: []parser.VariableLocationOrType{
+												{
+													Type: types.Typ[types.String],
+												},
+												{
+													Variable: &parser.VariableLocation{
+														Position: position.RawPosition{Text: ".GetJob", Offset: 19},
+														Scope:    "test.tmpl",
+													},
+												},
 											},
+											Scope: "test.tmpl",
 										},
-										Scope: "test.tmpl",
 									},
 								},
 								Scope: "test.tmpl",
@@ -210,7 +231,7 @@ Hello {{.Name}}! You are {{.Age}} years old.
 			template: `{{- /*gotype: test.Person*/ -}}
 Address:
   Street: {{.Address.Street}}`,
-			want: &parser.FileInfo{
+			want: &parser.ParsedTemplateFile{
 				Filename: "test.tmpl",
 				SourceContent: `{{- /*gotype: test.Person*/ -}}
 Address:
@@ -245,7 +266,7 @@ Address:
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			got, err := parser.Parse(ctx, []byte(tt.template), "test.tmpl")
+			got, err := parser.Parse(ctx, "test.tmpl", []byte(tt.template))
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -282,7 +303,7 @@ Name: {{.Name}}
 {{end}}
 `
 
-	want := &parser.FileInfo{
+	want := &parser.ParsedTemplateFile{
 		Filename:      "test.tmpl",
 		SourceContent: data,
 		Blocks: []parser.BlockInfo{
@@ -343,10 +364,12 @@ Name: {{.Name}}
 				Functions: []parser.VariableLocation{
 					{
 						Position: position.RawPosition{Text: "upper", Offset: 288},
-						MethodArguments: []types.Type{
-							&parser.VariableLocation{
-								Position: position.RawPosition{Text: ".GetJob", Offset: 278},
-								Scope:    "person",
+						PipeArguments: []parser.VariableLocationOrType{
+							{
+								Variable: &parser.VariableLocation{
+									Position: position.RawPosition{Text: ".GetJob", Offset: 278},
+									Scope:    "person",
+								},
 							},
 						},
 						Scope: "person",
@@ -379,7 +402,7 @@ Name: {{.Name}}
 
 	ctx := context.Background()
 
-	got, err := parser.Parse(ctx, []byte(data), "test.tmpl")
+	got, err := parser.Parse(ctx, "test.tmpl", []byte(data))
 	require.NoError(t, err)
 
 	assert.EqualExportedValues(t, want, got)
@@ -745,7 +768,7 @@ func TestParseMethodArguments(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			info, err := parser.Parse(ctx, []byte(tt.template), "test.tmpl")
+			info, err := parser.Parse(ctx, "test.tmpl", []byte(tt.template))
 			require.NoError(t, err, "parsing template should succeed")
 			require.Len(t, info.Blocks, 1, "should have one block")
 			require.Len(t, info.Blocks[0].Functions, 1, "should have one function")
@@ -754,9 +777,11 @@ func TestParseMethodArguments(t *testing.T) {
 			assert.Equal(t, tt.want.methodName, function.Name(), "method name should match")
 
 			var gotArgs []string
-			for _, arg := range function.MethodArguments {
-				if varm, ok := arg.(*parser.VariableLocation); ok {
-					gotArgs = append(gotArgs, varm.Position.Text)
+			for _, arg := range function.PipeArguments {
+				if arg.Variable != nil {
+					gotArgs = append(gotArgs, arg.Variable.Position.Text)
+				} else if arg.Type != nil {
+					gotArgs = append(gotArgs, arg.Type.String())
 				}
 			}
 			assert.Equal(t, tt.want.args, gotArgs, "method arguments should match")
@@ -814,7 +839,7 @@ func TestParseVariableLocations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			info, err := parser.Parse(ctx, []byte(tt.template), "test.tmpl")
+			info, err := parser.Parse(ctx, "test.tmpl", []byte(tt.template))
 			require.NoError(t, err, "parsing template should succeed")
 			require.Len(t, info.Blocks, 1, "should have one block")
 			require.NotEmpty(t, info.Blocks[0].Variables, "should have variables")

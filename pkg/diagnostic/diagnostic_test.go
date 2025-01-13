@@ -72,9 +72,7 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 				"Age":  types.Typ[types.Int],
 			})
 
-			pkgd.MustAddAndParseTemplates(ctx, map[string]string{
-				"test.tmpl": tt.template,
-			})
+			pkgd.AddTemplateFile("test.tmpl", tt.template)
 
 			got, err := diagnostic.GetDiagnostics(ctx, tt.template, registry)
 			if tt.wantErr {

@@ -28,7 +28,7 @@ const (
 // Severity: SeverityInformation | SeverityHint  // Combines both severities
 
 // GetDiagnosticsFromParsed returns diagnostic information for a parsed template
-func GetDiagnosticsFromParsed(ctx context.Context, nodes *parser.FileInfo, registry *ast.Registry) ([]*Diagnostic, error) {
+func GetDiagnosticsFromParsed(ctx context.Context, nodes *parser.ParsedTemplateFile, registry *ast.Registry) ([]*Diagnostic, error) {
 
 	var diagnostics []*Diagnostic
 	for _, block := range nodes.Blocks {
@@ -82,7 +82,7 @@ func GetDiagnosticsFromParsed(ctx context.Context, nodes *parser.FileInfo, regis
 // GetDiagnostics returns diagnostic information for a template
 func GetDiagnostics(ctx context.Context, template string, registry *ast.Registry) ([]*Diagnostic, error) {
 	// Parse the template
-	nodes, err := parser.Parse(ctx, []byte(template), "template.tmpl")
+	nodes, err := parser.Parse(ctx, "template.tmpl", []byte(template))
 	if err != nil {
 		return nil, errors.Errorf("parsing template: %w", err)
 	}

@@ -13,13 +13,33 @@ import (
 	"github.com/walteh/go-tmpl-typer/pkg/position"
 )
 
+func defaultTypeResolver(arg parser.VariableLocationOrType) []types.Type {
+	if arg.Variable != nil && arg.Variable.Name() == "GetJob" {
+		return []types.Type{types.Typ[types.String]}
+	}
+	if arg.Type != nil && arg.Type.String() == "string" {
+		return []types.Type{types.Typ[types.String]}
+	}
+	if arg.Variable != nil && arg.Variable.Name() == "Name" {
+		return []types.Type{types.Typ[types.String]}
+	}
+	if arg.Variable != nil && arg.Variable.Name() == "upper" {
+		return []types.Type{types.Typ[types.String]}
+	}
+	if arg.Variable != nil && arg.Variable.Name() == "replace" {
+		return []types.Type{types.Typ[types.String]}
+	}
+	return []types.Type{}
+}
+
 func TestFormatHoverResponse(t *testing.T) {
 	tests := []struct {
-		name     string
-		variable *parser.VariableLocation
-		method   *ast.TemplateMethodInfo
-		want     []string
-		wantErr  bool
+		name         string
+		variable     *parser.VariableLocation
+		method       *ast.TemplateMethodInfo
+		typeResolver func(parser.VariableLocationOrType) []types.Type
+		want         []string
+		wantErr      bool
 	}{
 		{
 			name: "simple function call",
@@ -28,8 +48,8 @@ func TestFormatHoverResponse(t *testing.T) {
 					Text:   ".GetJob",
 					Offset: 0,
 				},
-				MethodArguments: nil,
-				Scope:           "",
+				PipeArguments: nil,
+				Scope:         "",
 			},
 			method: &ast.TemplateMethodInfo{
 				Name: "upper",
@@ -40,6 +60,7 @@ func TestFormatHoverResponse(t *testing.T) {
 					types.Typ[types.String],
 				},
 			},
+			typeResolver: defaultTypeResolver,
 			want: []string{
 				`### Template Function
 
@@ -67,11 +88,13 @@ upper
 					Text:   ".GetJob",
 					Offset: 0,
 				},
-				MethodArguments: []types.Type{
-					&parser.VariableLocation{
-						Position: position.RawPosition{
-							Text:   "lower",
-							Offset: 10,
+				PipeArguments: []parser.VariableLocationOrType{
+					{
+						Variable: &parser.VariableLocation{
+							Position: position.RawPosition{
+								Text:   "lower",
+								Offset: 10,
+							},
 						},
 					},
 				},
@@ -86,6 +109,7 @@ upper
 					types.Typ[types.String],
 				},
 			},
+			typeResolver: defaultTypeResolver,
 			want: []string{
 				`### Template Function
 
@@ -115,9 +139,13 @@ upper
 					Text:   ".Name",
 					Offset: 0,
 				},
-				MethodArguments: []types.Type{
-					types.Typ[types.String],
-					types.Typ[types.String],
+				PipeArguments: []parser.VariableLocationOrType{
+					{
+						Type: types.Typ[types.String],
+					},
+					{
+						Type: types.Typ[types.String],
+					},
 				},
 				Scope: "",
 			},
@@ -132,6 +160,7 @@ upper
 					types.Typ[types.String],
 				},
 			},
+			typeResolver: defaultTypeResolver,
 			want: []string{
 				`### Template Function
 
@@ -161,11 +190,13 @@ replace
 				},
 				Scope: "",
 			},
-			method: nil,
+			method:       nil,
+			typeResolver: defaultTypeResolver,
 			want: []string{
 				`### Variable
 
-.Name`,
+.Name
+`,
 			},
 			wantErr: false,
 		},
@@ -179,7 +210,9 @@ replace
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := hover.FormatHoverResponse(context.Background(), tt.variable, tt.method)
+			got, err := hover.FormatHoverResponse(context.Background(), tt.variable, tt.method, func(arg parser.VariableLocationOrType) []types.Type {
+				return []types.Type{arg.Type}
+			})
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -214,7 +247,7 @@ func TestFormatHoverResponseFunction(t *testing.T) {
 				Position: position.RawPosition{
 					Text: ".GetJob",
 				},
-				MethodArguments: []types.Type{},
+				PipeArguments: []parser.VariableLocationOrType{},
 			},
 			block: &parser.BlockInfo{
 				TypeHint: &parser.TypeHint{
@@ -258,10 +291,12 @@ func (me *Person) chainPreview() (string) {
 				Position: position.RawPosition{
 					Text: ".GetJob",
 				},
-				MethodArguments: []types.Type{
-					&parser.VariableLocation{
-						Position: position.RawPosition{
-							Text: "lower",
+				PipeArguments: []parser.VariableLocationOrType{
+					{
+						Variable: &parser.VariableLocation{
+							Position: position.RawPosition{
+								Text: "lower",
+							},
 						},
 					},
 				},
@@ -320,15 +355,18 @@ func (me *Person) chainPreview() (string) {
 				Position: position.RawPosition{
 					Text: ".Name",
 				},
-				MethodArguments: []types.Type{
-					&parser.VariableLocation{
-						Position: position.RawPosition{
-							Text: `"old"`,
-						},
+				PipeArguments: []parser.VariableLocationOrType{
+					{
+						Type: types.Typ[types.String],
 					},
-					&parser.VariableLocation{
-						Position: position.RawPosition{
-							Text: `"new"`,
+					{
+						Type: types.Typ[types.String],
+					},
+					{
+						Variable: &parser.VariableLocation{
+							Position: position.RawPosition{
+								Text: `"new"`,
+							},
 						},
 					},
 				},
@@ -372,7 +410,7 @@ func (me *Person) chainPreview() (string) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			got, err := hover.FormatHoverResponse(ctx, &tt.variable, tt.method)
+			got, err := hover.FormatHoverResponse(ctx, &tt.variable, tt.method, defaultTypeResolver)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got.Content)
 		})
