@@ -17,7 +17,13 @@ func createTestTypeInfo(t *testing.T) *ast.TypeHintDefinition {
 
 	// Create the main type info
 	return &ast.TypeHintDefinition{
-		Name: "Person",
+		MyFieldInfo: ast.FieldInfo{
+			Name: "Person",
+			Type: types.NewStruct([]*types.Var{
+				types.NewField(0, pkg, "Name", types.Typ[types.String], false),
+				types.NewField(0, pkg, "Age", types.Typ[types.Int], false),
+			}, nil),
+		},
 		Fields: map[string]*ast.FieldInfo{
 			"Name": {
 				Name: "Name",

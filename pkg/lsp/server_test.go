@@ -18,6 +18,11 @@ func TestServer(t *testing.T) {
 			"go.mod":    "module test",
 			"test.go": `
 package test
+import _ "embed"
+
+//go:embed test.tmpl
+var TestTemplate string
+
 type Person struct {
 	Name string
 }`,
@@ -38,6 +43,14 @@ type Person struct {
 			"go.mod":     "module test",
 			"test.go": `
 package test
+import _ "embed"
+
+//go:embed file1.tmpl
+var File1Template string
+
+//go:embed file2.tmpl
+var File2Template string
+
 type Person struct {
 	Name string
 	Age  int
@@ -85,6 +98,10 @@ type Person struct {
 			"go.mod":    "module test",
 			"test.go": `
 package test
+import _ "embed"
+
+//go:embed test.tmpl
+var TestTemplate string
 type Person struct {
 	Name string
 }`,
@@ -141,6 +158,11 @@ Address:
 			"go.mod": "module test",
 			"test.go": `
 package test
+import _ "embed"
+
+//go:embed test.tmpl
+var TestTemplate string
+
 type Person struct {
 	Address struct {
 		Street string

@@ -115,7 +115,8 @@ func LoadPackageTypesFromFs(ctx context.Context, dir string) ([]*PackageWithTemp
 	for _, pkg := range pkgs {
 
 		pkgWithTemplateFiles := &PackageWithTemplateFiles{
-			Package: pkg,
+			Package:       pkg,
+			TemplateFiles: make(map[string]string),
 		}
 		for _, file := range pkg.EmbedFiles {
 			ext := filepath.Ext(file)
@@ -134,6 +135,15 @@ func LoadPackageTypesFromFs(ctx context.Context, dir string) ([]*PackageWithTemp
 	}
 
 	return pkgWithTemplateFilesList, nil
+}
+
+func (me *PackageWithTemplateFiles) LoadTypeByPath(ctx context.Context, path string) (types.Object, error) {
+	final := filepath.Base(path)
+	pkg := me.Package.Types.Scope().Lookup(final)
+	if pkg == nil {
+		return nil, errors.Errorf("type not found: %s", final)
+	}
+	return pkg, nil
 }
 
 // func LoadTemplatesFromFs(ctx context.Context, dir string) (map[string]*template.Template, error) {

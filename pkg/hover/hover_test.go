@@ -13,33 +13,32 @@ import (
 	"github.com/walteh/go-tmpl-typer/pkg/position"
 )
 
-func defaultTypeResolver(arg parser.VariableLocationOrType) []types.Type {
-	if arg.Variable != nil && arg.Variable.Name() == "GetJob" {
-		return []types.Type{types.Typ[types.String]}
-	}
-	if arg.Type != nil && arg.Type.String() == "string" {
-		return []types.Type{types.Typ[types.String]}
-	}
-	if arg.Variable != nil && arg.Variable.Name() == "Name" {
-		return []types.Type{types.Typ[types.String]}
-	}
-	if arg.Variable != nil && arg.Variable.Name() == "upper" {
-		return []types.Type{types.Typ[types.String]}
-	}
-	if arg.Variable != nil && arg.Variable.Name() == "replace" {
-		return []types.Type{types.Typ[types.String]}
-	}
-	return []types.Type{}
-}
+// 	if arg.Variable != nil && arg.Variable.Name() == "GetJob" {
+// 		return []types.Type{types.Typ[types.String]}
+// 	}
+// 	if arg.Type != nil && arg.Type.String() == "string" {
+// 		return []types.Type{types.Typ[types.String]}
+// 	}
+// 	if arg.Variable != nil && arg.Variable.Name() == "Name" {
+// 		return []types.Type{types.Typ[types.String]}
+// 	}
+// 	if arg.Variable != nil && arg.Variable.Name() == "upper" {
+// 		return []types.Type{types.Typ[types.String]}
+// 	}
+// 	if arg.Variable != nil && arg.Variable.Name() == "replace" {
+// 		return []types.Type{types.Typ[types.String]}
+// 	}
+// 	return []types.Type{}
+// }
 
 func TestFormatHoverResponse(t *testing.T) {
 	tests := []struct {
-		name         string
-		variable     *parser.VariableLocation
-		method       *ast.TemplateMethodInfo
-		typeResolver func(parser.VariableLocationOrType) []types.Type
-		want         []string
-		wantErr      bool
+		name     string
+		variable *parser.VariableLocation
+		method   *ast.TemplateMethodInfo
+		field    *ast.FieldInfo
+		want     []string
+		wantErr  bool
 	}{
 		{
 			name: "simple function call",
@@ -60,24 +59,9 @@ func TestFormatHoverResponse(t *testing.T) {
 					types.Typ[types.String],
 				},
 			},
-			typeResolver: defaultTypeResolver,
+			field: nil,
 			want: []string{
-				`### Template Function
-
-.GetJob
-    │
-    ▼
-upper
-
-### Signature
-
-` + "```go\n" + `func upper(arg1 string) string
-` + "```" + `
-
-### Template Usage
-
-` + "```\n" + `.GetJob | upper
-` + "```",
+				`func upper(string) string`,
 			},
 			wantErr: false,
 		},
@@ -85,14 +69,14 @@ upper
 			name: "multiple function chain",
 			variable: &parser.VariableLocation{
 				Position: position.RawPosition{
-					Text:   ".GetJob",
+					Text:   "upper",
 					Offset: 0,
 				},
 				PipeArguments: []parser.VariableLocationOrType{
 					{
 						Variable: &parser.VariableLocation{
 							Position: position.RawPosition{
-								Text:   "lower",
+								Text:   ".GetJob",
 								Offset: 10,
 							},
 						},
@@ -100,6 +84,7 @@ upper
 				},
 				Scope: "",
 			},
+			field: nil,
 			method: &ast.TemplateMethodInfo{
 				Name: "upper",
 				Parameters: []types.Type{
@@ -109,26 +94,8 @@ upper
 					types.Typ[types.String],
 				},
 			},
-			typeResolver: defaultTypeResolver,
 			want: []string{
-				`### Template Function
-
-.GetJob
-    │
-lower
-    │
-    ▼
-upper
-
-### Signature
-
-` + "```go\n" + `func upper(arg1 string) string
-` + "```" + `
-
-### Template Usage
-
-` + "```\n" + `.GetJob | upper
-` + "```",
+				`func upper(string) string`,
 			},
 			wantErr: false,
 		},
@@ -136,7 +103,7 @@ upper
 			name: "function with multiple arguments",
 			variable: &parser.VariableLocation{
 				Position: position.RawPosition{
-					Text:   ".Name",
+					Text:   "replace",
 					Offset: 0,
 				},
 				PipeArguments: []parser.VariableLocationOrType{
@@ -146,9 +113,13 @@ upper
 					{
 						Type: types.Typ[types.String],
 					},
+					{
+						Type: types.Typ[types.String],
+					},
 				},
 				Scope: "",
 			},
+			field: nil,
 			method: &ast.TemplateMethodInfo{
 				Name: "replace",
 				Parameters: []types.Type{
@@ -160,24 +131,8 @@ upper
 					types.Typ[types.String],
 				},
 			},
-			typeResolver: defaultTypeResolver,
 			want: []string{
-				`### Template Function
-
-.Name
-    │
-    ▼
-replace
-
-### Signature
-
-` + "```go\n" + `func replace(arg1 string, arg2 string, arg3 string) string
-` + "```" + `
-
-### Template Usage
-
-` + "```\n" + `.Name | replace
-` + "```",
+				`func replace(string, string, string) string`,
 			},
 			wantErr: false,
 		},
@@ -190,13 +145,13 @@ replace
 				},
 				Scope: "",
 			},
-			method:       nil,
-			typeResolver: defaultTypeResolver,
+			method: nil,
+			field: &ast.FieldInfo{
+				Name: ".Name",
+				Type: types.Typ[types.String],
+			},
 			want: []string{
-				`### Variable
-
-.Name
-`,
+				"**Variable**: .Name\n**Type**: string",
 			},
 			wantErr: false,
 		},
@@ -210,9 +165,9 @@ replace
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := hover.FormatHoverResponse(context.Background(), tt.variable, tt.method, func(arg parser.VariableLocationOrType) []types.Type {
-				return []types.Type{arg.Type}
-			})
+
+			ctx := context.Background()
+			got, err := hover.FormatHoverResponse(ctx, tt.variable, tt.method, tt.field)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -410,7 +365,7 @@ func (me *Person) chainPreview() (string) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			got, err := hover.FormatHoverResponse(ctx, &tt.variable, tt.method, defaultTypeResolver)
+			got, err := hover.FormatHoverResponse(ctx, &tt.variable, tt.method, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got.Content)
 		})

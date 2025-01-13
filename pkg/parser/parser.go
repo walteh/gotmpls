@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go/types"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"sort"
@@ -392,6 +393,39 @@ type VariableLocation struct {
 	Scope         string                   // The scope of the variable (e.g., template name or block ID)
 }
 
+func (me *VariableLocation) GetTypePaths(th *TypeHint) []string {
+	if th == nil {
+		return []string{me.LongName()}
+	}
+	returnd := []string{th.TypePath}
+	parts := strings.Split(me.LongName(), ".")
+	lastPart := parts[len(parts)-1]
+	parts = parts[:len(parts)-1]
+	for i, part := range parts {
+
+		returnd = append(returnd, fmt.Sprintf("%s.%s", th.TypePath, part))
+		if i == len(parts)-1 {
+			returnd = append(returnd, fmt.Sprintf("%s.%s[%s]", th.TypePath, part, lastPart))
+		}
+	}
+	return returnd
+}
+
+func (me *VariableLocation) GetTypePathNames(th *TypeHint) []string {
+	if th == nil {
+		return []string{me.LongName()}
+	}
+	returnd := []string{th.TypePath}
+	parts := strings.Split(me.LongName(), ".")
+	lastPart := parts[len(parts)-1]
+	parts = parts[:len(parts)-1]
+	for _, part := range parts {
+		returnd = append(returnd, fmt.Sprintf("%s.%s", th.TypePath, part))
+	}
+	returnd = append(returnd, lastPart)
+	return returnd
+}
+
 // Name returns the short name of the variable (last part after dot)
 func (v *VariableLocation) Name() string {
 	parts := strings.Split(v.Position.Text, ".")
@@ -431,6 +465,11 @@ type TypeHint struct {
 	Scope    string // The scope of the type hint (e.g., template name or block ID)
 }
 
+func (me *TypeHint) LocalTypeName() string {
+	parts := strings.Split(filepath.Base(me.TypePath), ".")
+	return parts[len(parts)-1]
+}
+
 type ParsedTemplateFile struct {
 	Filename      string
 	SourceContent string
@@ -467,13 +506,13 @@ type PipedArgumentOrType struct {
 	Type          types.Type
 }
 
-func (me *VariableLocation) GetPipedArguments(getReturnTypes func(VariableLocationOrType) []types.Type) *PipedArgument {
-	results := getReturnTypes(VariableLocationOrType{Variable: me})
+func (me *VariableLocation) GetPipedArguments(block *BlockInfo, getReturnTypes func(VariableLocationOrType, *TypeHint) []types.Type) *PipedArgument {
+	results := getReturnTypes(VariableLocationOrType{Variable: me}, block.TypeHint)
 	args := []PipedArgumentOrType{}
 	for _, arg := range me.PipeArguments {
 		if arg.Variable != nil {
 			args = append(args, PipedArgumentOrType{
-				PipedArgument: arg.Variable.GetPipedArguments(getReturnTypes),
+				PipedArgument: arg.Variable.GetPipedArguments(block, getReturnTypes),
 			})
 		} else if arg.Type != nil {
 			args = append(args, PipedArgumentOrType{

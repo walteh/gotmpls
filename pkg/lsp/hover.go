@@ -3,7 +3,6 @@ package lsp
 import (
 	"context"
 	"encoding/json"
-	"go/types"
 
 	"github.com/rs/zerolog"
 	"github.com/sourcegraph/jsonrpc2"
@@ -28,20 +27,20 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 
 	uri := s.normalizeURI(params.TextDocument.URI)
 
-	// Get document content
-	content, ok := s.getDocument(uri)
-	if !ok {
-		return nil, errors.Errorf("document not found: %s", uri)
-	}
+	// // Get document content
+	// content, ok := s.getDocument(uri)
+	// if !ok {
+	// 	return nil, errors.Errorf("document not found: %s", uri)
+	// }
 
 	reg, err := ast.AnalyzePackage(ctx, uri)
 	if err != nil {
 		return nil, errors.Errorf("analyzing package for hover: %w", err)
 	}
 
-	content, pkg, ok := reg.GetTemplateFile(uri)
+	content, _, ok := reg.GetTemplateFile(uri)
 	if !ok {
-		return nil, errors.Errorf("template %s not found in package %s, make sure its embeded", uri, pkg.Package.PkgPath)
+		return nil, errors.Errorf("template %s not found, make sure its embeded", uri)
 	}
 
 	// // Parse the template
@@ -52,29 +51,48 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 
 	pos := position.NewRawPositionFromLineAndColumn(params.Position.Line, params.Position.Character, string(content[params.Position.Character]), content)
 
-	hoverInfo, err := hover.BuildHoverResponseFromParse(ctx, info, pos, func(arg parser.VariableLocationOrType) []types.Type {
-		if arg.Type != nil {
-			return []types.Type{arg.Type}
-		}
+	// hoverInfo, err := hover.BuildHoverResponseFromParse(ctx, info, pos, func(arg parser.VariableLocationOrType, th parser.TypeHint) []types.Type {
+	// 	if arg.Type != nil {
+	// 		return []types.Type{arg.Type}
+	// 	}
 
-		if arg.Variable != nil {
-			// we know its a signature
-			typ := pkg.Package.Types.Scope().Lookup(arg.Variable.Name()).Type()
-			sig, ok := typ.(*types.Signature)
-			if !ok {
-				return []types.Type{}
-			}
-			out := []types.Type{}
-			for i := range sig.Results().Len() {
-				out = append(out, sig.Results().At(i).Type())
-			}
-			return out
-		}
+	// 	if arg.Variable != nil {
+	// 		// typ := arg.Variable.GetTypePaths(&th)
 
-		return []types.Type{}
-	})
+	// 		args := append([]string{th.LocalTypeName()}, strings.Split(arg.Variable.LongName(), ".")...)
+	// 		scope := pkg.Package.Types.Scope().Lookup(args[0])
+	// 	HERE:
+	// 		for _, typ := range args[1:] {
+	// 			if sig, ok := scope.Type().(*types.Struct); ok {
+	// 				for i := range sig.NumFields() {
+	// 					if sig.Field(i).Name() == typ {
+	// 						scope = sig.Field(i)
+	// 						break HERE
+	// 					}
+	// 				}
+	// 			}
+	// 		}
+
+	// 		if sig, ok := scope.Type().(*types.Signature); ok {
+	// 			typs := []types.Type{}
+	// 			for i := range sig.Results().Len() {
+	// 				typs = append(typs, sig.Results().At(i).Type())
+	// 			}
+	// 			return typs
+	// 		}
+
+	// 		return []types.Type{}
+	// 	}
+
+	// 	return []types.Type{}
+	// })
+	hoverInfo, err := hover.BuildHoverResponseFromParse(ctx, info, pos, reg)
 	if err != nil {
 		return nil, errors.Errorf("building hover response: %w", err)
+	}
+
+	if hoverInfo == nil {
+		return nil, nil
 	}
 
 	hovers := make([]Hover, len(hoverInfo.Content))

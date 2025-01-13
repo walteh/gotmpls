@@ -4,7 +4,6 @@ package hover
 import (
 	"context"
 	"fmt"
-	"go/types"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -23,7 +22,7 @@ type HoverInfo struct {
 }
 
 // FormatHoverResponse formats a hover response for a variable or function
-func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation, method *ast.TemplateMethodInfo, typeResolver func(parser.VariableLocationOrType) []types.Type) (*HoverInfo, error) {
+func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation, method *ast.TemplateMethodInfo, typeInfo *ast.FieldInfo) (*HoverInfo, error) {
 	if variable == nil {
 		return nil, errors.New("variable cannot be nil")
 	}
@@ -32,80 +31,52 @@ func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation,
 
 	// If it's a function call with method info
 	if method != nil {
-		// Template Function section
-		sb.WriteString("### Template Function\n\n")
-
-		// Visual representation of the chain
-		if len(variable.PipeArguments) > 0 {
-
-			piped := variable.GetPipedArguments(typeResolver)
-			// Show input chain
-			for i, arg := range piped.Arguments {
-				if i > 0 {
-					sb.WriteString("    │\n")
-				}
-				if arg.PipedArgument != nil {
-					sb.WriteString(arg.PipedArgument.Variable.Position.Text + "\n")
-				} else if arg.Type != nil {
-					sb.WriteString(arg.Type.String() + "\n")
-				}
-			}
-			sb.WriteString("    │\n    ▼\n")
-		}
-		sb.WriteString(method.Name + "\n\n")
-
-		// Function signature section
-		sb.WriteString("### Signature\n\n")
-		sb.WriteString("```go\n")
+		// Function signature
 		sb.WriteString(fmt.Sprintf("func %s(", method.Name))
 
 		// Parameters
 		params := make([]string, len(method.Parameters))
 		for i, param := range method.Parameters {
-			params[i] = fmt.Sprintf("arg%d %s", i+1, param.String())
+			params[i] = param.String()
 		}
 		sb.WriteString(strings.Join(params, ", "))
 		sb.WriteString(")")
 
 		// Return values
 		if len(method.Results) > 0 {
-			if len(variable.PipeArguments) > 0 {
-				sb.WriteString(" -> ")
-				piped := variable.GetPipedArguments(typeResolver)
-
-				for _, arg := range piped.Results {
-					sb.WriteString(arg.String() + " ")
-				}
+			if len(method.Results) == 1 {
+				sb.WriteString(fmt.Sprintf(" %s", method.Results[0].String()))
 			} else {
-				if len(method.Results) == 1 {
-					sb.WriteString(fmt.Sprintf(" %s", method.Results[0].String()))
-				} else {
-					sb.WriteString(" (")
-					results := make([]string, len(method.Results))
-					for i, result := range method.Results {
-						results[i] = result.String()
-					}
-					sb.WriteString(strings.Join(results, ", "))
-					sb.WriteString(")")
+				sb.WriteString(" (")
+				results := make([]string, len(method.Results))
+				for i, result := range method.Results {
+					results[i] = result.String()
 				}
+				sb.WriteString(strings.Join(results, ", "))
+				sb.WriteString(")")
 			}
 		}
-		sb.WriteString("\n```\n\n")
 
-		// Example usage section
-		sb.WriteString("### Template Usage\n\n")
-		sb.WriteString("```\n")
-
-		// Build the example usage string
-		usage := variable.Position.Text
-		if len(variable.PipeArguments) > 0 {
-			usage += " | " + method.Name
-		}
-		sb.WriteString(usage + "\n```")
-	} else {
+	} else if typeInfo != nil {
 		// Variable section
-		sb.WriteString("### Variable\n\n")
-		sb.WriteString(variable.Position.Text + "\n")
+		// sb.WriteString("**Variable**: ")
+
+		// pp.Println(typeInfo.NestedMultiLineTypeString())
+
+		// fld, ok := typeInfo.Type.Underlying().(*types.Var)
+		// if !ok {
+		// 	return nil, errors.New("type is not a field")
+		// }
+
+		// sb.WriteString(typeInfo.Name)
+		// sb.WriteString(".")
+		// sb.WriteString(variable.Name)
+
+		// sb.WriteString("\n")
+
+		// sb.WriteString("**Type**: ")
+		sb.WriteString(typeInfo.NestedMultiLineTypeString())
+
 	}
 
 	return &HoverInfo{
@@ -114,7 +85,7 @@ func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation,
 	}, nil
 }
 
-func BuildHoverResponseFromParse(ctx context.Context, info *parser.ParsedTemplateFile, hoverPosition position.RawPosition, typeResolver func(parser.VariableLocationOrType) []types.Type) (*HoverInfo, error) {
+func BuildHoverResponseFromParse(ctx context.Context, info *parser.ParsedTemplateFile, hoverPosition position.RawPosition, registry *ast.Registry) (*HoverInfo, error) {
 	for _, block := range info.Blocks {
 		if block.TypeHint == nil {
 			continue
@@ -123,6 +94,7 @@ func BuildHoverResponseFromParse(ctx context.Context, info *parser.ParsedTemplat
 		zerolog.Ctx(ctx).Debug().Msgf("checking block %s against type hint %s (vars: %d)", block.Name, block.TypeHint.TypePath, len(block.Variables))
 
 		for _, function := range block.Functions {
+			zerolog.Ctx(ctx).Debug().Any("function", function).Any("hover", hoverPosition).Msg("checking overlap")
 			zerolog.Ctx(ctx).Debug().Msgf("checking overlap of [%s:%d] with [%s:%d]", hoverPosition.Text, hoverPosition.Offset, function.Position.Text, function.Position.Offset)
 			if hoverPosition.HasRangeOverlapWith(function.Position) {
 				zerolog.Ctx(ctx).Debug().Msgf("function %s at %v overlaps with position %v", function.Name(), function.Position, hoverPosition)
@@ -131,7 +103,7 @@ func BuildHoverResponseFromParse(ctx context.Context, info *parser.ParsedTemplat
 					return nil, errors.Errorf("generating function call info: %w", err)
 				}
 
-				hoverInfo, err := FormatHoverResponse(ctx, &function, method, typeResolver)
+				hoverInfo, err := FormatHoverResponse(ctx, &function, method, nil)
 				if err != nil {
 					return nil, errors.Errorf("formatting hover response: %w", err)
 				}
@@ -140,12 +112,22 @@ func BuildHoverResponseFromParse(ctx context.Context, info *parser.ParsedTemplat
 			}
 		}
 
+		thd, err := ast.BuildTypeHintDefinitionFromRegistry(ctx, block.TypeHint.TypePath, registry)
+		if err != nil {
+			return nil, errors.Errorf("building type hint definition: %w", err)
+		}
+
 		for _, variable := range block.Variables {
 			zerolog.Ctx(ctx).Debug().Msgf("checking overlap of [%s:%d] with [%s:%d]", hoverPosition.Text, hoverPosition.Offset, variable.Position.Text, variable.Position.Offset)
 			if hoverPosition.HasRangeOverlapWith(variable.Position) {
 				zerolog.Ctx(ctx).Debug().Msgf("variable %s at %v overlaps with position %v", variable.Name(), variable.Position, hoverPosition)
 
-				hoverInfo, err := FormatHoverResponse(ctx, &variable, nil, typeResolver)
+				typeInfo, err := ast.GenerateFieldInfoFromPosition(ctx, thd, variable.Position)
+				if err != nil {
+					return nil, errors.Errorf("generating field info: %w", err)
+				}
+
+				hoverInfo, err := FormatHoverResponse(ctx, &variable, nil, typeInfo)
 				if err != nil {
 					return nil, errors.Errorf("formatting hover response: %w", err)
 				}
