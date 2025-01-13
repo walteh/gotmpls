@@ -3,7 +3,6 @@ package ast
 import (
 	"context"
 	"go/types"
-	"reflect"
 	"strings"
 
 	"github.com/walteh/go-tmpl-typer/pkg/position"
@@ -20,9 +19,9 @@ type TypeHintDefinition struct {
 
 // FieldInfo represents information about a struct field
 type FieldInfo struct {
-	Name     string
-	Type     types.Type
-	Reflect  reflect.Type
+	Name string
+	Type types.Type
+	// Reflect  reflect.Type
 	FullName string
 }
 
@@ -131,6 +130,25 @@ type FunctionCallInfo struct {
 	Name    string
 	Args    []*types.Var
 	Results []*types.Var
+}
+
+func GenerateFunctionCallInfoFromSignature(ctx context.Context, signature *types.Signature) (*TemplateMethodInfo, error) {
+	input := []types.Type{}
+	output := []types.Type{}
+
+	for i := 0; i < signature.Params().Len(); i++ {
+		input = append(input, signature.Params().At(i).Type())
+	}
+
+	for i := 0; i < signature.Results().Len(); i++ {
+		output = append(output, signature.Results().At(i).Type())
+	}
+
+	return &TemplateMethodInfo{
+		Name:       signature.String(),
+		Parameters: input,
+		Results:    output,
+	}, nil
 }
 
 func GenerateFunctionCallInfoFromPosition(ctx context.Context, pos position.RawPosition) (*TemplateMethodInfo, error) {

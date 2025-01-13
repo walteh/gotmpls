@@ -10,41 +10,34 @@ import (
 )
 
 func createMockRegistry(t *testing.T) *ast.Registry {
-	// Create a new types.Package
-	pkg := types.NewPackage("github.com/example/types", "types")
+	ctx := context.Background()
 
-	// Create a mock struct type
-	fields := []*types.Var{
-		types.NewField(0, pkg, "Name", types.Typ[types.String], false),
-		types.NewField(0, pkg, "Age", types.Typ[types.Int], false),
-		types.NewField(0, pkg, "SimpleString", types.Typ[types.String], false),
-	}
-	structType := types.NewStruct(fields, nil)
+	pkgr := ast.NewEmptyRegistry()
 
-	// Create the named type
-	named := types.NewNamed(
-		types.NewTypeName(0, pkg, "Person", nil),
-		structType,
-		nil,
-	)
+	pkgd := pkgr.AddInMemoryPackageForTesting(ctx, "github.com/example/types")
+
+	address := pkgd.AddStruct("Address", map[string]types.Type{
+		"Street": types.Typ[types.String],
+		"City":   types.Typ[types.String],
+	})
+
+	person := pkgd.AddStruct("Person", map[string]types.Type{
+		"Name":         types.Typ[types.String],
+		"Age":          types.Typ[types.Int],
+		"Address":      address,
+		"SimpleString": types.Typ[types.String],
+	})
 
 	// Add a method
 	sig := types.NewSignature(
 		nil,
 		types.NewTuple(),
-		types.NewTuple(types.NewVar(0, pkg, "", types.Typ[types.String])),
+		types.NewTuple(types.NewVar(0, pkgd.Package.Types, "", types.Typ[types.String])),
 		false,
 	)
-	named.AddMethod(types.NewFunc(0, pkg, "GetName", sig))
+	person.AddMethod(types.NewFunc(0, pkgd.Package.Types, "GetName", sig))
 
-	// Store in package scope
-	scope := pkg.Scope()
-	scope.Insert(named.Obj())
-
-	// Create and return the type registry
-	registry := ast.NewRegistry()
-	registry.Types[pkg.Path()] = pkg
-	return registry
+	return pkgr
 }
 
 func TestRegistry_GetFieldType(t *testing.T) {
@@ -155,7 +148,7 @@ func TestRegistry_TypeExists(t *testing.T) {
 	}{
 		{
 			name:     "existing package",
-			typePath: "github.com/example/types",
+			typePath: "github.com/example/types.Person",
 			want:     true,
 		},
 		{
@@ -166,7 +159,7 @@ func TestRegistry_TypeExists(t *testing.T) {
 		{
 			name:     "partial match",
 			typePath: "example/types",
-			want:     true,
+			want:     false,
 		},
 	}
 

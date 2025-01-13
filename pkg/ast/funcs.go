@@ -59,6 +59,9 @@ func Builtins() FuncMap {
 		"le": le, // <=
 		"lt": lt, // <
 		"ne": ne, // !=
+
+		// custom
+		"replace": strings.ReplaceAll,
 	}
 }
 

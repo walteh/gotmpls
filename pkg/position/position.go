@@ -313,3 +313,11 @@ func (me RawPositionArray) ToStrings() []string {
 	}
 	return texts
 }
+
+// NewStringNodePosition creates a new position from a string node
+func NewStringNodePosition(node *parse.StringNode) RawPosition {
+	return RawPosition{
+		Text:   node.Text,
+		Offset: int(node.Pos),
+	}
+}

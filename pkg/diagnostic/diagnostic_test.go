@@ -63,23 +63,18 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 			ctx := context.Background()
 
 			// Create a mock registry
-			registry := ast.NewRegistry()
-			pkg := types.NewPackage("github.com/example/types", "types")
-			registry.AddPackage(pkg)
+			registry := ast.NewEmptyRegistry()
 
-			// Create a mock type
-			fields := []*types.Var{
-				types.NewField(0, pkg, "Name", types.Typ[types.String], false),
-				types.NewField(0, pkg, "Age", types.Typ[types.Int], false),
-			}
-			structType := types.NewStruct(fields, nil)
-			named := types.NewNamed(
-				types.NewTypeName(0, pkg, "Person", nil),
-				structType,
-				nil,
-			)
-			scope := pkg.Scope()
-			scope.Insert(named.Obj())
+			pkgd := registry.AddInMemoryPackageForTesting(ctx, "github.com/example/types")
+
+			pkgd.AddStruct("Person", map[string]types.Type{
+				"Name": types.Typ[types.String],
+				"Age":  types.Typ[types.Int],
+			})
+
+			pkgd.MustAddAndParseTemplates(ctx, map[string]string{
+				"test.tmpl": tt.template,
+			})
 
 			got, err := diagnostic.GetDiagnostics(ctx, tt.template, registry)
 			if tt.wantErr {

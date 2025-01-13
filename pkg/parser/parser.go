@@ -210,10 +210,7 @@ func Parse(ctx context.Context, content []byte, filename string) (*FileInfo, err
 	}
 
 	// Create a template with all necessary functions to avoid parsing errors
-	tmpl := template.New(filename).Funcs(template.FuncMap{
-		"upper": strings.ToUpper,
-	})
-
+	tmpl := template.New(filename)
 	tmpl.Tree = parse.New(filename)
 	tmpl.Mode = parse.ParseComments | parse.SkipFuncCheck
 
@@ -362,7 +359,8 @@ var _ types.Type = &VariableLocation{}
 type VariableLocation struct {
 	Position        position.RawPosition
 	MethodArguments []types.Type
-	Scope           string // The scope of the variable (e.g., template name or block ID)
+	// ReturnType      types.Type
+	Scope string // The scope of the variable (e.g., template name or block ID)
 }
 
 // Name returns the short name of the variable (last part after dot)
@@ -413,6 +411,15 @@ type FileInfo struct {
 	Filename      string
 	SourceContent string
 	Blocks        []BlockInfo
+}
+
+func (me *BlockInfo) GetVariableFromPosition(pos position.RawPosition) *VariableLocation {
+	for _, variable := range me.Variables {
+		if variable.Position.HasRangeOverlapWith(pos) {
+			return &variable
+		}
+	}
+	return nil
 }
 
 type BlockInfo struct {

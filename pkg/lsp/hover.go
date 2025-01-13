@@ -3,12 +3,10 @@ package lsp
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/sourcegraph/jsonrpc2"
-	"github.com/walteh/go-tmpl-typer/pkg/ast"
+	"github.com/walteh/go-tmpl-typer/pkg/hover"
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
 	"github.com/walteh/go-tmpl-typer/pkg/position"
 	"gitlab.com/tozd/go/errors"
@@ -42,134 +40,40 @@ func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Requ
 
 	pos := position.NewRawPositionFromLineAndColumn(params.Position.Line, params.Position.Character, string(content[params.Position.Character]), content)
 
-	registry, err := ast.AnalyzePackage(ctx, info.Filename)
+	hoverInfo, err := hover.BuildHoverResponseFromParse(ctx, info, pos)
 	if err != nil {
-		return nil, errors.Errorf("analyzing package for hover: %w", err)
+		return nil, errors.Errorf("building hover response: %w", err)
 	}
 
-	for _, block := range info.Blocks {
-
-		if block.TypeHint == nil {
-			continue
+	hovers := make([]Hover, len(hoverInfo.Content))
+	for i, hcontent := range hoverInfo.Content {
+		hovers[i] = Hover{
+			Contents: MarkupContent{
+				Kind:  "markdown",
+				Value: hcontent,
+			},
+			Range: rangeToLSP(hoverInfo.Position.GetRange(content)),
 		}
-
-		zerolog.Ctx(ctx).Debug().Msgf("checking block %s against type hint %s (vars: %d)", block.Name, block.TypeHint.TypePath, len(block.Variables))
-
-		for _, function := range block.Functions {
-			zerolog.Ctx(ctx).Debug().Msgf("checking overlap of [%s:%d] with [%s:%d]", pos.Text, pos.Offset, function.Position.Text, function.Position.Offset)
-			if pos.HasRangeOverlapWith(function.Position) {
-				zerolog.Ctx(ctx).Debug().Msgf("function %s at %v overlaps with position %v", function.Name(), function.Position, pos)
-
-				ranged := RangeFromGoTmplTyperRange(function.Position.GetRange(content))
-				return &Hover{
-					Contents: MarkupContent{
-						Kind:  "markdown",
-						Value: FormatHoverResponse(function.Name(), function.String()),
-					},
-					Range: &ranged,
-				}, nil
-			}
-		}
-
-		typeInfo, err := ast.BuildTypeHintDefinitionFromRegistry(ctx, block.TypeHint.TypePath, registry)
-		if err != nil {
-			return nil, errors.Errorf("validating type for hover: %w", err)
-		}
-
-		for _, variable := range block.Variables {
-			zerolog.Ctx(ctx).Debug().Msgf("checking overlap of [%s:%d] with [%s:%d]", pos.Text, pos.Offset, variable.Position.Text, variable.Position.Offset)
-			if pos.HasRangeOverlapWith(variable.Position) {
-
-				zerolog.Ctx(ctx).Debug().Msgf("variable %s at %v overlaps with position %v", variable.Name(), variable.Position, pos)
-
-				// Get field info
-				fieldInfo, err := ast.GenerateFieldInfoFromPosition(ctx, typeInfo, variable.Position)
-				if err != nil {
-					return nil, errors.Errorf("getting field info: %w", err)
-				}
-
-				ranged := RangeFromGoTmplTyperRange(variable.Position.GetRange(content))
-
-				return &Hover{
-					Contents: MarkupContent{
-						Kind:  "markdown",
-						Value: FormatHoverResponse(fmt.Sprintf("%s%s", typeInfo.Name, variable.Position.Text), fieldInfo.Type.String()),
-					},
-					Range: &ranged,
-				}, nil
-			}
-		}
-
 	}
 
-	// // Find the field at the current position
-	// field, err := FindFieldAtPosition(info, content, pos)
-	// if err != nil {
-	// 	return nil, errors.Errorf("finding field at position: %w", err)
-	// }
-	// if field == nil {
-	// 	return nil, nil
-	// }
-
-	// // Get field info using ast.GenerateFieldInfoFromPosition
-	// fieldInfo, err := ast.GenerateFieldInfoFromPosition(ctx, typeInfo, field)
-	// if err != nil {
-	// 	return nil, errors.Errorf("getting field info: %w", err)
-	// }
-
-	// // Get the field's position in the line
-	// _, startChar := position.GetLineAndColumn(content, parse.Pos(field.Offset()))
-
-	// // Create hover response
-	// hover := &Hover{
-	// 	Contents: MarkupContent{
-	// 		Kind:  "markdown",
-	// 		Value: FormatHoverResponse(typeInfo.Name, field.Text(), fieldInfo.Type.String()),
-	// 	},
-	// 	Range: &Range{
-	// 		Start: Position{
-	// 			Line:      params.Position.Line,
-	// 			Character: startChar - 1, // Convert to 0-based
-	// 		},
-	// 		End: Position{
-	// 			Line:      params.Position.Line,
-	// 			Character: startChar - 1 + len(field.Text()),
-	// 		},
-	// 	},
-	// }
+	// TODO: Return more than one
+	if len(hovers) > 0 {
+		return &hovers[0], nil
+	}
 
 	return nil, nil
 }
 
-// func FindTypeHintForPosition(info *parser.TemplateInfo, content string, pos position.RawPosition) *parser.TypeHint {
-// 	if len(info.TypeHints) == 0 {
-// 		return nil
-// 	}
-
-// 	// Find the type hint that contains the current position
-// 	var lastHint *parser.TypeHint
-// 	for i := range info.TypeHints {
-// 		if position.HasRangeOverlap(pos, info.TypeHints[i].Position) {
-// 			lastHint = &info.TypeHints[i]
-// 		}
-// 	}
-
-// 	return lastHint
-// }
-
-// func FindFieldAtPosition(info *parser.TemplateInfo, content string, pos position.RawPosition) (position.RawPosition, error) {
-// 	// Find the variable that contains the current position
-// 	for _, variable := range info.Variables {
-// 		if position.HasRangeOverlap(pos, variable.Position) {
-// 			return variable.Position, nil
-// 		}
-// 	}
-
-// 	return nil, nil
-// }
-
-func FormatHoverResponse(typeName, fieldType string) string {
-	typeName = strings.TrimPrefix(typeName, ".")
-
-	return "**Variable**: " + typeName + "\n**Type**: " + fieldType
+// rangeToLSP converts a position.Range to an LSP Range
+func rangeToLSP(r position.Range) *Range {
+	return &Range{
+		Start: Position{
+			Line:      r.Start.Line,
+			Character: r.Start.Character,
+		},
+		End: Position{
+			Line:      r.End.Line,
+			Character: r.End.Character,
+		},
+	}
 }

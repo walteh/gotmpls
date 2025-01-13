@@ -118,14 +118,14 @@ type Person struct {
 
 	_, err = ast.AnalyzePackage(ctx, tmpDir)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing go.mod")
+	assert.Contains(t, err.Error(), "no main module found for directory")
 }
 
 func TestPackageAnalyzer_InvalidPath(t *testing.T) {
 	ctx := context.Background()
 	_, err := ast.AnalyzePackage(ctx, "/path/that/does/not/exist")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing go.mod")
+	assert.Contains(t, err.Error(), "no such file or directory")
 }
 
 func TestPackageAnalyzer_Diagnostics(t *testing.T) {

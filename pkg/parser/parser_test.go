@@ -686,3 +686,142 @@ func TestUseRegexToFindStartOfBlock(t *testing.T) {
 		})
 	}
 }
+
+func TestParseMethodArguments(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		want     struct {
+			methodName string
+			args       []string
+		}
+	}{
+		{
+			name:     "simple function call",
+			template: `{{- /*gotype: test.Person*/ -}}{{ .GetJob | upper }}`,
+			want: struct {
+				methodName string
+				args       []string
+			}{
+				methodName: "upper",
+				args:       []string{".GetJob"},
+			},
+		}, // TODO better support here
+		// {
+		// 	name:     "function with string literals",
+		// 	template: `{{- /*gotype: test.Person*/ -}}{{ .Name | replace "old" "new" }}`,
+		// 	want: struct {
+		// 		methodName string
+		// 		args       []string
+		// 	}{
+		// 		methodName: "replace",
+		// 		args:       []string{".Name", `"old"`, `"new"`},
+		// 	},
+		// },
+		// {
+		// 	name:     "multiple function chain",
+		// 	template: `{{- /*gotype: test.Person*/ -}}{{ .GetJob | lower | upper }}`,
+		// 	want: struct {
+		// 		methodName string
+		// 		args       []string
+		// 	}{
+		// 		methodName: "upper",
+		// 		args:       []string{".GetJob", "lower"},
+		// 	},
+		// },
+		// {
+		// 	name:     "nested function calls",
+		// 	template: `{{- /*gotype: test.Person*/ -}}{{ .GetAddress | printf "%s, %s" .City .Street }}`,
+		// 	want: struct {
+		// 		methodName string
+		// 		args       []string
+		// 	}{
+		// 		methodName: "printf",
+		// 		args:       []string{".GetAddress", `"%s, %s"`, ".City", ".Street"},
+		// 	},
+		// },
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			info, err := parser.Parse(ctx, []byte(tt.template), "test.tmpl")
+			require.NoError(t, err, "parsing template should succeed")
+			require.Len(t, info.Blocks, 1, "should have one block")
+			require.Len(t, info.Blocks[0].Functions, 1, "should have one function")
+
+			function := info.Blocks[0].Functions[0]
+			assert.Equal(t, tt.want.methodName, function.Name(), "method name should match")
+
+			var gotArgs []string
+			for _, arg := range function.MethodArguments {
+				if varm, ok := arg.(*parser.VariableLocation); ok {
+					gotArgs = append(gotArgs, varm.Position.Text)
+				}
+			}
+			assert.Equal(t, tt.want.args, gotArgs, "method arguments should match")
+		})
+	}
+}
+
+func TestParseVariableLocations(t *testing.T) {
+	t.Skip()
+	tests := []struct {
+		name     string
+		template string
+		want     struct {
+			varName string
+			scope   string
+		}
+	}{
+		{
+			name:     "simple field access",
+			template: `{{- /*gotype: test.Person*/ -}}{{ .Name }}`,
+			want: struct {
+				varName string
+				scope   string
+			}{
+				varName: ".Name",
+				scope:   "test.tmpl",
+			},
+		},
+		{
+			name:     "nested field access",
+			template: `{{- /*gotype: test.Person*/ -}}{{ .Address.Street }}`,
+			want: struct {
+				varName string
+				scope   string
+			}{
+				varName: ".Address.Street",
+				scope:   "test.tmpl",
+			},
+		},
+
+		// TODO: add support for with
+		// {
+		// 	name:     "scoped variable",
+		// 	template: `{{- /*gotype: test.Person*/ -}}{{ with .Address }}{{ .Street }}{{ end }}`,
+		// 	want: struct {
+		// 		varName string
+		// 		scope   string
+		// 	}{
+		// 		varName: ".Street",
+		// 		scope:   ".Address",
+		// 	},
+		// },
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			info, err := parser.Parse(ctx, []byte(tt.template), "test.tmpl")
+			require.NoError(t, err, "parsing template should succeed")
+			require.Len(t, info.Blocks, 1, "should have one block")
+			require.NotEmpty(t, info.Blocks[0].Variables, "should have variables")
+
+			variable := info.Blocks[0].Variables[0]
+			assert.Equal(t, tt.want.varName, variable.Position.Text, "variable name should match")
+			assert.Equal(t, tt.want.scope, variable.Scope, "variable scope should match")
+		})
+	}
+}
