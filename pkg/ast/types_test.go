@@ -5,44 +5,56 @@ import (
 	"go/types"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/position"
 )
 
+func createTestContext(t *testing.T) context.Context {
+	// Create a test logger that writes to the test log
+	logger := zerolog.New(zerolog.TestWriter{T: t}).With().Timestamp().Logger()
+	return logger.WithContext(context.Background())
+}
+
 func createTestTypeInfo(t *testing.T) *ast.TypeHintDefinition {
 	// Create a mock package
 	pkg := types.NewPackage("test", "test")
+
+	// Create variables for the fields
+	nameVar := types.NewField(0, pkg, "Name", types.Typ[types.String], false)
+	ageVar := types.NewField(0, pkg, "Age", types.Typ[types.Int], false)
+	streetVar := types.NewField(0, pkg, "Street", types.Typ[types.String], false)
+	cityVar := types.NewField(0, pkg, "City", types.Typ[types.String], false)
+	simpleStringVar := types.NewField(0, pkg, "SimpleString", types.Typ[types.String], false)
 
 	// Create the main type info
 	return &ast.TypeHintDefinition{
 		MyFieldInfo: ast.FieldInfo{
 			Name: "Person",
-			Type: types.NewStruct([]*types.Var{
-				types.NewField(0, pkg, "Name", types.Typ[types.String], false),
-				types.NewField(0, pkg, "Age", types.Typ[types.Int], false),
-			}, nil),
+			Type: ast.FieldVarOrFunc{
+				Var: types.NewField(0, pkg, "Person", types.NewStruct([]*types.Var{nameVar, ageVar}, nil), false),
+			},
 		},
 		Fields: map[string]*ast.FieldInfo{
 			"Name": {
 				Name: "Name",
-				Type: types.Typ[types.String],
+				Type: ast.FieldVarOrFunc{Var: nameVar},
 			},
 			"Age": {
 				Name: "Age",
-				Type: types.Typ[types.Int],
+				Type: ast.FieldVarOrFunc{Var: ageVar},
 			},
 			"Address": {
 				Name: "Address",
-				Type: types.NewStruct([]*types.Var{
-					types.NewField(0, pkg, "Street", types.Typ[types.String], false),
-					types.NewField(0, pkg, "City", types.Typ[types.String], false),
-				}, nil),
+				Type: ast.FieldVarOrFunc{
+					Var: types.NewField(0, pkg, "Address", types.NewStruct([]*types.Var{streetVar, cityVar}, nil), false),
+				},
 			},
 			"SimpleString": {
 				Name: "SimpleString",
-				Type: types.Typ[types.String],
+				Type: ast.FieldVarOrFunc{Var: simpleStringVar},
 			},
 		},
 	}
@@ -50,7 +62,7 @@ func createTestTypeInfo(t *testing.T) *ast.TypeHintDefinition {
 
 func TestGenerateFieldInfoFromPosition(t *testing.T) {
 	typeInfo := createTestTypeInfo(t)
-	ctx := context.Background()
+	ctx := createTestContext(t)
 
 	tests := []struct {
 		name      string
@@ -63,7 +75,7 @@ func TestGenerateFieldInfoFromPosition(t *testing.T) {
 			fieldPath: position.NewBasicPosition("SimpleString", 0),
 			wantErr:   false,
 			check: func(t *testing.T, info *ast.FieldInfo) {
-				assert.Equal(t, "string", info.Type.String())
+				assert.Equal(t, "string", info.Type.Type().String())
 			},
 		},
 		{
@@ -71,7 +83,7 @@ func TestGenerateFieldInfoFromPosition(t *testing.T) {
 			fieldPath: position.NewBasicPosition("Address", 0),
 			wantErr:   false,
 			check: func(t *testing.T, info *ast.FieldInfo) {
-				structType, ok := info.Type.(*types.Struct)
+				structType, ok := info.Type.Type().(*types.Struct)
 				require.True(t, ok)
 				assert.Equal(t, 2, structType.NumFields())
 			},
@@ -81,7 +93,7 @@ func TestGenerateFieldInfoFromPosition(t *testing.T) {
 			fieldPath: position.NewBasicPosition("Address.Street", 0),
 			wantErr:   false,
 			check: func(t *testing.T, info *ast.FieldInfo) {
-				assert.Equal(t, "string", info.Type.String())
+				assert.Equal(t, "string", info.Type.Type().String())
 			},
 		},
 		{

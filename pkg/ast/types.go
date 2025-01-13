@@ -3,7 +3,6 @@ package ast
 import (
 	"context"
 	"go/types"
-	"slices"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -36,76 +35,88 @@ func (f *FieldInfo) TypeName() string {
 	return ""
 }
 
-func (f *FieldInfo) NestedMultiLineTypeString() string {
-	parents := []string{}
-	for p := f.Parent; p != nil; {
-		if p.MyFieldInfo.Parent == nil {
-			parents = append(parents, p.MyFieldInfo.Type.Obj().Name())
-			break
-		} else {
-			parents = append(parents, p.MyFieldInfo.Name+":"+p.MyFieldInfo.Type.Obj().Name())
-			p = p.MyFieldInfo.Parent
-		}
-	}
-
-	slices.Reverse(parents)
-
-	out := "```go\n"
-	after := ""
-	for i, parent := range parents {
-		out += strings.Repeat("\t", i)
-		parts := strings.Split(parent, ":")
-		if i != 0 {
-			out += parts[0] + " struct { // " + parts[1] + "\n"
-		} else {
-			out += "type " + parts[0] + " struct {\n"
-
-		}
-		out += strings.Repeat("\t", i+1)
-		if i == len(parents)-1 {
-			out += f.Name + " " + f.Type.String() + "\n"
-		}
-		after += strings.Repeat("\t", i)
-		after += "}\n"
-		// out += "\n"
-	}
-	revafter := strings.Split(after, "\n")
-	slices.Reverse(revafter)
-	out += strings.Join(revafter, "\n") + "\n```"
-	return out
-
-}
-
 type FieldVarOrFunc struct {
 	Var  *types.Var
 	Func *types.Func
 }
 
+func (f FieldVarOrFunc) Type() types.Type {
+	if f.Var != nil {
+		return f.Var.Type()
+	}
+	if f.Func != nil {
+		return f.Func.Type()
+	}
+	return nil
+}
+
+func (f FieldVarOrFunc) String() string {
+	if f.Var != nil {
+		return f.Var.Type().String()
+	}
+	if f.Func != nil {
+		return f.Func.Type().String()
+	}
+	return "<unknown>"
+}
+
+func (f FieldVarOrFunc) Obj() types.Object {
+	if f.Var != nil {
+		return f.Var
+	}
+	if f.Func != nil {
+		return f.Func
+	}
+	return nil
+}
+
+func (f FieldVarOrFunc) Underlying() types.Type {
+	if f.Var != nil {
+		return f.Var.Type().Underlying()
+	}
+	if f.Func != nil {
+		return f.Func.Type().Underlying()
+	}
+	return nil
+}
+
 // createFieldInfo creates a new FieldInfo from a types.Object (can be Var or Func)
-func createFieldInfo(obj FieldVarOrFunc, parent *TypeHintDefinition) (*FieldInfo, error) {
-	// reflectType, err := astreflect.AST2Reflect(obj.Type())
-	// if err != nil {
-	// 	return nil, errors.Errorf("failed to reflect field %s: %w", obj.Name(), err)
-	// }
-
+func createFieldInfo(ctx context.Context, obj FieldVarOrFunc, parent *TypeHintDefinition) (*FieldInfo, error) {
+	if obj.Var != nil {
+		zerolog.Ctx(ctx).Debug().
+			Str("type", obj.Var.Type().String()).
+			Str("name", obj.Var.Name()).
+			Msg("creating field info for var")
+	} else if obj.Func != nil {
+		zerolog.Ctx(ctx).Debug().
+			Str("type", obj.Func.Type().String()).
+			Str("name", obj.Func.Name()).
+			Msg("creating field info for func")
+	}
 	return &FieldInfo{
-		// Name: obj.Name(),
-		Type: obj,
-
-		// Reflect:  reflectType,
-		// FormattedTypeString: obj.String(),
+		Type:   obj,
 		Parent: parent,
 	}, nil
 }
 
 // createTypeInfoFromStruct creates a TypeInfo from a types.Struct
-func createTypeInfoFromStruct(name string, obj FieldInfo, strict bool, parent *TypeHintDefinition) (*TypeHintDefinition, error) {
+func createTypeInfoFromStruct(ctx context.Context, name string, obj types.Type, strict bool, parent *TypeHintDefinition) (*TypeHintDefinition, error) {
+	zerolog.Ctx(ctx).Debug().
+		Str("name", name).
+		Str("type", obj.String()).
+		Bool("strict", strict).
+		Msg("creating type info")
+
 	typeInfo := &TypeHintDefinition{
-		// Name:   name,
 		Fields: make(map[string]*FieldInfo),
 	}
 
-	typeInfo.MyFieldInfo = obj
+	// Create a FieldInfo for the type itself
+	typeInfo.MyFieldInfo = FieldInfo{
+		Name:   name,
+		Type:   FieldVarOrFunc{}, // Empty for now since this is the root type
+		Parent: parent,
+	}
 
 	var namedType *types.Named
 	var structType *types.Struct
@@ -127,7 +138,7 @@ func createTypeInfoFromStruct(name string, obj FieldInfo, strict bool, parent *T
 	if structType != nil {
 		for i := 0; i < structType.NumFields(); i++ {
 			field := structType.Field(i)
-			fieldInfo, err := createFieldInfo(FieldVarOrFunc{Var: field}, typeInfo)
+			fieldInfo, err := createFieldInfo(ctx, FieldVarOrFunc{Var: field}, typeInfo)
 			if err != nil {
 				return nil, errors.Errorf("failed to create field info for %s: %w", field.Name(), err)
 			}
@@ -142,7 +153,7 @@ func createTypeInfoFromStruct(name string, obj FieldInfo, strict bool, parent *T
 		// Add methods
 		for i := 0; i < namedType.NumMethods(); i++ {
 			method := namedType.Method(i)
-			methodInfo, err := createFieldInfo(FieldVarOrFunc{Func: method}, typeInfo)
+			methodInfo, err := createFieldInfo(ctx, FieldVarOrFunc{Func: method}, typeInfo)
 			if err != nil {
 				return nil, errors.Errorf("failed to create method info for %s: %w", method.Name(), err)
 			}
@@ -176,7 +187,19 @@ func GenerateFieldInfoFromPosition(ctx context.Context, typeInfo *TypeHintDefini
 
 		if part != parts[len(parts)-1] {
 			var err error
-			currentType, err = createTypeInfoFromStruct(part, field.Type, false, currentType)
+			// Get the underlying type if it's a named type
+			fieldType := field.Type.Type()
+			if named, ok := fieldType.(*types.Named); ok {
+				fieldType = named.Underlying()
+			}
+
+			// Check if it's a struct type
+			structType, ok := fieldType.(*types.Struct)
+			if !ok {
+				return nil, errors.Errorf("field %s is not a struct type", part)
+			}
+
+			currentType, err = createTypeInfoFromStruct(ctx, part, structType, false, currentType)
 			if err != nil {
 				return nil, errors.Errorf("failed to create type info for %s: %w", part, err)
 			}
@@ -265,7 +288,7 @@ func BuildTypeHintDefinitionFromRegistry(ctx context.Context, typePath string, r
 		return nil, errors.Errorf("type %s not found in package %s", typeName, pkgName)
 	}
 
-	typeInfo, err := createTypeInfoFromStruct(typeName, obj.Type(), true, nil)
+	typeInfo, err := createTypeInfoFromStruct(ctx, typeName, obj.Type(), true, nil)
 	if err != nil {
 		return nil, errors.Errorf("failed to create type info: %w", err)
 	}

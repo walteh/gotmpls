@@ -69,7 +69,7 @@ type Person struct {
 		})
 		require.NoError(t, err, "hover request should succeed")
 		require.NotNil(t, hoverResult, "hover result should not be nil")
-		require.Equal(t, "**Variable**: Person.Name\n**Type**: string", hoverResult.Contents.Value)
+		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```go-template\n.Name\n```", hoverResult.Contents.Value)
 		require.NotNil(t, hoverResult.Range, "hover range should not be nil")
 		require.Equal(t, 1, hoverResult.Range.Start.Line, "range should start on line 1")
 		require.Equal(t, 1, hoverResult.Range.End.Line, "range should end on line 1")
@@ -84,7 +84,7 @@ type Person struct {
 		})
 		require.NoError(t, err, "hover request should succeed")
 		require.NotNil(t, hoverResult, "hover result should not be nil")
-		require.Equal(t, "**Variable**: Person.Age\n**Type**: int", hoverResult.Contents.Value)
+		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tAge int\n}\n```\n\n### Template Access\n```go-template\n.Age\n```", hoverResult.Contents.Value)
 		require.NotNil(t, hoverResult.Range, "hover range should not be nil")
 		require.Equal(t, 1, hoverResult.Range.Start.Line, "range should start on line 1")
 		require.Equal(t, 1, hoverResult.Range.End.Line, "range should end on line 1")
@@ -92,7 +92,7 @@ type Person struct {
 		require.Equal(t, 7, hoverResult.Range.End.Character, "range should end at the end of .Age")
 	})
 
-	t.Run("server handles file changes", func(t *testing.T) {
+	t.Run("server_handles_file_changes", func(t *testing.T) {
 		files := testFiles{
 			"test.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .Name }}",
 			"go.mod":    "module test",
@@ -120,7 +120,7 @@ type Person struct {
 		})
 		require.NoError(t, err, "hover request should succeed")
 		require.NotNil(t, hoverResult, "hover result should not be nil")
-		require.Equal(t, "**Variable**: Person.Name\n**Type**: string", hoverResult.Contents.Value)
+		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```go-template\n.Name\n```", hoverResult.Contents.Value)
 		require.NotNil(t, hoverResult.Range, "hover range should not be nil")
 		require.Equal(t, 1, hoverResult.Range.Start.Line, "range should start on line 1")
 		require.Equal(t, 1, hoverResult.Range.End.Line, "range should end on line 1")
@@ -150,7 +150,40 @@ type Person struct {
 		require.Nil(t, hoverResult, "hover should return nil for non-existent field")
 	})
 
-	t.Run("server verifies hover ranges", func(t *testing.T) {
+	t.Run("hover_should_show_method_signature", func(t *testing.T) {
+		files := testFiles{
+			"test.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .GetName }}",
+			"go.mod":    "module test",
+			"test.go": `
+package test
+import _ "embed"
+
+//go:embed test.tmpl
+var TestTemplate string
+type Person struct {
+	Name string
+}
+	func (p *Person) GetName() string {
+		return p.Name
+	}
+}`,
+		}
+
+		setup, err := setupNeovimTest(t, files)
+		require.NoError(t, err, "setup should succeed")
+		defer setup.cleanup()
+
+		testFile := filepath.Join(setup.tmpDir, "test.tmpl")
+		hoverResult, err := setup.requestHover(t, ctx, &lsp.HoverParams{
+			TextDocument: lsp.TextDocumentIdentifier{URI: "file://" + testFile},
+			Position:     lsp.Position{Line: 1, Character: 3},
+		})
+		require.NoError(t, err, "hover request should succeed")
+		require.NotNil(t, hoverResult, "hover result should not be nil")
+		require.Equal(t, "### Method Information\n\n```go\nfunc (*Person) GetName() (string)\n```\n\n### Return Type\n```go\nstring\n```\n\n### Template Usage\n```go-template\n.GetName\n```", hoverResult.Contents.Value)
+	})
+
+	t.Run("server_verifies_hover_ranges", func(t *testing.T) {
 		files := testFiles{
 			"test.tmpl": `{{- /*gotype: test.Person*/ -}}
 Address:
@@ -198,7 +231,7 @@ type Person struct {
 
 				if pos.expected {
 					require.NotNil(t, hoverResult, "hover result should not be nil")
-					require.Equal(t, "**Variable**: Person.Address.Street\n**Type**: string", hoverResult.Contents.Value)
+					require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tAddress struct {\n\t\tStreet string\n\t}\n}\n```\n\n### Template Access\n```go-template\n.Address.Street\n```", hoverResult.Contents.Value)
 					require.NotNil(t, hoverResult.Range, "hover range should not be nil")
 					require.Equal(t, 2, hoverResult.Range.Start.Line, "range should start on line 2")
 					require.Equal(t, 2, hoverResult.Range.End.Line, "range should end on line 2")

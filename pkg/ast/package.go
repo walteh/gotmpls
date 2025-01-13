@@ -86,6 +86,19 @@ func LoadPackageTypesFromFs(ctx context.Context, dir string) ([]*PackageWithTemp
 
 	pkgd := make(map[string]*types.Package)
 
+	if len(pkgs) == 0 {
+		// try loading the base package
+		cfg.Dir = filepath.Dir(dir)
+		pkg, err := packages.Load(cfg, "./...")
+		if err != nil {
+			return nil, errors.Errorf("no packages found in directory: %s", dir)
+		}
+		pkgs = append(pkgs, pkg...)
+		if len(pkgs) == 0 {
+			return nil, errors.Errorf("no packages found in directory: %s", dir)
+		}
+	}
+
 	zerolog.Ctx(ctx).Debug().Msgf("loaded %d packages\n", len(pkgs))
 	for _, pkg := range pkgs {
 		zerolog.Ctx(ctx).Debug().Msgf("package: %s (path: %s)\n", pkg.Name, pkg.PkgPath)
@@ -100,10 +113,6 @@ func LoadPackageTypesFromFs(ctx context.Context, dir string) ([]*PackageWithTemp
 		}
 
 		pkgd[pkg.PkgPath] = pkg.Types
-	}
-
-	if len(pkgs) == 0 {
-		return nil, errors.Errorf("no packages found in directory: %s", dir)
 	}
 
 	if len(pkgs) == 1 && pkgs[0].ID == "./..." {

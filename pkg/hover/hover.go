@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"go/types"
+
 	"github.com/rs/zerolog"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
@@ -27,60 +29,109 @@ func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation,
 		return nil, errors.New("variable cannot be nil")
 	}
 
-	var sb strings.Builder
+	var content []string
 
 	// If it's a function call with method info
 	if method != nil {
 		// Function signature
-		sb.WriteString(fmt.Sprintf("func %s(", method.Name))
+		content = append(content, "### Template Function\n")
 
-		// Parameters
+		// Function signature in Go style
+		sig := fmt.Sprintf("```go\nfunc %s(", method.Name)
 		params := make([]string, len(method.Parameters))
 		for i, param := range method.Parameters {
-			params[i] = param.String()
+			params[i] = fmt.Sprintf("arg%d %s", i+1, param.String())
 		}
-		sb.WriteString(strings.Join(params, ", "))
-		sb.WriteString(")")
+		sig += strings.Join(params, ", ")
+		sig += ")"
 
-		// Return values
 		if len(method.Results) > 0 {
 			if len(method.Results) == 1 {
-				sb.WriteString(fmt.Sprintf(" %s", method.Results[0].String()))
+				sig += fmt.Sprintf(" %s", method.Results[0].String())
 			} else {
-				sb.WriteString(" (")
+				sig += " ("
 				results := make([]string, len(method.Results))
 				for i, result := range method.Results {
 					results[i] = result.String()
 				}
-				sb.WriteString(strings.Join(results, ", "))
-				sb.WriteString(")")
+				sig += strings.Join(results, ", ")
+				sig += ")"
 			}
 		}
+		sig += "\n```"
+		content = append(content, sig)
+
+		// Template usage example
+		usage := "### Template Usage\n```go-template\n"
+		if len(variable.PipeArguments) > 0 {
+			usage += variable.Position.Text + " | " + method.Name
+			for _, arg := range variable.PipeArguments {
+				if arg.Type != nil {
+					usage += fmt.Sprintf(" %q", arg.Type.String())
+				}
+			}
+		} else {
+			usage += method.Name + " " + variable.Position.Text
+		}
+		usage += "\n```"
+		content = append(content, usage)
 
 	} else if typeInfo != nil {
-		// Variable section
-		// sb.WriteString("**Variable**: ")
+		if typeInfo.Type.Func != nil {
+			// Method Information
+			content = append(content, "### Method Information\n")
 
-		// pp.Println(typeInfo.NestedMultiLineTypeString())
+			// Method signature
+			sig := typeInfo.NestedMultiLineTypeString()
+			content = append(content, sig)
 
-		// fld, ok := typeInfo.Type.Underlying().(*types.Var)
-		// if !ok {
-		// 	return nil, errors.New("type is not a field")
-		// }
+			// Return type info
+			if sig, ok := typeInfo.Type.Type().(*types.Signature); ok && sig.Results().Len() > 0 {
+				content = append(content, "\n### Return Type\n```go")
+				for i := 0; i < sig.Results().Len(); i++ {
+					content = append(content, sig.Results().At(i).Type().String())
+				}
+				content = append(content, "```")
+			}
 
-		// sb.WriteString(typeInfo.Name)
-		// sb.WriteString(".")
-		// sb.WriteString(variable.Name)
+			// Template usage
+			content = append(content, "\n### Template Usage\n```go-template")
+			content = append(content, variable.Position.Text)
+			content = append(content, "```")
 
-		// sb.WriteString("\n")
+		} else {
+			// Type Information for fields
+			content = append(content, "### Type Information\n")
 
-		// sb.WriteString("**Type**: ")
-		sb.WriteString(typeInfo.NestedMultiLineTypeString())
+			// Add the nested type visualization
+			typeStr := typeInfo.NestedMultiLineTypeString()
+			if typeStr == "" {
+				typeStr = "```go\n// Type information not available\n```"
+			}
+			content = append(content, typeStr)
 
+			// Show the template access path
+			templatePath := "\n### Template Access\n```go-template\n"
+			templatePath += variable.Position.Text
+			templatePath += "\n```"
+			content = append(content, templatePath)
+		}
+	} else {
+		// Fallback for when we don't have type info
+		content = append(content, "### Template Reference\n")
+		content = append(content, "```go-template\n"+variable.Position.Text+"\n```")
+		content = append(content, "\n*Type information not available*")
 	}
 
+	zerolog.Ctx(ctx).Debug().
+		Str("variable", variable.Position.Text).
+		Bool("has_method", method != nil).
+		Bool("has_type_info", typeInfo != nil).
+		Bool("is_method", typeInfo != nil && typeInfo.Type.Func != nil).
+		Msg("formatted hover response")
+
 	return &HoverInfo{
-		Content:  []string{sb.String()},
+		Content:  []string{strings.Join(content, "\n")},
 		Position: variable.Position,
 	}, nil
 }

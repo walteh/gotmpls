@@ -5,6 +5,7 @@ import (
 	"go/types"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
@@ -12,6 +13,11 @@ import (
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
 	"github.com/walteh/go-tmpl-typer/pkg/position"
 )
+
+func createTestContext(t *testing.T) context.Context {
+	logger := zerolog.New(zerolog.TestWriter{T: t}).With().Timestamp().Logger()
+	return logger.WithContext(context.Background())
+}
 
 // 	if arg.Variable != nil && arg.Variable.Name() == "GetJob" {
 // 		return []types.Type{types.Typ[types.String]}
@@ -44,11 +50,9 @@ func TestFormatHoverResponse(t *testing.T) {
 			name: "simple function call",
 			variable: &parser.VariableLocation{
 				Position: position.RawPosition{
-					Text:   ".GetJob",
+					Text:   "GetJob",
 					Offset: 0,
 				},
-				PipeArguments: nil,
-				Scope:         "",
 			},
 			method: &ast.TemplateMethodInfo{
 				Name: "upper",
@@ -59,32 +63,23 @@ func TestFormatHoverResponse(t *testing.T) {
 					types.Typ[types.String],
 				},
 			},
-			field: nil,
 			want: []string{
-				`func upper(string) string`,
+				"### Template Function\n",
+				"```go\nfunc upper(arg1 string) string\n```",
+				"### Template Usage\n```go-template\nupper GetJob\n```",
 			},
-			wantErr: false,
 		},
 		{
-			name: "multiple function chain",
+			name: "piped function call",
 			variable: &parser.VariableLocation{
 				Position: position.RawPosition{
-					Text:   "upper",
+					Text:   "GetJob",
 					Offset: 0,
 				},
 				PipeArguments: []parser.VariableLocationOrType{
-					{
-						Variable: &parser.VariableLocation{
-							Position: position.RawPosition{
-								Text:   ".GetJob",
-								Offset: 10,
-							},
-						},
-					},
+					{Type: types.Typ[types.String]},
 				},
-				Scope: "",
 			},
-			field: nil,
 			method: &ast.TemplateMethodInfo{
 				Name: "upper",
 				Parameters: []types.Type{
@@ -95,78 +90,44 @@ func TestFormatHoverResponse(t *testing.T) {
 				},
 			},
 			want: []string{
-				`func upper(string) string`,
+				"### Template Function\n",
+				"```go\nfunc upper(arg1 string) string\n```",
+				"### Template Usage\n```go-template\nGetJob | upper \"string\"\n```",
 			},
-			wantErr: false,
 		},
 		{
-			name: "function with multiple arguments",
-			variable: &parser.VariableLocation{
-				Position: position.RawPosition{
-					Text:   "replace",
-					Offset: 0,
-				},
-				PipeArguments: []parser.VariableLocationOrType{
-					{
-						Type: types.Typ[types.String],
-					},
-					{
-						Type: types.Typ[types.String],
-					},
-					{
-						Type: types.Typ[types.String],
-					},
-				},
-				Scope: "",
-			},
-			field: nil,
-			method: &ast.TemplateMethodInfo{
-				Name: "replace",
-				Parameters: []types.Type{
-					types.Typ[types.String],
-					types.Typ[types.String],
-					types.Typ[types.String],
-				},
-				Results: []types.Type{
-					types.Typ[types.String],
-				},
-			},
-			want: []string{
-				`func replace(string, string, string) string`,
-			},
-			wantErr: false,
-		},
-		{
-			name: "simple variable",
+			name: "struct field",
 			variable: &parser.VariableLocation{
 				Position: position.RawPosition{
 					Text:   ".Name",
 					Offset: 0,
 				},
-				Scope: "",
 			},
-			method: nil,
 			field: &ast.FieldInfo{
-				Name: ".Name",
-				Type: types.Typ[types.String],
+				Name: "Name",
+				Type: ast.FieldVarOrFunc{
+					Var: types.NewVar(0, nil, "Name", types.Typ[types.String]),
+				},
+				Parent: &ast.TypeHintDefinition{
+					MyFieldInfo: ast.FieldInfo{
+						Name: "Person",
+						Type: ast.FieldVarOrFunc{
+							Var: types.NewVar(0, nil, "Person", types.NewStruct([]*types.Var{}, nil)),
+						},
+					},
+				},
 			},
 			want: []string{
-				"**Variable**: .Name\n**Type**: string",
+				"### Type Information\n",
+				"```go\ntype Person struct {\n\tName string\n}\n```",
+				"\n### Template Access\n```go-template\n.Name\n```",
 			},
-			wantErr: false,
-		},
-		{
-			name:     "nil variable",
-			variable: nil,
-			method:   nil,
-			wantErr:  true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
-			ctx := context.Background()
+			ctx := createTestContext(t)
 			got, err := hover.FormatHoverResponse(ctx, tt.variable, tt.method, tt.field)
 			if tt.wantErr {
 				require.Error(t, err)

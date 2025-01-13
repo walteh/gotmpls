@@ -1,4 +1,4 @@
-{{- /*gotype: github.com/example/types.Config */ -}}
+// {{- /*gotype: github.com/example/types.Config */ -}}
 package templates
 
 type Data struct {
@@ -6,6 +6,6 @@ type Data struct {
 	Age  int
 }
 
-{{define "main"}}
-Hello {{.Name}}! You are {{.Age}} years old.
-{{end}}
+// {{define "main"}}
+// Hello {{.Name}}! You are {{.Age}} years old.
+// {{end}}
