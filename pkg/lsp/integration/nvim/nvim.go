@@ -277,19 +277,19 @@ func setupNeovimConfig(t *testing.T, tmpDir string, socketPath string) (string, 
 	// }
 	// t.Logf("Actual nvim-lspconfig dir: %s", actualLspConfigDir)
 
-	// Get absolute paths for commands
-	projectRoot, err := filepath.Abs("../../../..")
-	if err != nil {
-		return "", errors.Errorf("failed to get project root: %w", err)
-	}
+	// // Get absolute paths for commands
+	// projectRoot, err := filepath.Abs("../../../..")
+	// if err != nil {
+	// 	return "", errors.Errorf("failed to get project root: %w", err)
+	// }
 
-	// check for a go.work file in the project root
-	goWorkPath := filepath.Join(projectRoot, "go.work")
-	if _, err := os.Stat(goWorkPath); os.IsNotExist(err) {
-		return "", errors.Errorf("go.work file not found in project root: %s - the filepath.abs is likely wrong", projectRoot)
-	}
+	// // check for a go.work file in the project root
+	// goWorkPath := filepath.Join(projectRoot, "go.work")
+	// if _, err := os.Stat(goWorkPath); os.IsNotExist(err) {
+	// 	return "", errors.Errorf("go.work file not found in project root: %s - the filepath.abs is likely wrong", projectRoot)
+	// }
 
-	stdioProxyPath := filepath.Join(projectRoot, "cmd", "stdio-proxy")
+	// stdioProxyPath := filepath.Join(projectRoot, "cmd", "stdio-proxy")
 
 	// Create a temporary config.vim
 	vimConfig := fmt.Sprintf(`
@@ -324,7 +324,7 @@ end
 if not configs.go_template then
     configs.go_template = {
         default_config = {
-            cmd = { 'go', 'run', '%[2]s', '%[3]s' },
+            cmd = { 'go', 'run', 'github.com/walteh/go-tmpl-typer/cmd/stdio-proxy', '%[2]s' },
             filetypes = { 'go-template' },
             root_dir = function(fname)
                 local path = vim.fn.getcwd()
@@ -362,7 +362,7 @@ else
 end
 
 print("LSP setup complete")
-EOF`, lspConfigDir, stdioProxyPath, socketPath)
+EOF`, lspConfigDir, socketPath)
 
 	configPath := filepath.Join(tmpDir, "config.vim")
 	if err := os.WriteFile(configPath, []byte(vimConfig), 0644); err != nil {

@@ -114,7 +114,7 @@ func Handlers(h handler.Func) jrpc2.Handler {
 // 	return jrpc2.NewServer(methods, opts)
 // }
 
-func NewServerServer(ctx context.Context, server Server, opts *jrpc2.ServerOptions) *jrpc2.Server {
+func NewServerServer(ctx context.Context, server Server, opts *jrpc2.ServerOptions) (*jrpc2.Server, *CallbackClient) {
 	methods := buildServerDispatchMap(server)
 	if opts == nil {
 		opts = &jrpc2.ServerOptions{}
@@ -137,7 +137,7 @@ func NewServerServer(ctx context.Context, server Server, opts *jrpc2.ServerOptio
 
 	callbackServer = NewCallbackClient(result, opts)
 
-	return result
+	return result, callbackServer
 }
 
 // Utility functions used by generated code

@@ -209,10 +209,10 @@ type Person struct {
 					require.NotNil(t, hoverResult, "hover result should not be nil")
 					require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tAddress struct {\n\t\tStreet string\n\t}\n}\n```\n\n### Template Access\n```go-template\n.Address.Street\n```", hoverResult.Contents.Value)
 					require.NotNil(t, hoverResult.Range, "hover range should not be nil")
-					require.Equal(t, (2), hoverResult.Range.Start.Line, "range should start on line 2")
-					require.Equal(t, (2), hoverResult.Range.End.Line, "range should end on line 2")
-					require.Equal(t, (12), hoverResult.Range.Start.Character, "range should start at the beginning of .Address.Street")
-					require.Equal(t, (27), hoverResult.Range.End.Character, "range should end at the end of .Address.Street")
+					require.Equal(t, uint32(2), hoverResult.Range.Start.Line, "range should start on line 2")
+					require.Equal(t, uint32(2), hoverResult.Range.End.Line, "range should end on line 2")
+					require.Equal(t, uint32(12), hoverResult.Range.Start.Character, "range should start at the beginning of .Address.Street")
+					require.Equal(t, uint32(27), hoverResult.Range.End.Character, "range should end at the end of .Address.Street")
 				} else {
 					require.Nil(t, hoverResult, "hover should return nil for positions outside variable")
 				}

@@ -2,10 +2,8 @@ package lsp
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -13,7 +11,6 @@ import (
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
-	"github.com/sourcegraph/jsonrpc2"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
 	"github.com/walteh/go-tmpl-typer/pkg/hover"
@@ -21,675 +18,345 @@ import (
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
 	"github.com/walteh/go-tmpl-typer/pkg/position"
 	"gitlab.com/tozd/go/errors"
+	"gopkg.in/fsnotify.v1"
 )
 
-// type handlerFunc func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error)
-
-// // bufferedReadWriteCloser wraps a reader and writer with buffering
-// type bufferedReadWriteCloser struct {
-// 	reader *bufio.Reader
-// 	writer *bufio.Writer
-// 	closer io.Closer
-// }
-
-// func newBufferedReadWriteCloser(r io.Reader, w io.Writer) io.ReadWriteCloser {
-// 	return &bufferedReadWriteCloser{
-// 		reader: bufio.NewReader(r),
-// 		writer: bufio.NewWriter(w),
-// 		closer: io.NopCloser(nil),
-// 	}
-// }
-
-// func (b *bufferedReadWriteCloser) Read(p []byte) (n int, err error) {
-// 	return b.reader.Read(p)
-// }
-
-// func (b *bufferedReadWriteCloser) Write(p []byte) (n int, err error) {
-// 	n, err = b.writer.Write(p)
-// 	if err != nil {
-// 		return n, err
-// 	}
-// 	return n, b.writer.Flush()
-// }
-
-// func (b *bufferedReadWriteCloser) Close() error {
-// 	return b.closer.Close()
-// }
-
-// Server represents an LSP server instance
-type Server struct {
-	documents sync.Map // map[string]string
-	workspace string
-	conn      *jsonrpc2.Conn
-	id        string
-	// extraLogWriters []io.Writer
-	debug bool
+// Document represents a text document with its metadata
+type Document struct {
+	URI        string
+	LanguageID protocol.LanguageKind
+	Version    int32
+	Content    string
+	AST        *parser.ParsedTemplateFile
 }
 
-var _ protocol.Server = (*Server)(nil)
+// DocumentManager handles document operations
+type DocumentManager struct {
+	store *sync.Map // map[string]*Document
+}
 
-func NewServer(ctx context.Context) *Server {
-	return &Server{
-		// extraLogWriters: extraLogWriters,
-		id:        xid.New().String(),
-		conn:      nil,
-		documents: sync.Map{},
-		workspace: "",
+func NewDocumentManager() *DocumentManager {
+	return &DocumentManager{
+		store: &sync.Map{},
 	}
 }
 
-// func Spawn(ctx context.Context, reader io.Reader, writer io.Writer, extraLogWriters ...io.Writer) error {
-// 	server := NewServer(ctx, extraLogWriters...)
-// 	return server.Run(ctx, reader, writer, extraLogWriters...)
-// }
-
-func (s *Server) Run(ctx context.Context, reader io.Reader, writer io.WriteCloser, opts *jrpc2.ServerOptions) error {
-	zerolog.Ctx(ctx).Info().Msg("starting LSP server - all logging will be redirected to LSP")
-
-	server := protocol.NewServerServer(ctx, s, opts)
-
-	in := channel.LSP(reader, writer)
-
-	server = server.Start(in)
-
-	return server.Wait()
-
-	// // Wait for either the connection to be closed or the context to be done
-	// select {
-	// case <-conn.DisconnectNotify():
-	// 	return nil
-	// case <-ctx.Done():
-	// 	return ctx.Err()
-	// }
-}
-
-// func (s *Server) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
-// 	ctx = s.ApplyLSPWriter(ctx, conn, s.extraLogWriters...)
-// 	if s.debug {
-// 		s.debugf(ctx, "received request: %s", req.Method)
-// 		if req.Params != nil {
-// 			s.debugf(ctx, "request params: %s", string(*req.Params))
-// 		}
-// 	}
-
-// 	ctx = zerolog.Ctx(ctx).With().Str("method", req.Method).Logger().WithContext(ctx)
-
-// 	handler := s.router(ctx, req.Method)
-// 	if handler == nil {
-// 		if s.debug {
-// 			s.debugf(ctx, "unhandled method: %s", req.Method)
-// 		}
-// 		if !req.Notif {
-// 			if err := conn.Reply(ctx, req.ID, nil); err != nil {
-// 				s.debugf(ctx, "error sending default reply: %v", err)
-// 			}
-// 		}
-// 		return
-// 	}
-
-// 	result, err := handler(ctx, req)
-// 	if err != nil {
-// 		s.debugf(ctx, "error handling %s: %v", req.Method, err)
-// 		if !req.Notif {
-// 			if err := conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
-// 				Code:    jsonrpc2.CodeInternalError,
-// 				Message: err.Error(),
-// 			}); err != nil {
-// 				s.debugf(ctx, "error sending error reply: %v", err)
-// 			}
-// 		}
-// 		return
-// 	}
-
-// 	if !req.Notif && result != nil {
-// 		if err := conn.Reply(ctx, req.ID, result); err != nil {
-// 			s.debugf(ctx, "error sending reply: %v", err)
-// 		}
-// 	}
-// }
-
-// func (s *Server) router(ctx context.Context, method string) handlerFunc {
-// 	zerolog.Ctx(ctx).Info().Str("method", method).Msg("routing request")
-// 	switch method {
-// 	case "initialize", "initialized":
-// 		return s.handleInitialize
-// 	// case "initialized":
-// 	// 	return func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
-// 	// 		s.debugf(ctx, "initialized")
-
-// 	// 		zerolog.Ctx(ctx).Info().Str("params", string(*req.Params)).Msg("initialized")
-// 	// 		return nil, nil
-// 	// 	}
-// 	case "shutdown":
-// 		return func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
-// 			return nil, nil
-// 		}
-// 	case "exit":
-// 		return func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
-// 			return nil, nil
-// 		}
-// 	case "textDocument/didOpen":
-// 		return s.handleTextDocumentDidOpen
-// 	case "textDocument/didChange":
-// 		return s.handleTextDocumentDidChange
-// 	case "textDocument/didClose":
-// 		return s.handleTextDocumentDidClose
-// 	case "textDocument/hover":
-// 		return s.handleTextDocumentHover
-// 	// case "textDocument/completion":
-// 	// 	return s.handleTextDocumentCompletion
-// 	case "$/setTrace":
-// 		return func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
-// 			return nil, nil
-// 		}
-// 	case "$/cancelRequest":
-// 		return func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
-// 			return nil, nil
-// 		}
-// 	case "workspace/didChangeConfiguration":
-// 		return func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
-// 			return nil, nil
-// 		}
-// 	default:
-// 		return nil
-// 	}
-// }
-
-func (s *Server) handleTextDocumentDidOpen(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
-	if s.debug {
-		s.debugf(ctx, "handling textDocument/didOpen")
-	}
-
-	var params DidOpenTextDocumentParams
-	if err := json.Unmarshal(*req.Params, &params); err != nil {
-		s.debugf(ctx, "failed to unmarshal didOpen params: %v", err)
-		return nil, errors.Errorf("failed to unmarshal didOpen params: %w", err)
-	}
-
-	s.debugf(ctx, "storing document in memory: %s", params.TextDocument.URI)
-	s.storeDocument(params.TextDocument.URI, params.TextDocument.Text)
-	s.debugf(ctx, "document stored successfully, validating...")
-	return s.validateDocument(ctx, params.TextDocument.URI, params.TextDocument.Text)
-}
-
-func (s *Server) handleTextDocumentDidChange(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
-	if s.debug {
-		s.debugf(ctx, "handling textDocument/didChange")
-	}
-
-	var params DidChangeTextDocumentParams
-	if err := json.Unmarshal(*req.Params, &params); err != nil {
-		return nil, errors.Errorf("failed to unmarshal didChange params: %w", err)
-	}
-
-	// For now, we'll just use the full content sync
-	if len(params.ContentChanges) > 0 {
-		s.storeDocument(params.TextDocument.URI, params.ContentChanges[0].Text)
-		return s.validateDocument(ctx, params.TextDocument.URI, params.ContentChanges[0].Text)
-	}
-
-	return nil, nil
-}
-
-func (s *Server) handleTextDocumentDidClose(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
-	if s.debug {
-		s.debugf(ctx, "handling textDocument/didClose")
-	}
-
-	var params DidCloseTextDocumentParams
-	if err := json.Unmarshal(*req.Params, &params); err != nil {
-		return nil, errors.Errorf("failed to unmarshal didClose params: %w", err)
-	}
-
-	s.documents.Delete(s.normalizeURI(params.TextDocument.URI))
-	return nil, nil
-}
-
-func (s *Server) handleInitialize(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
-	if s.debug {
-		s.debugf(ctx, "handling initialize request")
-	}
-
-	var params InitializeParams
-	if err := json.Unmarshal(*req.Params, &params); err != nil {
-		return nil, errors.Errorf("failed to unmarshal initialize params: %w", err)
-	}
-
-	// Convert workspace URI to filesystem path
-	workspacePath, err := uriToPath(params.RootURI)
-	if err != nil {
-		return nil, errors.Errorf("invalid workspace URI: %w", err)
-	}
-
-	s.workspace = workspacePath
-	s.debugf(ctx, "workspace path: %s", s.workspace)
-
-	// Schedule a workspace scan after initialization
-	go func() {
-		if err := s.scanWorkspace(ctx); err != nil {
-			s.debugf(ctx, "failed to scan workspace: %v", err)
-		}
-	}()
-
-	return InitializeResult{
-		Capabilities: ServerCapabilities{
-			TextDocumentSync: TextDocumentSyncKind{
-				Change: 1, // Incremental
-			},
-			HoverProvider: true,
-			// CompletionProvider: CompletionOptions{
-			// 	TriggerCharacters: []string{"."},
-			// },
-		},
-	}, nil
-}
-
-func (s *Server) scanWorkspace(ctx context.Context) error {
-	// Walk through the workspace and validate all .tmpl files
-	return filepath.Walk(s.workspace, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() && filepath.Ext(path) == ".tmpl" {
-			content, err := os.ReadFile(path)
-			if err != nil {
-				return errors.Errorf("reading template file: %w", err)
-			}
-			uri := pathToURI(path)
-			s.storeDocument(uri, string(content))
-			if _, err := s.validateDocument(ctx, uri, string(content)); err != nil {
-				s.debugf(ctx, "failed to validate document %s: %v", path, err)
-			}
-		}
-		return nil
-	})
-}
-
-func pathToURI(path string) string {
-	return "file://" + path
-}
-
-// func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
-// 	if s.debug {
-// 		s.debugf(ctx, "handling textDocument/hover")
-// 	}
-
-// 	var params HoverParams
-// 	if err := json.Unmarshal(*req.Params, &params); err != nil {
-// 		return nil, errors.Errorf("failed to unmarshal hover params: %w", err)
-// 	}
-
-// 	zerolog.Ctx(ctx).Debug().Msgf("hover request received: %+v", params)
-
-// 	uri := s.normalizeURI(params.TextDocument.URI)
-
-// 	// // Get document content
-// 	// content, ok := s.getDocument(uri)
-// 	// if !ok {
-// 	// 	return nil, errors.Errorf("document not found: %s", uri)
-// 	// }
-
-// 	reg, err := ast.AnalyzePackage(ctx, uri)
-// 	if err != nil {
-// 		return nil, errors.Errorf("analyzing package for hover: %w", err)
-// 	}
-
-// 	content, _, ok := reg.GetTemplateFile(uri)
-// 	if !ok {
-// 		return nil, errors.Errorf("template %s not found, make sure its embeded", uri)
-// 	}
-
-// 	// // Parse the template
-// 	info, err := parser.Parse(ctx, uri, []byte(content))
-// 	if err != nil {
-// 		return nil, errors.Errorf("parsing template for hover: %w", err)
-// 	}
-
-// 	pos := position.NewRawPositionFromLineAndColumn(params.Position.Line, params.Position.Character, string(content[params.Position.Character]), content)
-
-// 	hoverInfo, err := hover.BuildHoverResponseFromParse(ctx, info, pos, reg)
-// 	if err != nil {
-// 		return nil, errors.Errorf("building hover response: %w", err)
-// 	}
-
-// 	if hoverInfo == nil {
-// 		return nil, nil
-// 	}
-
-// 	hovers := make([]Hover, len(hoverInfo.Content))
-// 	for i, hcontent := range hoverInfo.Content {
-// 		hovers[i] = Hover{
-// 			Contents: MarkupContent{
-// 				Kind:  "markdown",
-// 				Value: hcontent,
-// 			},
-// 			Range: rangeFromLSP(hoverInfo.Position.GetRange(content)),
-// 		}
-// 	}
-
-// 	// TODO: Return more than one
-// 	if len(hovers) > 0 {
-// 		return &hovers[0], nil
-// 	}
-
-// 	return nil, nil
-// }
-
-// rangeToLSP converts a position.Range to an LSP Range
-func rangeFromLSP(r position.Range) protocol.Range {
-	return protocol.Range{
-		Start: protocol.Position{
-			Line:      uint32(r.Start.Line),
-			Character: uint32(r.Start.Character),
-		},
-		End: protocol.Position{
-			Line:      uint32(r.End.Line),
-			Character: uint32(r.End.Character),
-		},
-	}
-}
-
-func rangeToLSP(r protocol.Range) position.Range {
-	return position.Range{
-		Start: position.Place{
-			Line:      int(r.Start.Line),
-			Character: int(r.Start.Character),
-		},
-		End: position.Place{
-			Line:      int(r.End.Line),
-			Character: int(r.End.Character),
-		},
-	}
-}
-
-func (s *Server) validateDocument(ctx context.Context, uri string, content string) (interface{}, error) {
-	if s.debug {
-		s.debugf(ctx, "validating document: %s", uri)
-	}
-
-	uri = s.normalizeURI(uri)
-
-	registry, err := ast.AnalyzePackage(ctx, uri)
-	if err != nil {
-		return nil, errors.Errorf("analyzing package: %w", err)
-	}
-
-	nodes, err := parser.Parse(ctx, uri, []byte(content))
-	if err != nil {
-		return nil, errors.Errorf("parsing template for validation: %w", err)
-	}
-
-	diagnostics, err := diagnostic.GetDiagnosticsFromParsed(ctx, nodes, registry)
-	if err != nil {
-		return nil, errors.Errorf("getting diagnostics: %w", err)
-	}
-
-	// Parse the template to get type hints
-	// info, err := parser.Parse(ctx, []byte(content), uri)
-	// if err != nil {
-	// 	return nil, errors.Errorf("parsing template for validation: %w", err)
-	// }
-
-	// Add success diagnostic for type hint if present and valid
-	// for _, block := range info.Blocks {
-	// 	if block.TypeHint != nil {
-	// 		if typeInfo, err := ast.GenerateTypeInfoFromRegistry(ctx, block.TypeHint.TypePath, registry); err == nil {
-	// 			// Add success diagnostic
-	// 			diagnostics = append(diagnostics, &diagnostic.Diagnostic{
-	// 				Message:  "Type hint successfully loaded: " + typeInfo.Name,
-	// 				Location: block.TypeHint.Position,
-	// 				Severity: diagnostic.SeverityInformation,
-	// 			})
-	// 		}
-	// 	}
-	// }
-
-	// Publish diagnostics
-	if err := s.publishDiagnostics(ctx, uri, content, diagnostics); err != nil {
-		return nil, errors.Errorf("publishing diagnostics: %w", err)
-	}
-
-	return nil, nil
-}
-
-func (s *Server) publishDiagnostics(ctx context.Context, uri string, content string, diagnostics []*diagnostic.Diagnostic) error {
-	params := &PublishDiagnosticsParams{
-		URI:         uri,
-		Diagnostics: make([]Diagnostic, len(diagnostics)),
-	}
-	for i, d := range diagnostics {
-		params.Diagnostics[i] = DiagnosticFromGoTmplTyperDiagnostic(d, content)
-	}
-
-	// if s.debug {
-	// 	s.debugf(ctx, "publishing %d diagnostics for %s", len(diagnostics), uri)
-	// 	for _, d := range diagnostics {
-	// 		severity := "unknown"
-	// 		switch d.Severity {
-	// 		case 1:
-	// 			severity = "error"
-	// 		case 2:
-	// 			severity = "warning"
-	// 		case 3:
-	// 			severity = "information"
-	// 		case 4:
-	// 			severity = "hint"
-	// 		}
-	// 		s.debugf(ctx, "  - %s at %v: %s", severity, d.Range, d.Message)
-	// 	}
-	// }
-
-	return s.conn.Notify(ctx, "textDocument/publishDiagnostics", params)
-}
-
-// normalizeURI ensures consistent URI handling by removing the file:// prefix if present
-// and converting to a clean path
-func (s *Server) normalizeURI(uri string) string {
-
-	uri = strings.TrimPrefix(uri, "file://")
-	// remove the file:/private prefix
-	uri = strings.TrimPrefix(uri, "file:")
-
-	// // Remove any leading slashes for consistency
-	// uri = strings.TrimLeft(uri, "/")
-	return uri
-}
-
-// getDocument retrieves a document from the server's store using a normalized URI
-func (s *Server) getDocument(uri string) (string, bool) {
-	normalizedURI := s.normalizeURI(uri)
-	content, ok := s.documents.Load(normalizedURI)
+func (m *DocumentManager) Get(uri string) (*Document, bool) {
+	normalizedURI := normalizeURI(uri)
+	content, ok := m.store.Load(normalizedURI)
 	if !ok {
 		// Try with the original URI as fallback
-		content, ok = s.documents.Load("file://" + uri)
+		content, ok = m.store.Load("file://" + uri)
 	}
 	if !ok {
-
 		// try filesystem
-
 		file, err := os.Open(normalizedURI)
 		if err != nil {
-			return "", false
+			return nil, false
 		}
 		defer file.Close()
 		contentz, err := io.ReadAll(file)
 		if err != nil {
-			return "", false
+			return nil, false
 		}
-		content = string(contentz)
-		s.documents.Store(normalizedURI, content)
+		doc := &Document{
+			URI:     normalizedURI,
+			Content: string(contentz),
+		}
+		m.store.Store(normalizedURI, doc)
+		return doc, true
 	}
 
-	text, ok := content.(string)
-	return text, ok
+	doc, ok := content.(*Document)
+	return doc, ok
 }
 
-// storeDocument stores a document in the server's store using a normalized URI
-func (s *Server) storeDocument(uri string, content string) {
-	normalizedURI := s.normalizeURI(uri)
-	s.documents.Store(normalizedURI, content)
+func (m *DocumentManager) Store(uri string, doc *Document) {
+	normalizedURI := normalizeURI(uri)
+	m.store.Store(normalizedURI, doc)
 }
 
-// CodeAction implements protocol.Server.
-func (s *Server) CodeAction(context.Context, *protocol.CodeActionParams) ([]protocol.CodeAction, error) {
-	panic("unimplemented")
+func (m *DocumentManager) Delete(uri string) {
+	normalizedURI := normalizeURI(uri)
+	m.store.Delete(normalizedURI)
 }
 
-// CodeLens implements protocol.Server.
-func (s *Server) CodeLens(context.Context, *protocol.CodeLensParams) ([]protocol.CodeLens, error) {
-	panic("unimplemented")
+// normalizeURI ensures consistent URI handling by removing the file:// prefix if present
+// and converting to a clean path
+func normalizeURI(uri string) string {
+	uri = strings.TrimPrefix(uri, "file://")
+	// remove the file:/private prefix
+	uri = strings.TrimPrefix(uri, "file:")
+	return uri
 }
 
-// ColorPresentation implements protocol.Server.
-func (s *Server) ColorPresentation(context.Context, *protocol.ColorPresentationParams) ([]protocol.ColorPresentation, error) {
-	panic("unimplemented")
+// Server represents an LSP server instance
+type Server struct {
+	// Document management
+	documents *DocumentManager
+
+	// Workspace management
+	workspace          string
+	workspaceFSWatcher *fsnotify.Watcher
+
+	// Server state
+	initialized bool
+	shutdown    bool
+
+	// Server identification
+	id    string
+	debug bool
+
+	// LSP capabilities
+	clientCapabilities protocol.ClientCapabilities
+	serverCapabilities protocol.ServerCapabilities
+
+	// Context management
+	cancelFuncs *sync.Map // map[string]context.CancelFunc
+
+	// LSP client for notifications
+	client protocol.Client
 }
 
-// Completion implements protocol.Server.
-func (s *Server) Completion(context.Context, *protocol.CompletionParams) (*protocol.CompletionList, error) {
-	panic("unimplemented")
+func NewServer(ctx context.Context) *Server {
+	return &Server{
+		id:          xid.New().String(),
+		documents:   NewDocumentManager(),
+		cancelFuncs: &sync.Map{},
+		debug:       false, // Disabled debug mode
+	}
 }
 
-// Declaration implements protocol.Server.
-func (s *Server) Declaration(context.Context, *protocol.DeclarationParams) (*protocol.Or_textDocument_declaration, error) {
-	panic("unimplemented")
+func (s *Server) Run(ctx context.Context, reader io.Reader, writer io.WriteCloser, opts *jrpc2.ServerOptions) error {
+	logger := zerolog.Ctx(ctx)
+	logger.Info().Msg("starting LSP server")
+
+	if opts == nil {
+		opts = &jrpc2.ServerOptions{
+			AllowPush: true,
+		}
+	}
+
+	server, client := protocol.NewServerServer(ctx, s, opts)
+	stream := channel.LSP(reader, writer)
+	server = server.Start(stream)
+
+	// Store client for notifications
+	s.client = client
+
+	return server.Wait()
 }
 
-// Definition implements protocol.Server.
-func (s *Server) Definition(context.Context, *protocol.DefinitionParams) ([]protocol.Location, error) {
-	panic("unimplemented")
+// Required interface methods
+func (s *Server) Progress(ctx context.Context, params *protocol.ProgressParams) error {
+	return nil // Not implemented yet
 }
 
-// Diagnostic implements protocol.Server.
-func (s *Server) Diagnostic(context.Context, *protocol.DocumentDiagnosticParams) (*protocol.DocumentDiagnosticReport, error) {
-	panic("unimplemented")
+func (s *Server) SetTrace(ctx context.Context, params *protocol.SetTraceParams) error {
+	return nil // Not implemented yet
 }
 
-// DiagnosticWorkspace implements protocol.Server.
-func (s *Server) DiagnosticWorkspace(context.Context, *protocol.WorkspaceDiagnosticParams) (*protocol.WorkspaceDiagnosticReport, error) {
-	panic("unimplemented")
+func (s *Server) IncomingCalls(ctx context.Context, params *protocol.CallHierarchyIncomingCallsParams) ([]protocol.CallHierarchyIncomingCall, error) {
+	return nil, nil // Not implemented yet
 }
 
-// DidChange implements protocol.Server.
-func (s *Server) DidChange(context.Context, *protocol.DidChangeTextDocumentParams) error {
-	panic("unimplemented")
+func (s *Server) OutgoingCalls(ctx context.Context, params *protocol.CallHierarchyOutgoingCallsParams) ([]protocol.CallHierarchyOutgoingCall, error) {
+	return nil, nil // Not implemented yet
 }
 
-// DidChangeConfiguration implements protocol.Server.
-func (s *Server) DidChangeConfiguration(context.Context, *protocol.DidChangeConfigurationParams) error {
-	panic("unimplemented")
+func (s *Server) ResolveCodeAction(ctx context.Context, params *protocol.CodeAction) (*protocol.CodeAction, error) {
+	return nil, nil // Not implemented yet
 }
 
-// DidChangeNotebookDocument implements protocol.Server.
-func (s *Server) DidChangeNotebookDocument(context.Context, *protocol.DidChangeNotebookDocumentParams) error {
-	panic("unimplemented")
+func (s *Server) ResolveCodeLens(ctx context.Context, params *protocol.CodeLens) (*protocol.CodeLens, error) {
+	return nil, nil // Not implemented yet
 }
 
-// DidChangeWatchedFiles implements protocol.Server.
-func (s *Server) DidChangeWatchedFiles(context.Context, *protocol.DidChangeWatchedFilesParams) error {
-	panic("unimplemented")
+func (s *Server) ResolveCompletionItem(ctx context.Context, params *protocol.CompletionItem) (*protocol.CompletionItem, error) {
+	return nil, nil // Not implemented yet
 }
 
-// DidChangeWorkspaceFolders implements protocol.Server.
-func (s *Server) DidChangeWorkspaceFolders(context.Context, *protocol.DidChangeWorkspaceFoldersParams) error {
-	panic("unimplemented")
+func (s *Server) ResolveDocumentLink(ctx context.Context, params *protocol.DocumentLink) (*protocol.DocumentLink, error) {
+	return nil, nil // Not implemented yet
 }
 
-// DidClose implements protocol.Server.
-func (s *Server) DidClose(context.Context, *protocol.DidCloseTextDocumentParams) error {
-	panic("unimplemented")
+func (s *Server) Exit(ctx context.Context) error {
+	return nil // Not implemented yet
 }
 
-// DidCloseNotebookDocument implements protocol.Server.
-func (s *Server) DidCloseNotebookDocument(context.Context, *protocol.DidCloseNotebookDocumentParams) error {
-	panic("unimplemented")
+func (s *Server) Initialize(ctx context.Context, params *protocol.ParamInitialize) (*protocol.InitializeResult, error) {
+	return &protocol.InitializeResult{
+		Capabilities: protocol.ServerCapabilities{
+			HoverProvider: &protocol.Or_ServerCapabilities_hoverProvider{
+				Value: true,
+			},
+		},
+	}, nil
 }
 
-// DidCreateFiles implements protocol.Server.
-func (s *Server) DidCreateFiles(context.Context, *protocol.CreateFilesParams) error {
-	panic("unimplemented")
+func (s *Server) Initialized(ctx context.Context, params *protocol.InitializedParams) error {
+	return nil // Not implemented yet
 }
 
-// DidDeleteFiles implements protocol.Server.
-func (s *Server) DidDeleteFiles(context.Context, *protocol.DeleteFilesParams) error {
-	panic("unimplemented")
+func (s *Server) Resolve(ctx context.Context, params *protocol.InlayHint) (*protocol.InlayHint, error) {
+	return nil, nil // Not implemented yet
 }
 
-// DidOpen implements protocol.Server.
-func (s *Server) DidOpen(context.Context, *protocol.DidOpenTextDocumentParams) error {
+func (s *Server) DidChangeNotebookDocument(ctx context.Context, params *protocol.DidChangeNotebookDocumentParams) error {
+	return nil // Not implemented yet
+}
+
+func (s *Server) DidCloseNotebookDocument(ctx context.Context, params *protocol.DidCloseNotebookDocumentParams) error {
+	return nil // Not implemented yet
+}
+
+func (s *Server) DidOpenNotebookDocument(ctx context.Context, params *protocol.DidOpenNotebookDocumentParams) error {
+	return nil // Not implemented yet
+}
+
+func (s *Server) DidSaveNotebookDocument(ctx context.Context, params *protocol.DidSaveNotebookDocumentParams) error {
+	return nil // Not implemented yet
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	return nil // Not implemented yet
+}
+
+func (s *Server) CodeAction(ctx context.Context, params *protocol.CodeActionParams) ([]protocol.CodeAction, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) CodeLens(ctx context.Context, params *protocol.CodeLensParams) ([]protocol.CodeLens, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) ColorPresentation(ctx context.Context, params *protocol.ColorPresentationParams) ([]protocol.ColorPresentation, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) Completion(ctx context.Context, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) Declaration(ctx context.Context, params *protocol.DeclarationParams) (*protocol.Or_textDocument_declaration, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) Definition(ctx context.Context, params *protocol.DefinitionParams) ([]protocol.Location, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) Diagnostic(ctx context.Context, params *protocol.DocumentDiagnosticParams) (*protocol.DocumentDiagnosticReport, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) DiagnosticWorkspace(ctx context.Context, params *protocol.WorkspaceDiagnosticParams) (*protocol.WorkspaceDiagnosticReport, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDocumentParams) error {
+	logger := zerolog.Ctx(ctx)
+	logger.Debug().Str("uri", string(params.TextDocument.URI)).Msg("document changed")
+
+	// For now, we'll just use the full content sync
+	if len(params.ContentChanges) > 0 {
+		doc, ok := s.documents.Get(string(params.TextDocument.URI))
+		if !ok {
+			return errors.Errorf("document not found: %s", params.TextDocument.URI)
+		}
+
+		// Update document
+		doc.Version = params.TextDocument.Version
+		doc.Content = params.ContentChanges[0].Text
+
+		s.documents.Store(string(params.TextDocument.URI), doc)
+		return s.validateDocument(ctx, string(params.TextDocument.URI), doc.Content)
+	}
+
 	return nil
 }
 
-// DidOpenNotebookDocument implements protocol.Server.
-func (s *Server) DidOpenNotebookDocument(context.Context, *protocol.DidOpenNotebookDocumentParams) error {
-	panic("unimplemented")
+func (s *Server) DidChangeConfiguration(ctx context.Context, params *protocol.DidChangeConfigurationParams) error {
+	return nil // Not implemented yet
 }
 
-// DidRenameFiles implements protocol.Server.
-func (s *Server) DidRenameFiles(context.Context, *protocol.RenameFilesParams) error {
-	panic("unimplemented")
+func (s *Server) DidChangeWatchedFiles(ctx context.Context, params *protocol.DidChangeWatchedFilesParams) error {
+	return nil // Not implemented yet
 }
 
-// DidSave implements protocol.Server.
-func (s *Server) DidSave(context.Context, *protocol.DidSaveTextDocumentParams) error {
+func (s *Server) DidChangeWorkspaceFolders(ctx context.Context, params *protocol.DidChangeWorkspaceFoldersParams) error {
+	return nil // Not implemented yet
+}
+
+func (s *Server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocumentParams) error {
+	logger := zerolog.Ctx(ctx)
+	logger.Debug().Str("uri", string(params.TextDocument.URI)).Msg("document closed")
+
+	s.documents.Delete(string(params.TextDocument.URI))
 	return nil
 }
 
-// DidSaveNotebookDocument implements protocol.Server.
-func (s *Server) DidSaveNotebookDocument(context.Context, *protocol.DidSaveNotebookDocumentParams) error {
-	panic("unimplemented")
+func (s *Server) DidCreateFiles(ctx context.Context, params *protocol.CreateFilesParams) error {
+	return nil // Not implemented yet
 }
 
-// DocumentColor implements protocol.Server.
-func (s *Server) DocumentColor(context.Context, *protocol.DocumentColorParams) ([]protocol.ColorInformation, error) {
-	panic("unimplemented")
+func (s *Server) DidDeleteFiles(ctx context.Context, params *protocol.DeleteFilesParams) error {
+	return nil // Not implemented yet
 }
 
-// DocumentHighlight implements protocol.Server.
-func (s *Server) DocumentHighlight(context.Context, *protocol.DocumentHighlightParams) ([]protocol.DocumentHighlight, error) {
-	panic("unimplemented")
+func (s *Server) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocumentParams) error {
+	logger := zerolog.Ctx(ctx)
+	logger.Debug().Str("uri", string(params.TextDocument.URI)).Msg("document opened")
+
+	doc := &Document{
+		URI:        string(params.TextDocument.URI),
+		LanguageID: params.TextDocument.LanguageID,
+		Version:    params.TextDocument.Version,
+		Content:    params.TextDocument.Text,
+	}
+
+	s.documents.Store(string(params.TextDocument.URI), doc)
+	return s.validateDocument(ctx, string(params.TextDocument.URI), params.TextDocument.Text)
 }
 
-// DocumentLink implements protocol.Server.
-func (s *Server) DocumentLink(context.Context, *protocol.DocumentLinkParams) ([]protocol.DocumentLink, error) {
-	panic("unimplemented")
+func (s *Server) DidRenameFiles(ctx context.Context, params *protocol.RenameFilesParams) error {
+	return nil // Not implemented yet
 }
 
-// DocumentSymbol implements protocol.Server.
-func (s *Server) DocumentSymbol(context.Context, *protocol.DocumentSymbolParams) ([]any, error) {
-	panic("unimplemented")
+func (s *Server) DidSave(ctx context.Context, params *protocol.DidSaveTextDocumentParams) error {
+	return nil // Not implemented yet
 }
 
-// ExecuteCommand implements protocol.Server.
-func (s *Server) ExecuteCommand(context.Context, *protocol.ExecuteCommandParams) (any, error) {
-	panic("unimplemented")
+func (s *Server) DocumentColor(ctx context.Context, params *protocol.DocumentColorParams) ([]protocol.ColorInformation, error) {
+	return nil, nil // Not implemented yet
 }
 
-// Exit implements protocol.Server.
-func (s *Server) Exit(context.Context) error {
-	return nil
+func (s *Server) DocumentHighlight(ctx context.Context, params *protocol.DocumentHighlightParams) ([]protocol.DocumentHighlight, error) {
+	return nil, nil // Not implemented yet
 }
 
-// FoldingRange implements protocol.Server.
-func (s *Server) FoldingRange(context.Context, *protocol.FoldingRangeParams) ([]protocol.FoldingRange, error) {
-	panic("unimplemented")
+func (s *Server) DocumentLink(ctx context.Context, params *protocol.DocumentLinkParams) ([]protocol.DocumentLink, error) {
+	return nil, nil // Not implemented yet
 }
 
-// Formatting implements protocol.Server.
-func (s *Server) Formatting(context.Context, *protocol.DocumentFormattingParams) ([]protocol.TextEdit, error) {
-	panic("unimplemented")
+func (s *Server) DocumentSymbol(ctx context.Context, params *protocol.DocumentSymbolParams) ([]any, error) {
+	return nil, nil // Not implemented yet
 }
 
-// Hover implements protocol.Server.
+func (s *Server) ExecuteCommand(ctx context.Context, params *protocol.ExecuteCommandParams) (any, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) FoldingRange(ctx context.Context, params *protocol.FoldingRangeParams) ([]protocol.FoldingRange, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) Formatting(ctx context.Context, params *protocol.DocumentFormattingParams) ([]protocol.TextEdit, error) {
+	return nil, nil // Not implemented yet
+}
+
 func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
-
 	zerolog.Ctx(ctx).Debug().Msgf("hover request received: %+v", params)
-
-	// // Get document content
-	// content, ok := s.getDocument(uri)
-	// if !ok {
-	// 	return nil, errors.Errorf("document not found: %s", uri)
-	// }
 
 	uripath := params.TextDocument.URI.Path()
 
@@ -703,7 +370,7 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 		return nil, errors.Errorf("template %s not found, make sure its embeded", uripath)
 	}
 
-	// // Parse the template
+	// Parse the template
 	info, err := parser.Parse(ctx, uripath, []byte(content))
 	if err != nil {
 		return nil, errors.Errorf("parsing template for hover: %w", err)
@@ -727,7 +394,16 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 				Kind:  "markdown",
 				Value: hcontent,
 			},
-			Range: rangeFromLSP(hoverInfo.Position.GetRange(content)),
+			Range: protocol.Range{
+				Start: protocol.Position{
+					Line:      uint32(hoverInfo.Position.GetRange(content).Start.Line),
+					Character: uint32(hoverInfo.Position.GetRange(content).Start.Character),
+				},
+				End: protocol.Position{
+					Line:      uint32(hoverInfo.Position.GetRange(content).End.Line),
+					Character: uint32(hoverInfo.Position.GetRange(content).End.Character),
+				},
+			},
 		}
 	}
 
@@ -739,223 +415,181 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 	return nil, nil
 }
 
-// Implementation implements protocol.Server.
-func (s *Server) Implementation(context.Context, *protocol.ImplementationParams) ([]protocol.Location, error) {
-	panic("unimplemented")
+func (s *Server) Implementation(ctx context.Context, params *protocol.ImplementationParams) ([]protocol.Location, error) {
+	return nil, nil // Not implemented yet
 }
 
-// IncomingCalls implements protocol.Server.
-func (s *Server) IncomingCalls(context.Context, *protocol.CallHierarchyIncomingCallsParams) ([]protocol.CallHierarchyIncomingCall, error) {
-	panic("unimplemented")
+func (s *Server) InlayHint(ctx context.Context, params *protocol.InlayHintParams) ([]protocol.InlayHint, error) {
+	return nil, nil // Not implemented yet
 }
 
-// Initialize implements protocol.Server.
-func (s *Server) Initialize(context.Context, *protocol.ParamInitialize) (*protocol.InitializeResult, error) {
-	return &protocol.InitializeResult{
-		Capabilities: protocol.ServerCapabilities{
-			HoverProvider: &protocol.Or_ServerCapabilities_hoverProvider{
-				Value: true,
+func (s *Server) InlineCompletion(ctx context.Context, params *protocol.InlineCompletionParams) (*protocol.Or_Result_textDocument_inlineCompletion, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) InlineValue(ctx context.Context, params *protocol.InlineValueParams) ([]protocol.InlineValue, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) LinkedEditingRange(ctx context.Context, params *protocol.LinkedEditingRangeParams) (*protocol.LinkedEditingRanges, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) Moniker(ctx context.Context, params *protocol.MonikerParams) ([]protocol.Moniker, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) OnTypeFormatting(ctx context.Context, params *protocol.DocumentOnTypeFormattingParams) ([]protocol.TextEdit, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) PrepareCallHierarchy(ctx context.Context, params *protocol.CallHierarchyPrepareParams) ([]protocol.CallHierarchyItem, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) PrepareRename(ctx context.Context, params *protocol.PrepareRenameParams) (*protocol.PrepareRenameResult, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) PrepareTypeHierarchy(ctx context.Context, params *protocol.TypeHierarchyPrepareParams) ([]protocol.TypeHierarchyItem, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) RangeFormatting(ctx context.Context, params *protocol.DocumentRangeFormattingParams) ([]protocol.TextEdit, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) RangesFormatting(ctx context.Context, params *protocol.DocumentRangesFormattingParams) ([]protocol.TextEdit, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) References(ctx context.Context, params *protocol.ReferenceParams) ([]protocol.Location, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*protocol.WorkspaceEdit, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) SelectionRange(ctx context.Context, params *protocol.SelectionRangeParams) ([]protocol.SelectionRange, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) SemanticTokensFull(ctx context.Context, params *protocol.SemanticTokensParams) (*protocol.SemanticTokens, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) SemanticTokensFullDelta(ctx context.Context, params *protocol.SemanticTokensDeltaParams) (any, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) SemanticTokensRange(ctx context.Context, params *protocol.SemanticTokensRangeParams) (*protocol.SemanticTokens, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) SignatureHelp(ctx context.Context, params *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) Subtypes(ctx context.Context, params *protocol.TypeHierarchySubtypesParams) ([]protocol.TypeHierarchyItem, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) Supertypes(ctx context.Context, params *protocol.TypeHierarchySupertypesParams) ([]protocol.TypeHierarchyItem, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) Symbol(ctx context.Context, params *protocol.WorkspaceSymbolParams) ([]protocol.SymbolInformation, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) TextDocumentContent(ctx context.Context, params *protocol.TextDocumentContentParams) (*string, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) TypeDefinition(ctx context.Context, params *protocol.TypeDefinitionParams) ([]protocol.Location, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) WillCreateFiles(ctx context.Context, params *protocol.CreateFilesParams) (*protocol.WorkspaceEdit, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) WillDeleteFiles(ctx context.Context, params *protocol.DeleteFilesParams) (*protocol.WorkspaceEdit, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) WillRenameFiles(ctx context.Context, params *protocol.RenameFilesParams) (*protocol.WorkspaceEdit, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) WillSave(ctx context.Context, params *protocol.WillSaveTextDocumentParams) error {
+	return nil // Not implemented yet
+}
+
+func (s *Server) WillSaveWaitUntil(ctx context.Context, params *protocol.WillSaveTextDocumentParams) ([]protocol.TextEdit, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) WorkDoneProgressCancel(ctx context.Context, params *protocol.WorkDoneProgressCancelParams) error {
+	return nil // Not implemented yet
+}
+
+func (s *Server) ResolveWorkspaceSymbol(ctx context.Context, params *protocol.WorkspaceSymbol) (*protocol.WorkspaceSymbol, error) {
+	return nil, nil // Not implemented yet
+}
+
+func (s *Server) validateDocument(ctx context.Context, uri string, content string) error {
+	logger := zerolog.Ctx(ctx)
+	logger.Debug().Str("uri", uri).Msg("validating document")
+
+	uri = normalizeURI(uri)
+
+	registry, err := ast.AnalyzePackage(ctx, uri)
+	if err != nil {
+		return errors.Errorf("analyzing package: %w", err)
+	}
+
+	nodes, err := parser.Parse(ctx, uri, []byte(content))
+	if err != nil {
+		return errors.Errorf("parsing template for validation: %w", err)
+	}
+
+	diagnostics, err := diagnostic.GetDiagnosticsFromParsed(ctx, nodes, registry)
+	if err != nil {
+		return errors.Errorf("getting diagnostics: %w", err)
+	}
+
+	// Publish diagnostics
+	if err := s.publishDiagnostics(ctx, uri, content, diagnostics); err != nil {
+		return errors.Errorf("publishing diagnostics: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Server) publishDiagnostics(ctx context.Context, uri string, content string, diagnostics []*diagnostic.Diagnostic) error {
+	params := &protocol.PublishDiagnosticsParams{
+		URI:         protocol.DocumentURI(uri),
+		Diagnostics: make([]protocol.Diagnostic, len(diagnostics)),
+	}
+
+	for i, d := range diagnostics {
+		params.Diagnostics[i] = protocol.Diagnostic{
+			Range: protocol.Range{
+				Start: protocol.Position{
+					Line:      uint32(d.Location.GetRange(content).Start.Line),
+					Character: uint32(d.Location.GetRange(content).Start.Character),
+				},
+				End: protocol.Position{
+					Line:      uint32(d.Location.GetRange(content).End.Line),
+					Character: uint32(d.Location.GetRange(content).End.Character),
+				},
 			},
-		},
-	}, nil
-}
+			Severity: protocol.DiagnosticSeverity(d.Severity),
+			Message:  d.Message,
+		}
+	}
 
-// Initialized implements protocol.Server.
-func (s *Server) Initialized(context.Context, *protocol.InitializedParams) error {
-	return nil
-}
-
-// InlayHint implements protocol.Server.
-func (s *Server) InlayHint(context.Context, *protocol.InlayHintParams) ([]protocol.InlayHint, error) {
-	panic("unimplemented")
-}
-
-// InlineCompletion implements protocol.Server.
-func (s *Server) InlineCompletion(context.Context, *protocol.InlineCompletionParams) (*protocol.Or_Result_textDocument_inlineCompletion, error) {
-	panic("unimplemented")
-}
-
-// InlineValue implements protocol.Server.
-func (s *Server) InlineValue(context.Context, *protocol.InlineValueParams) ([]protocol.InlineValue, error) {
-	panic("unimplemented")
-}
-
-// LinkedEditingRange implements protocol.Server.
-func (s *Server) LinkedEditingRange(context.Context, *protocol.LinkedEditingRangeParams) (*protocol.LinkedEditingRanges, error) {
-	panic("unimplemented")
-}
-
-// Moniker implements protocol.Server.
-func (s *Server) Moniker(context.Context, *protocol.MonikerParams) ([]protocol.Moniker, error) {
-	panic("unimplemented")
-}
-
-// OnTypeFormatting implements protocol.Server.
-func (s *Server) OnTypeFormatting(context.Context, *protocol.DocumentOnTypeFormattingParams) ([]protocol.TextEdit, error) {
-	panic("unimplemented")
-}
-
-// OutgoingCalls implements protocol.Server.
-func (s *Server) OutgoingCalls(context.Context, *protocol.CallHierarchyOutgoingCallsParams) ([]protocol.CallHierarchyOutgoingCall, error) {
-	panic("unimplemented")
-}
-
-// PrepareCallHierarchy implements protocol.Server.
-func (s *Server) PrepareCallHierarchy(context.Context, *protocol.CallHierarchyPrepareParams) ([]protocol.CallHierarchyItem, error) {
-	panic("unimplemented")
-}
-
-// PrepareRename implements protocol.Server.
-func (s *Server) PrepareRename(context.Context, *protocol.PrepareRenameParams) (*protocol.PrepareRenameResult, error) {
-	panic("unimplemented")
-}
-
-// PrepareTypeHierarchy implements protocol.Server.
-func (s *Server) PrepareTypeHierarchy(context.Context, *protocol.TypeHierarchyPrepareParams) ([]protocol.TypeHierarchyItem, error) {
-	panic("unimplemented")
-}
-
-// Progress implements protocol.Server.
-func (s *Server) Progress(context.Context, *protocol.ProgressParams) error {
-	panic("unimplemented")
-}
-
-// RangeFormatting implements protocol.Server.
-func (s *Server) RangeFormatting(context.Context, *protocol.DocumentRangeFormattingParams) ([]protocol.TextEdit, error) {
-	panic("unimplemented")
-}
-
-// RangesFormatting implements protocol.Server.
-func (s *Server) RangesFormatting(context.Context, *protocol.DocumentRangesFormattingParams) ([]protocol.TextEdit, error) {
-	panic("unimplemented")
-}
-
-// References implements protocol.Server.
-func (s *Server) References(context.Context, *protocol.ReferenceParams) ([]protocol.Location, error) {
-	panic("unimplemented")
-}
-
-// Rename implements protocol.Server.
-func (s *Server) Rename(context.Context, *protocol.RenameParams) (*protocol.WorkspaceEdit, error) {
-	panic("unimplemented")
-}
-
-// Resolve implements protocol.Server.
-func (s *Server) Resolve(context.Context, *protocol.InlayHint) (*protocol.InlayHint, error) {
-	panic("unimplemented")
-}
-
-// ResolveCodeAction implements protocol.Server.
-func (s *Server) ResolveCodeAction(context.Context, *protocol.CodeAction) (*protocol.CodeAction, error) {
-	panic("unimplemented")
-}
-
-// ResolveCodeLens implements protocol.Server.
-func (s *Server) ResolveCodeLens(context.Context, *protocol.CodeLens) (*protocol.CodeLens, error) {
-	panic("unimplemented")
-}
-
-// ResolveCompletionItem implements protocol.Server.
-func (s *Server) ResolveCompletionItem(context.Context, *protocol.CompletionItem) (*protocol.CompletionItem, error) {
-	panic("unimplemented")
-}
-
-// ResolveDocumentLink implements protocol.Server.
-func (s *Server) ResolveDocumentLink(context.Context, *protocol.DocumentLink) (*protocol.DocumentLink, error) {
-	panic("unimplemented")
-}
-
-// ResolveWorkspaceSymbol implements protocol.Server.
-func (s *Server) ResolveWorkspaceSymbol(context.Context, *protocol.WorkspaceSymbol) (*protocol.WorkspaceSymbol, error) {
-	panic("unimplemented")
-}
-
-// SelectionRange implements protocol.Server.
-func (s *Server) SelectionRange(context.Context, *protocol.SelectionRangeParams) ([]protocol.SelectionRange, error) {
-	panic("unimplemented")
-}
-
-// SemanticTokensFull implements protocol.Server.
-func (s *Server) SemanticTokensFull(context.Context, *protocol.SemanticTokensParams) (*protocol.SemanticTokens, error) {
-	panic("unimplemented")
-}
-
-// SemanticTokensFullDelta implements protocol.Server.
-func (s *Server) SemanticTokensFullDelta(context.Context, *protocol.SemanticTokensDeltaParams) (any, error) {
-	panic("unimplemented")
-}
-
-// SemanticTokensRange implements protocol.Server.
-func (s *Server) SemanticTokensRange(context.Context, *protocol.SemanticTokensRangeParams) (*protocol.SemanticTokens, error) {
-	panic("unimplemented")
-}
-
-// SetTrace implements protocol.Server.
-func (s *Server) SetTrace(context.Context, *protocol.SetTraceParams) error {
-	panic("unimplemented")
-}
-
-// Shutdown implements protocol.Server.
-func (s *Server) Shutdown(context.Context) error {
-	return nil
-}
-
-// SignatureHelp implements protocol.Server.
-func (s *Server) SignatureHelp(context.Context, *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error) {
-	panic("unimplemented")
-}
-
-// Subtypes implements protocol.Server.
-func (s *Server) Subtypes(context.Context, *protocol.TypeHierarchySubtypesParams) ([]protocol.TypeHierarchyItem, error) {
-	panic("unimplemented")
-}
-
-// Supertypes implements protocol.Server.
-func (s *Server) Supertypes(context.Context, *protocol.TypeHierarchySupertypesParams) ([]protocol.TypeHierarchyItem, error) {
-	panic("unimplemented")
-}
-
-// Symbol implements protocol.Server.
-func (s *Server) Symbol(context.Context, *protocol.WorkspaceSymbolParams) ([]protocol.SymbolInformation, error) {
-	panic("unimplemented")
-}
-
-// TextDocumentContent implements protocol.Server.
-func (s *Server) TextDocumentContent(context.Context, *protocol.TextDocumentContentParams) (*string, error) {
-	panic("unimplemented")
-}
-
-// TypeDefinition implements protocol.Server.
-func (s *Server) TypeDefinition(context.Context, *protocol.TypeDefinitionParams) ([]protocol.Location, error) {
-	panic("unimplemented")
-}
-
-// WillCreateFiles implements protocol.Server.
-func (s *Server) WillCreateFiles(context.Context, *protocol.CreateFilesParams) (*protocol.WorkspaceEdit, error) {
-	panic("unimplemented")
-}
-
-// WillDeleteFiles implements protocol.Server.
-func (s *Server) WillDeleteFiles(context.Context, *protocol.DeleteFilesParams) (*protocol.WorkspaceEdit, error) {
-	panic("unimplemented")
-}
-
-// WillRenameFiles implements protocol.Server.
-func (s *Server) WillRenameFiles(context.Context, *protocol.RenameFilesParams) (*protocol.WorkspaceEdit, error) {
-	panic("unimplemented")
-}
-
-// WillSave implements protocol.Server.
-func (s *Server) WillSave(context.Context, *protocol.WillSaveTextDocumentParams) error {
-	panic("unimplemented")
-}
-
-// WillSaveWaitUntil implements protocol.Server.
-func (s *Server) WillSaveWaitUntil(context.Context, *protocol.WillSaveTextDocumentParams) ([]protocol.TextEdit, error) {
-	panic("unimplemented")
-}
-
-// WorkDoneProgressCancel implements protocol.Server.
-func (s *Server) WorkDoneProgressCancel(context.Context, *protocol.WorkDoneProgressCancelParams) error {
-	panic("unimplemented")
+	return s.client.PublishDiagnostics(ctx, params)
 }
