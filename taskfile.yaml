@@ -3,13 +3,90 @@
 
 # source: ".retab/task.retab"
 
-version: 3
+version: '3'
+
+includes:
+    tool:
+        optional: true
+        taskfile: "./gen/taskfiles/Taskfile.tools.yml"
+    script:
+        optional: true
+        taskfile: "./gen/taskfiles/Taskfile.scripts.yml"
+
 tasks:
+    generate-taskfiles:
+        run: once
+        env: { OUTPUT_DIR: "./out", SCRIPTS_DIR: "./scripts", TASKFILE_OUTPUT_DIR: "./gen/taskfiles" }
+        cmds:
+          - ./scripts/setup-tools-for-local.sh --generate-taskfiles --skip-build
+        sources:
+          - ./tools/**/*
+          - ./scripts/**/*
+        generates:
+          - "./gen/taskfiles/**/*"
+
+    local-setup-tools:
+        run: once
+        deps: [ generate-taskfiles ]
+        env: { SCRIPTS_DIR: "./scripts", TASKFILE_OUTPUT_DIR: "./gen/taskfiles", TOOLS_OUTPUT_DIR: "./out/tools" }
+        cmds:
+          - ./scripts/setup-tools-for-local.sh
+        sources:
+          - ./tools/**/*
+          - ./scripts/setup-tools-for-local.sh
+          - ./scripts/build-tool.sh
+          - go.work.sum
+        generates:
+          - ./out/tools/**/*
+
+    download-repo-as-tarball:
+        desc: Download a specific repository and store it
+        vars:
+            REPO: '{{.REPO}}'
+            ORG: '{{.ORG}}'
+            REF: '{{.REF}}'
+            PATH: '{{.PATH}}'
+            PKG: '{{.REPO | lower | replace "-" ""}}'
+        cmds:
+          - mkdir -p gen/git-repo-tarballs/{{.REPO}}
+          - rm -f gen/git-repo-tarballs/{{.REPO}}/{{.REPO}}.tar.gz
+          - |
+            curl -fL https://github.com/{{.ORG}}/{{.REPO}}/archive/refs/{{.REF}}.tar.gz -o gen/git-repo-tarballs/{{.REPO}}/{{.REPO}}.tar.gz
+            if [ $? -ne 0 ] || [ ! -s gen/git-repo-tarballs/{{.REPO}}/{{.REPO}}.tar.gz ]; then
+              echo "Failed to download {{.REPO}} or file is empty"
+              rm -f gen/git-repo-tarballs/{{.REPO}}/{{.REPO}}.tar.gz
+              exit 1
+            fi
+          - echo "package {{.PKG}}" > gen/git-repo-tarballs/{{.REPO}}/embed.go
+
+          - echo "import _ \"embed\"" >> gen/git-repo-tarballs/{{.REPO}}/embed.go
+          - echo "//go:embed {{.REPO}}.tar.gz" >> gen/git-repo-tarballs/{{.REPO}}/embed.go
+
+          - echo "var Data []byte" >> gen/git-repo-tarballs/{{.REPO}}/embed.go
+          - echo "var Ref string = \"{{.REF}}\"" >> gen/git-repo-tarballs/{{.REPO}}/embed.go
+        status:
+          - test -d gen/git-repo-tarballs/{{.REPO}}/{{.REPO}}.tar.gz
+
+    download-all-repos-as-tarballs:
+        desc: Download all configured repositories
+        cmds:
+          - task: download-repo-as-tarball
+            vars:
+                REPO: nvim-lspconfig
+                ORG: neovim
+                REF: tags/v1.3.0
+                PATH: pkg/lsp/gen
+          - task: download-repo-as-tarball
+            vars:
+                REPO: vscode-languageserver-node
+                ORG: microsoft
+                REF: tags/release/jsonrpc/9.0.0-next.6
+                PATH: pkg/lsp/gen
+
     generate:
         cmds:
           - mockery
           - find ./gen/mockery -type f -not -mmin -1 -delete
-
         generates:
           - ./gen/mockery/*.go
         sources:
@@ -42,13 +119,32 @@ tasks:
           - bun install
           - bun run build
 
-    download-nvim-lspconfig:
-        desc: Download nvim-lspconfig and store it in testdata
+    sync-go-file:
+        desc: Sync Go files from a GitHub repository
+        vars:
+            SRC: '{{.SRC}}'
+            DEST: '{{.DEST}}'
+        env:
+            SCRIPTS_DIR: "./scripts"
         cmds:
-          - mkdir -p pkg/lsp/testdata/gen
-          - rm -f pkg/lsp/testdata/gen/nvim-lspconfig.tar.gz
-          - curl -L https://github.com/neovim/nvim-lspconfig/archive/refs/heads/master.tar.gz -o pkg/lsp/testdata/gen/nvim-lspconfig.tar.gz
-          - cd pkg/lsp/testdata/gen && tar xzf nvim-lspconfig.tar.gz
-          - rm pkg/lsp/testdata/gen/nvim-lspconfig.tar.gz
+          - |
+            "${SCRIPTS_DIR}/sync-go-files.sh" {{.SRC}} {{.DEST}} {{if .STRINGS_TO_REPLACE}}{{range $index, $str := .STRINGS_TO_REPLACE}} --string-to-replace "{{$str}}"{{end}}{{end}}
         status:
-          - test -d pkg/lsp/testdata/gen/nvim-lspconfig-master
+          - test -d {{.DEST}}
+
+    sync-lsp-generator:
+        desc: Sync LSP generator files from golang/tools
+        cmds:
+          - task: sync-go-file
+            vars:
+                SRC: github.com/golang/tools/blob/master/gopls/internal/protocol/generate
+                DEST: ./pkg/lsp/protocol/generator
+                STRINGS_TO_REPLACE:
+                  - 'func processinline():func processinline_old()'
+                  - golang.org/x/tools/internal/jsonrpc2:github.com/sourcegraph/jsonrpc2
+                  - reply jsonrpc2.Replier, r jsonrpc2.Request:conn \*jsonrpc2.Conn, r \*jsonrpc2.Request
+                  - switch r.Method() {:switch r.Method {
+                  - UnmarshalJSON(r.Params(), \&params):UnmarshalJSON(r.Params, \&params)
+                  - reply(ctx, :reply_fwd(ctx, conn, r,
+                  - sendParseError(ctx, reply,:sendParseError(ctx, conn, r,
+                  - recoverHandlerPanic(r.Method()):recoverHandlerPanic(r.Method)

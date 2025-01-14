@@ -1,0 +1,14 @@
+version: '3'
+
+# vars:
+#   SCRIPTS_DIR: ./scripts
+
+tasks:
+  build-tool:
+    desc: run ./scripts/build-tool.sh
+    cmds:
+      - ./scripts/build-tool.sh {{.CLI_ARGS}}
+  run-tool:
+    desc: run ./scripts/run-tool.sh
+    cmds:
+      - ./scripts/run-tool.sh {{.CLI_ARGS}}

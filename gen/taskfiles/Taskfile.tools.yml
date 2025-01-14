@@ -1,0 +1,75 @@
+version: '3'
+
+# vars:
+#   TOOLS_OUTPUT_DIR: ./out/tools
+#   SCRIPTS_DIR: ./scripts
+
+# includes:
+#   script:
+#     taskfile: "./Taskfile.scripts.yml"
+#     # vars:
+#     #   SCRIPTS_DIR: ./scripts
+#     internal: true
+
+
+tasks:
+  test2json:
+    desc: run test2json - built from cmd/test2json
+    cmds:
+      - ./scripts/run-tool.sh test2json {{.CLI_ARGS}}
+  gotestsum:
+    desc: run gotestsum - built from gotest.tools/gotestsum
+    cmds:
+      - ./scripts/run-tool.sh gotestsum {{.CLI_ARGS}}
+  crane:
+    desc: run crane - built from github.com/google/go-containerregistry/cmd/crane
+    cmds:
+      - ./scripts/run-tool.sh crane {{.CLI_ARGS}}
+  protoc-gen-connect-go:
+    desc: run protoc-gen-connect-go - built from connectrpc.com/connect/cmd/protoc-gen-connect-go
+    cmds:
+      - ./scripts/run-tool.sh protoc-gen-connect-go {{.CLI_ARGS}}
+  buf:
+    desc: run buf - built from github.com/bufbuild/buf/cmd/buf
+    cmds:
+      - ./scripts/run-tool.sh buf {{.CLI_ARGS}}
+  download-plugins:
+    desc: run download-plugins - built from github.com/bufbuild/plugins/cmd/download-plugins
+    cmds:
+      - ./scripts/run-tool.sh download-plugins {{.CLI_ARGS}}
+  latest-plugins:
+    desc: run latest-plugins - built from github.com/bufbuild/plugins/cmd/latest-plugins
+    cmds:
+      - ./scripts/run-tool.sh latest-plugins {{.CLI_ARGS}}
+  task:
+    desc: run task - built from github.com/go-task/task/v3/cmd/task
+    cmds:
+      - ./scripts/run-tool.sh task {{.CLI_ARGS}}
+  golangci-lint:
+    desc: run golangci-lint - built from github.com/golangci/golangci-lint/cmd/golangci-lint
+    cmds:
+      - ./scripts/run-tool.sh golangci-lint {{.CLI_ARGS}}
+  goreleaser:
+    desc: run goreleaser - built from github.com/goreleaser/goreleaser/v2
+    cmds:
+      - ./scripts/run-tool.sh goreleaser {{.CLI_ARGS}}
+  go-mod-upgrade:
+    desc: run go-mod-upgrade - built from github.com/oligot/go-mod-upgrade
+    cmds:
+      - ./scripts/run-tool.sh go-mod-upgrade {{.CLI_ARGS}}
+  protoc-gen-gotag:
+    desc: run protoc-gen-gotag - built from github.com/srikrsna/protoc-gen-gotag
+    cmds:
+      - ./scripts/run-tool.sh protoc-gen-gotag {{.CLI_ARGS}}
+  mockery:
+    desc: run mockery - built from github.com/vektra/mockery/v2
+    cmds:
+      - ./scripts/run-tool.sh mockery {{.CLI_ARGS}}
+  retab:
+    desc: run retab - built from github.com/walteh/retab/v2/cmd/retab
+    cmds:
+      - ./scripts/run-tool.sh retab {{.CLI_ARGS}}
+  generate:
+    desc: run generate - built from golang.org/x/tools/gopls/internal/protocol/generate
+    cmds:
+      - ./scripts/run-tool.sh generate {{.CLI_ARGS}}
