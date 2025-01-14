@@ -13,7 +13,7 @@ package protocol
 import (
 	"context"
 
-	"github.com/sourcegraph/jsonrpc2"
+	"github.com/creachadair/jrpc2/handler"
 )
 
 type Client interface {
@@ -61,248 +61,111 @@ type Client interface {
 	WorkspaceFolders(context.Context) ([]WorkspaceFolder, error)
 }
 
-func clientDispatch(ctx context.Context, client Client, conn *jsonrpc2.Conn, r *jsonrpc2.Request) (bool, error) {
-	defer recoverHandlerPanic(r.Method)
-	switch r.Method {
-	case "$/logTrace":
-		var params LogTraceParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := client.LogTrace(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "$/progress":
-		var params ProgressParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := client.Progress(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "client/registerCapability":
-		var params RegistrationParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := client.RegisterCapability(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "client/unregisterCapability":
-		var params UnregistrationParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := client.UnregisterCapability(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "telemetry/event":
-		var params any
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := client.Event(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "textDocument/publishDiagnostics":
-		var params PublishDiagnosticsParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := client.PublishDiagnostics(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "window/logMessage":
-		var params LogMessageParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := client.LogMessage(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "window/showDocument":
-		var params ShowDocumentParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := client.ShowDocument(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "window/showMessage":
-		var params ShowMessageParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := client.ShowMessage(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "window/showMessageRequest":
-		var params ShowMessageRequestParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := client.ShowMessageRequest(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "window/workDoneProgress/create":
-		var params WorkDoneProgressCreateParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := client.WorkDoneProgressCreate(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "workspace/applyEdit":
-		var params ApplyWorkspaceEditParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := client.ApplyEdit(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "workspace/codeLens/refresh":
-		err := client.CodeLensRefresh(ctx)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "workspace/configuration":
-		var params ParamConfiguration
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := client.Configuration(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "workspace/diagnostic/refresh":
-		err := client.DiagnosticRefresh(ctx)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "workspace/foldingRange/refresh":
-		err := client.FoldingRangeRefresh(ctx)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "workspace/inlayHint/refresh":
-		err := client.InlayHintRefresh(ctx)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "workspace/inlineValue/refresh":
-		err := client.InlineValueRefresh(ctx)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "workspace/semanticTokens/refresh":
-		err := client.SemanticTokensRefresh(ctx)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "workspace/textDocumentContent/refresh":
-		var params TextDocumentContentRefreshParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := client.TextDocumentContentRefresh(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "workspace/workspaceFolders":
-		resp, err := client.WorkspaceFolders(ctx)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	default:
-		return false, nil
+func buildClientDispatchMap(client Client) handler.Map {
+	return handler.Map{
+		"$/logTrace":                            createEmptyResultHandler(client.LogTrace),
+		"$/progress":                            createEmptyResultHandler(client.Progress),
+		"client/registerCapability":             createEmptyResultHandler(client.RegisterCapability),
+		"client/unregisterCapability":           createEmptyResultHandler(client.UnregisterCapability),
+		"telemetry/event":                       createEmptyResultHandler(client.Event),
+		"textDocument/publishDiagnostics":       createEmptyResultHandler(client.PublishDiagnostics),
+		"window/logMessage":                     createEmptyResultHandler(client.LogMessage),
+		"window/showDocument":                   createHandler(client.ShowDocument),
+		"window/showMessage":                    createEmptyResultHandler(client.ShowMessage),
+		"window/showMessageRequest":             createHandler(client.ShowMessageRequest),
+		"window/workDoneProgress/create":        createEmptyResultHandler(client.WorkDoneProgressCreate),
+		"workspace/applyEdit":                   createHandler(client.ApplyEdit),
+		"workspace/codeLens/refresh":            createEmptyHandler(client.CodeLensRefresh),
+		"workspace/configuration":               createHandler(client.Configuration),
+		"workspace/diagnostic/refresh":          createEmptyHandler(client.DiagnosticRefresh),
+		"workspace/foldingRange/refresh":        createEmptyHandler(client.FoldingRangeRefresh),
+		"workspace/inlayHint/refresh":           createEmptyHandler(client.InlayHintRefresh),
+		"workspace/inlineValue/refresh":         createEmptyHandler(client.InlineValueRefresh),
+		"workspace/semanticTokens/refresh":      createEmptyHandler(client.SemanticTokensRefresh),
+		"workspace/textDocumentContent/refresh": createEmptyResultHandler(client.TextDocumentContentRefresh),
+		"workspace/workspaceFolders":            createEmptyParamsHandler(client.WorkspaceFolders),
 	}
 }
 
-func (s *clientDispatcher) LogTrace(ctx context.Context, params *LogTraceParams) error {
-	return s.sender.Notify(ctx, "$/logTrace", params)
+func (s *CallbackClient) LogTrace(ctx context.Context, params *LogTraceParams) error {
+	return createNotify(ctx, s, "$/logTrace", params)
 }
-func (s *clientDispatcher) Progress(ctx context.Context, params *ProgressParams) error {
-	return s.sender.Notify(ctx, "$/progress", params)
+func (s *CallbackClient) Progress(ctx context.Context, params *ProgressParams) error {
+	return createNotify(ctx, s, "$/progress", params)
 }
-func (s *clientDispatcher) RegisterCapability(ctx context.Context, params *RegistrationParams) error {
-	return s.sender.Call(ctx, "client/registerCapability", params, nil)
+func (s *CallbackClient) RegisterCapability(ctx context.Context, params *RegistrationParams) error {
+	return createEmptyResultCallback(ctx, s, "client/registerCapability", params)
 }
-func (s *clientDispatcher) UnregisterCapability(ctx context.Context, params *UnregistrationParams) error {
-	return s.sender.Call(ctx, "client/unregisterCapability", params, nil)
+func (s *CallbackClient) UnregisterCapability(ctx context.Context, params *UnregistrationParams) error {
+	return createEmptyResultCallback(ctx, s, "client/unregisterCapability", params)
 }
-func (s *clientDispatcher) Event(ctx context.Context, params *any) error {
-	return s.sender.Notify(ctx, "telemetry/event", params)
+func (s *CallbackClient) Event(ctx context.Context, params *any) error {
+	return createNotify(ctx, s, "telemetry/event", params)
 }
-func (s *clientDispatcher) PublishDiagnostics(ctx context.Context, params *PublishDiagnosticsParams) error {
-	return s.sender.Notify(ctx, "textDocument/publishDiagnostics", params)
+func (s *CallbackClient) PublishDiagnostics(ctx context.Context, params *PublishDiagnosticsParams) error {
+	return createNotify(ctx, s, "textDocument/publishDiagnostics", params)
 }
-func (s *clientDispatcher) LogMessage(ctx context.Context, params *LogMessageParams) error {
-	return s.sender.Notify(ctx, "window/logMessage", params)
+func (s *CallbackClient) LogMessage(ctx context.Context, params *LogMessageParams) error {
+	return createNotify(ctx, s, "window/logMessage", params)
 }
-func (s *clientDispatcher) ShowDocument(ctx context.Context, params *ShowDocumentParams) (*ShowDocumentResult, error) {
+func (s *CallbackClient) ShowDocument(ctx context.Context, params *ShowDocumentParams) (*ShowDocumentResult, error) {
 	var result *ShowDocumentResult
-	if err := s.sender.Call(ctx, "window/showDocument", params, &result); err != nil {
+	if err := createCallback(ctx, s, "window/showDocument", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *clientDispatcher) ShowMessage(ctx context.Context, params *ShowMessageParams) error {
-	return s.sender.Notify(ctx, "window/showMessage", params)
+func (s *CallbackClient) ShowMessage(ctx context.Context, params *ShowMessageParams) error {
+	return createNotify(ctx, s, "window/showMessage", params)
 }
-func (s *clientDispatcher) ShowMessageRequest(ctx context.Context, params *ShowMessageRequestParams) (*MessageActionItem, error) {
+func (s *CallbackClient) ShowMessageRequest(ctx context.Context, params *ShowMessageRequestParams) (*MessageActionItem, error) {
 	var result *MessageActionItem
-	if err := s.sender.Call(ctx, "window/showMessageRequest", params, &result); err != nil {
+	if err := createCallback(ctx, s, "window/showMessageRequest", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *clientDispatcher) WorkDoneProgressCreate(ctx context.Context, params *WorkDoneProgressCreateParams) error {
-	return s.sender.Call(ctx, "window/workDoneProgress/create", params, nil)
+func (s *CallbackClient) WorkDoneProgressCreate(ctx context.Context, params *WorkDoneProgressCreateParams) error {
+	return createEmptyResultCallback(ctx, s, "window/workDoneProgress/create", params)
 }
-func (s *clientDispatcher) ApplyEdit(ctx context.Context, params *ApplyWorkspaceEditParams) (*ApplyWorkspaceEditResult, error) {
+func (s *CallbackClient) ApplyEdit(ctx context.Context, params *ApplyWorkspaceEditParams) (*ApplyWorkspaceEditResult, error) {
 	var result *ApplyWorkspaceEditResult
-	if err := s.sender.Call(ctx, "workspace/applyEdit", params, &result); err != nil {
+	if err := createCallback(ctx, s, "workspace/applyEdit", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *clientDispatcher) CodeLensRefresh(ctx context.Context) error {
-	return s.sender.Call(ctx, "workspace/codeLens/refresh", nil, nil)
+func (s *CallbackClient) CodeLensRefresh(ctx context.Context) error {
+	return createEmptyCallback(ctx, s, "workspace/codeLens/refresh")
 }
-func (s *clientDispatcher) Configuration(ctx context.Context, params *ParamConfiguration) ([]LSPAny, error) {
+func (s *CallbackClient) Configuration(ctx context.Context, params *ParamConfiguration) ([]LSPAny, error) {
 	var result []LSPAny
-	if err := s.sender.Call(ctx, "workspace/configuration", params, &result); err != nil {
+	if err := createCallback(ctx, s, "workspace/configuration", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *clientDispatcher) DiagnosticRefresh(ctx context.Context) error {
-	return s.sender.Call(ctx, "workspace/diagnostic/refresh", nil, nil)
+func (s *CallbackClient) DiagnosticRefresh(ctx context.Context) error {
+	return createEmptyCallback(ctx, s, "workspace/diagnostic/refresh")
 }
-func (s *clientDispatcher) FoldingRangeRefresh(ctx context.Context) error {
-	return s.sender.Call(ctx, "workspace/foldingRange/refresh", nil, nil)
+func (s *CallbackClient) FoldingRangeRefresh(ctx context.Context) error {
+	return createEmptyCallback(ctx, s, "workspace/foldingRange/refresh")
 }
-func (s *clientDispatcher) InlayHintRefresh(ctx context.Context) error {
-	return s.sender.Call(ctx, "workspace/inlayHint/refresh", nil, nil)
+func (s *CallbackClient) InlayHintRefresh(ctx context.Context) error {
+	return createEmptyCallback(ctx, s, "workspace/inlayHint/refresh")
 }
-func (s *clientDispatcher) InlineValueRefresh(ctx context.Context) error {
-	return s.sender.Call(ctx, "workspace/inlineValue/refresh", nil, nil)
+func (s *CallbackClient) InlineValueRefresh(ctx context.Context) error {
+	return createEmptyCallback(ctx, s, "workspace/inlineValue/refresh")
 }
-func (s *clientDispatcher) SemanticTokensRefresh(ctx context.Context) error {
-	return s.sender.Call(ctx, "workspace/semanticTokens/refresh", nil, nil)
+func (s *CallbackClient) SemanticTokensRefresh(ctx context.Context) error {
+	return createEmptyCallback(ctx, s, "workspace/semanticTokens/refresh")
 }
-func (s *clientDispatcher) TextDocumentContentRefresh(ctx context.Context, params *TextDocumentContentRefreshParams) error {
-	return s.sender.Call(ctx, "workspace/textDocumentContent/refresh", params, nil)
+func (s *CallbackClient) TextDocumentContentRefresh(ctx context.Context, params *TextDocumentContentRefreshParams) error {
+	return createEmptyResultCallback(ctx, s, "workspace/textDocumentContent/refresh", params)
 }
-func (s *clientDispatcher) WorkspaceFolders(ctx context.Context) ([]WorkspaceFolder, error) {
+func (s *CallbackClient) WorkspaceFolders(ctx context.Context) ([]WorkspaceFolder, error) {
 	var result []WorkspaceFolder
-	if err := s.sender.Call(ctx, "workspace/workspaceFolders", nil, &result); err != nil {
+	if err := createEmptyParamsCallback(ctx, s, "workspace/workspaceFolders", &result); err != nil {
 		return nil, err
 	}
 	return result, nil

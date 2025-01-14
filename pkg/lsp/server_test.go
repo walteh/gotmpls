@@ -60,7 +60,7 @@ type Person struct {
 
 		// Test hover in first file
 		file1 := runner.TmpFilePathOf("file1.tmpl")
-		hoverResult, err := runner.RequestHover(t, ctx, protocol.NewHoverParams(file1, protocol.Position{Line: 1, Character: 3}))
+		hoverResult, err := runner.Hover(t, ctx, protocol.NewHoverParams(file1, protocol.Position{Line: 1, Character: 3}))
 		require.NoError(t, err, "hover request should succeed")
 		require.NotNil(t, hoverResult, "hover result should not be nil")
 		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```go-template\n.Name\n```", hoverResult.Contents.Value)
@@ -72,7 +72,7 @@ type Person struct {
 
 		// Test hover in second file
 		file2 := runner.TmpFilePathOf("file2.tmpl")
-		hoverResult, err = runner.RequestHover(t, ctx, protocol.NewHoverParams(file2, protocol.Position{Line: 1, Character: 3}))
+		hoverResult, err = runner.Hover(t, ctx, protocol.NewHoverParams(file2, protocol.Position{Line: 1, Character: 3}))
 		require.NoError(t, err, "hover request should succeed")
 		require.NotNil(t, hoverResult, "hover result should not be nil")
 		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tAge int\n}\n```\n\n### Template Access\n```go-template\n.Age\n```", hoverResult.Contents.Value)
@@ -104,7 +104,7 @@ type Person struct {
 		testFile := runner.TmpFilePathOf("test.tmpl")
 
 		// Test initial hover
-		hoverResult, err := runner.RequestHover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
+		hoverResult, err := runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
 		require.NoError(t, err, "hover request should succeed")
 		require.NotNil(t, hoverResult, "hover result should not be nil")
 		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```go-template\n.Name\n```", hoverResult.Contents.Value)
@@ -129,7 +129,7 @@ type Person struct {
 		require.NoError(t, err, "save should succeed")
 
 		// Test hover after change
-		hoverResult, err = runner.RequestHover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
+		hoverResult, err = runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
 		require.NoError(t, err, "hover request should succeed")
 		require.Nil(t, hoverResult, "hover should return nil for non-existent field")
 	})
@@ -157,7 +157,7 @@ type Person struct {
 		require.NoError(t, err, "setup should succeed")
 
 		testFile := runner.TmpFilePathOf("test.tmpl")
-		hoverResult, err := runner.RequestHover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
+		hoverResult, err := runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
 		require.NoError(t, err, "hover request should succeed")
 		require.NotNil(t, hoverResult, "hover result should not be nil")
 		require.Equal(t, "### Method Information\n\n```go\nfunc (*Person) GetName() (string)\n```\n\n### Return Type\n```go\nstring\n```\n\n### Template Usage\n```go-template\n.GetName\n```", hoverResult.Contents.Value)
@@ -202,7 +202,7 @@ type Person struct {
 
 		for _, pos := range positions {
 			t.Run(pos.name, func(t *testing.T) {
-				hoverResult, err := runner.RequestHover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 2, Character: uint32(pos.character)}))
+				hoverResult, err := runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 2, Character: uint32(pos.character)}))
 				require.NoError(t, err, "hover request should succeed")
 
 				if pos.expected {

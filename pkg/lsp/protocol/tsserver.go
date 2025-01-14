@@ -13,7 +13,7 @@ package protocol
 import (
 	"context"
 
-	"github.com/sourcegraph/jsonrpc2"
+	"github.com/creachadair/jrpc2/handler"
 )
 
 type Server interface {
@@ -167,1187 +167,515 @@ type Server interface {
 	ResolveWorkspaceSymbol(context.Context, *WorkspaceSymbol) (*WorkspaceSymbol, error)
 }
 
-func serverDispatch(ctx context.Context, server Server, conn *jsonrpc2.Conn, r *jsonrpc2.Request) (bool, error) {
-	defer recoverHandlerPanic(r.Method)
-	switch r.Method {
-	case "$/progress":
-		var params ProgressParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.Progress(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "$/setTrace":
-		var params SetTraceParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.SetTrace(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "callHierarchy/incomingCalls":
-		var params CallHierarchyIncomingCallsParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.IncomingCalls(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "callHierarchy/outgoingCalls":
-		var params CallHierarchyOutgoingCallsParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.OutgoingCalls(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "codeAction/resolve":
-		var params CodeAction
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.ResolveCodeAction(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "codeLens/resolve":
-		var params CodeLens
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.ResolveCodeLens(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "completionItem/resolve":
-		var params CompletionItem
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.ResolveCompletionItem(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "documentLink/resolve":
-		var params DocumentLink
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.ResolveDocumentLink(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "exit":
-		err := server.Exit(ctx)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "initialize":
-		var params ParamInitialize
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.Initialize(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "initialized":
-		var params InitializedParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.Initialized(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "inlayHint/resolve":
-		var params InlayHint
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.Resolve(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "notebookDocument/didChange":
-		var params DidChangeNotebookDocumentParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.DidChangeNotebookDocument(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "notebookDocument/didClose":
-		var params DidCloseNotebookDocumentParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.DidCloseNotebookDocument(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "notebookDocument/didOpen":
-		var params DidOpenNotebookDocumentParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.DidOpenNotebookDocument(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "notebookDocument/didSave":
-		var params DidSaveNotebookDocumentParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.DidSaveNotebookDocument(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "shutdown":
-		err := server.Shutdown(ctx)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "textDocument/codeAction":
-		var params CodeActionParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.CodeAction(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/codeLens":
-		var params CodeLensParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.CodeLens(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/colorPresentation":
-		var params ColorPresentationParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.ColorPresentation(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/completion":
-		var params CompletionParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.Completion(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/declaration":
-		var params DeclarationParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.Declaration(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/definition":
-		var params DefinitionParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.Definition(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/diagnostic":
-		var params DocumentDiagnosticParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.Diagnostic(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/didChange":
-		var params DidChangeTextDocumentParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.DidChange(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "textDocument/didClose":
-		var params DidCloseTextDocumentParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.DidClose(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "textDocument/didOpen":
-		var params DidOpenTextDocumentParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.DidOpen(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "textDocument/didSave":
-		var params DidSaveTextDocumentParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.DidSave(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "textDocument/documentColor":
-		var params DocumentColorParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.DocumentColor(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/documentHighlight":
-		var params DocumentHighlightParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.DocumentHighlight(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/documentLink":
-		var params DocumentLinkParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.DocumentLink(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/documentSymbol":
-		var params DocumentSymbolParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.DocumentSymbol(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/foldingRange":
-		var params FoldingRangeParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.FoldingRange(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/formatting":
-		var params DocumentFormattingParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.Formatting(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/hover":
-		var params HoverParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.Hover(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/implementation":
-		var params ImplementationParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.Implementation(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/inlayHint":
-		var params InlayHintParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.InlayHint(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/inlineCompletion":
-		var params InlineCompletionParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.InlineCompletion(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/inlineValue":
-		var params InlineValueParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.InlineValue(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/linkedEditingRange":
-		var params LinkedEditingRangeParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.LinkedEditingRange(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/moniker":
-		var params MonikerParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.Moniker(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/onTypeFormatting":
-		var params DocumentOnTypeFormattingParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.OnTypeFormatting(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/prepareCallHierarchy":
-		var params CallHierarchyPrepareParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.PrepareCallHierarchy(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/prepareRename":
-		var params PrepareRenameParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.PrepareRename(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/prepareTypeHierarchy":
-		var params TypeHierarchyPrepareParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.PrepareTypeHierarchy(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/rangeFormatting":
-		var params DocumentRangeFormattingParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.RangeFormatting(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/rangesFormatting":
-		var params DocumentRangesFormattingParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.RangesFormatting(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/references":
-		var params ReferenceParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.References(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/rename":
-		var params RenameParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.Rename(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/selectionRange":
-		var params SelectionRangeParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.SelectionRange(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/semanticTokens/full":
-		var params SemanticTokensParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.SemanticTokensFull(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/semanticTokens/full/delta":
-		var params SemanticTokensDeltaParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.SemanticTokensFullDelta(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/semanticTokens/range":
-		var params SemanticTokensRangeParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.SemanticTokensRange(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/signatureHelp":
-		var params SignatureHelpParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.SignatureHelp(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/typeDefinition":
-		var params TypeDefinitionParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.TypeDefinition(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "textDocument/willSave":
-		var params WillSaveTextDocumentParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.WillSave(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "textDocument/willSaveWaitUntil":
-		var params WillSaveTextDocumentParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.WillSaveWaitUntil(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "typeHierarchy/subtypes":
-		var params TypeHierarchySubtypesParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.Subtypes(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "typeHierarchy/supertypes":
-		var params TypeHierarchySupertypesParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.Supertypes(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "window/workDoneProgress/cancel":
-		var params WorkDoneProgressCancelParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.WorkDoneProgressCancel(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "workspace/diagnostic":
-		var params WorkspaceDiagnosticParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.DiagnosticWorkspace(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "workspace/didChangeConfiguration":
-		var params DidChangeConfigurationParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.DidChangeConfiguration(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "workspace/didChangeWatchedFiles":
-		var params DidChangeWatchedFilesParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.DidChangeWatchedFiles(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "workspace/didChangeWorkspaceFolders":
-		var params DidChangeWorkspaceFoldersParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.DidChangeWorkspaceFolders(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "workspace/didCreateFiles":
-		var params CreateFilesParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.DidCreateFiles(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "workspace/didDeleteFiles":
-		var params DeleteFilesParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.DidDeleteFiles(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "workspace/didRenameFiles":
-		var params RenameFilesParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		err := server.DidRenameFiles(ctx, &params)
-		return true, reply_fwd(ctx, conn, r, nil, err)
-
-	case "workspace/executeCommand":
-		var params ExecuteCommandParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.ExecuteCommand(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "workspace/symbol":
-		var params WorkspaceSymbolParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.Symbol(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "workspace/textDocumentContent":
-		var params TextDocumentContentParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.TextDocumentContent(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "workspace/willCreateFiles":
-		var params CreateFilesParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.WillCreateFiles(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "workspace/willDeleteFiles":
-		var params DeleteFilesParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.WillDeleteFiles(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "workspace/willRenameFiles":
-		var params RenameFilesParams
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.WillRenameFiles(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	case "workspaceSymbol/resolve":
-		var params WorkspaceSymbol
-		if err := UnmarshalJSON(r.Params, &params); err != nil {
-			return true, sendParseError(ctx, conn, r, err)
-		}
-		resp, err := server.ResolveWorkspaceSymbol(ctx, &params)
-		if err != nil {
-			return true, reply_fwd(ctx, conn, r, nil, err)
-		}
-		return true, reply_fwd(ctx, conn, r, resp, nil)
-
-	default:
-		return false, nil
+func buildServerDispatchMap(server Server) handler.Map {
+	return handler.Map{
+		"$/progress":                             createEmptyResultHandler(server.Progress),
+		"$/setTrace":                             createEmptyResultHandler(server.SetTrace),
+		"callHierarchy/incomingCalls":            createHandler(server.IncomingCalls),
+		"callHierarchy/outgoingCalls":            createHandler(server.OutgoingCalls),
+		"codeAction/resolve":                     createHandler(server.ResolveCodeAction),
+		"codeLens/resolve":                       createHandler(server.ResolveCodeLens),
+		"completionItem/resolve":                 createHandler(server.ResolveCompletionItem),
+		"documentLink/resolve":                   createHandler(server.ResolveDocumentLink),
+		"exit":                                   createEmptyHandler(server.Exit),
+		"initialize":                             createHandler(server.Initialize),
+		"initialized":                            createEmptyResultHandler(server.Initialized),
+		"inlayHint/resolve":                      createHandler(server.Resolve),
+		"notebookDocument/didChange":             createEmptyResultHandler(server.DidChangeNotebookDocument),
+		"notebookDocument/didClose":              createEmptyResultHandler(server.DidCloseNotebookDocument),
+		"notebookDocument/didOpen":               createEmptyResultHandler(server.DidOpenNotebookDocument),
+		"notebookDocument/didSave":               createEmptyResultHandler(server.DidSaveNotebookDocument),
+		"shutdown":                               createEmptyHandler(server.Shutdown),
+		"textDocument/codeAction":                createHandler(server.CodeAction),
+		"textDocument/codeLens":                  createHandler(server.CodeLens),
+		"textDocument/colorPresentation":         createHandler(server.ColorPresentation),
+		"textDocument/completion":                createHandler(server.Completion),
+		"textDocument/declaration":               createHandler(server.Declaration),
+		"textDocument/definition":                createHandler(server.Definition),
+		"textDocument/diagnostic":                createHandler(server.Diagnostic),
+		"textDocument/didChange":                 createEmptyResultHandler(server.DidChange),
+		"textDocument/didClose":                  createEmptyResultHandler(server.DidClose),
+		"textDocument/didOpen":                   createEmptyResultHandler(server.DidOpen),
+		"textDocument/didSave":                   createEmptyResultHandler(server.DidSave),
+		"textDocument/documentColor":             createHandler(server.DocumentColor),
+		"textDocument/documentHighlight":         createHandler(server.DocumentHighlight),
+		"textDocument/documentLink":              createHandler(server.DocumentLink),
+		"textDocument/documentSymbol":            createHandler(server.DocumentSymbol),
+		"textDocument/foldingRange":              createHandler(server.FoldingRange),
+		"textDocument/formatting":                createHandler(server.Formatting),
+		"textDocument/hover":                     createHandler(server.Hover),
+		"textDocument/implementation":            createHandler(server.Implementation),
+		"textDocument/inlayHint":                 createHandler(server.InlayHint),
+		"textDocument/inlineCompletion":          createHandler(server.InlineCompletion),
+		"textDocument/inlineValue":               createHandler(server.InlineValue),
+		"textDocument/linkedEditingRange":        createHandler(server.LinkedEditingRange),
+		"textDocument/moniker":                   createHandler(server.Moniker),
+		"textDocument/onTypeFormatting":          createHandler(server.OnTypeFormatting),
+		"textDocument/prepareCallHierarchy":      createHandler(server.PrepareCallHierarchy),
+		"textDocument/prepareRename":             createHandler(server.PrepareRename),
+		"textDocument/prepareTypeHierarchy":      createHandler(server.PrepareTypeHierarchy),
+		"textDocument/rangeFormatting":           createHandler(server.RangeFormatting),
+		"textDocument/rangesFormatting":          createHandler(server.RangesFormatting),
+		"textDocument/references":                createHandler(server.References),
+		"textDocument/rename":                    createHandler(server.Rename),
+		"textDocument/selectionRange":            createHandler(server.SelectionRange),
+		"textDocument/semanticTokens/full":       createHandler(server.SemanticTokensFull),
+		"textDocument/semanticTokens/full/delta": createHandler(server.SemanticTokensFullDelta),
+		"textDocument/semanticTokens/range":      createHandler(server.SemanticTokensRange),
+		"textDocument/signatureHelp":             createHandler(server.SignatureHelp),
+		"textDocument/typeDefinition":            createHandler(server.TypeDefinition),
+		"textDocument/willSave":                  createEmptyResultHandler(server.WillSave),
+		"textDocument/willSaveWaitUntil":         createHandler(server.WillSaveWaitUntil),
+		"typeHierarchy/subtypes":                 createHandler(server.Subtypes),
+		"typeHierarchy/supertypes":               createHandler(server.Supertypes),
+		"window/workDoneProgress/cancel":         createEmptyResultHandler(server.WorkDoneProgressCancel),
+		"workspace/diagnostic":                   createHandler(server.DiagnosticWorkspace),
+		"workspace/didChangeConfiguration":       createEmptyResultHandler(server.DidChangeConfiguration),
+		"workspace/didChangeWatchedFiles":        createEmptyResultHandler(server.DidChangeWatchedFiles),
+		"workspace/didChangeWorkspaceFolders":    createEmptyResultHandler(server.DidChangeWorkspaceFolders),
+		"workspace/didCreateFiles":               createEmptyResultHandler(server.DidCreateFiles),
+		"workspace/didDeleteFiles":               createEmptyResultHandler(server.DidDeleteFiles),
+		"workspace/didRenameFiles":               createEmptyResultHandler(server.DidRenameFiles),
+		"workspace/executeCommand":               createHandler(server.ExecuteCommand),
+		"workspace/symbol":                       createHandler(server.Symbol),
+		"workspace/textDocumentContent":          createHandler(server.TextDocumentContent),
+		"workspace/willCreateFiles":              createHandler(server.WillCreateFiles),
+		"workspace/willDeleteFiles":              createHandler(server.WillDeleteFiles),
+		"workspace/willRenameFiles":              createHandler(server.WillRenameFiles),
+		"workspaceSymbol/resolve":                createHandler(server.ResolveWorkspaceSymbol),
 	}
 }
 
-func (s *serverDispatcher) Progress(ctx context.Context, params *ProgressParams) error {
-	return s.sender.Notify(ctx, "$/progress", params)
+func (s *CallbackServer) Progress(ctx context.Context, params *ProgressParams) error {
+	return createNotify(ctx, s, "$/progress", params)
 }
-func (s *serverDispatcher) SetTrace(ctx context.Context, params *SetTraceParams) error {
-	return s.sender.Notify(ctx, "$/setTrace", params)
+func (s *CallbackServer) SetTrace(ctx context.Context, params *SetTraceParams) error {
+	return createNotify(ctx, s, "$/setTrace", params)
 }
-func (s *serverDispatcher) IncomingCalls(ctx context.Context, params *CallHierarchyIncomingCallsParams) ([]CallHierarchyIncomingCall, error) {
+func (s *CallbackServer) IncomingCalls(ctx context.Context, params *CallHierarchyIncomingCallsParams) ([]CallHierarchyIncomingCall, error) {
 	var result []CallHierarchyIncomingCall
-	if err := s.sender.Call(ctx, "callHierarchy/incomingCalls", params, &result); err != nil {
+	if err := createCallback(ctx, s, "callHierarchy/incomingCalls", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) OutgoingCalls(ctx context.Context, params *CallHierarchyOutgoingCallsParams) ([]CallHierarchyOutgoingCall, error) {
+func (s *CallbackServer) OutgoingCalls(ctx context.Context, params *CallHierarchyOutgoingCallsParams) ([]CallHierarchyOutgoingCall, error) {
 	var result []CallHierarchyOutgoingCall
-	if err := s.sender.Call(ctx, "callHierarchy/outgoingCalls", params, &result); err != nil {
+	if err := createCallback(ctx, s, "callHierarchy/outgoingCalls", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) ResolveCodeAction(ctx context.Context, params *CodeAction) (*CodeAction, error) {
+func (s *CallbackServer) ResolveCodeAction(ctx context.Context, params *CodeAction) (*CodeAction, error) {
 	var result *CodeAction
-	if err := s.sender.Call(ctx, "codeAction/resolve", params, &result); err != nil {
+	if err := createCallback(ctx, s, "codeAction/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) ResolveCodeLens(ctx context.Context, params *CodeLens) (*CodeLens, error) {
+func (s *CallbackServer) ResolveCodeLens(ctx context.Context, params *CodeLens) (*CodeLens, error) {
 	var result *CodeLens
-	if err := s.sender.Call(ctx, "codeLens/resolve", params, &result); err != nil {
+	if err := createCallback(ctx, s, "codeLens/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) ResolveCompletionItem(ctx context.Context, params *CompletionItem) (*CompletionItem, error) {
+func (s *CallbackServer) ResolveCompletionItem(ctx context.Context, params *CompletionItem) (*CompletionItem, error) {
 	var result *CompletionItem
-	if err := s.sender.Call(ctx, "completionItem/resolve", params, &result); err != nil {
+	if err := createCallback(ctx, s, "completionItem/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) ResolveDocumentLink(ctx context.Context, params *DocumentLink) (*DocumentLink, error) {
+func (s *CallbackServer) ResolveDocumentLink(ctx context.Context, params *DocumentLink) (*DocumentLink, error) {
 	var result *DocumentLink
-	if err := s.sender.Call(ctx, "documentLink/resolve", params, &result); err != nil {
+	if err := createCallback(ctx, s, "documentLink/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) Exit(ctx context.Context) error {
-	return s.sender.Notify(ctx, "exit", nil)
+func (s *CallbackServer) Exit(ctx context.Context) error {
+	return createEmptyNotify(ctx, s, "exit")
 }
-func (s *serverDispatcher) Initialize(ctx context.Context, params *ParamInitialize) (*InitializeResult, error) {
+func (s *CallbackServer) Initialize(ctx context.Context, params *ParamInitialize) (*InitializeResult, error) {
 	var result *InitializeResult
-	if err := s.sender.Call(ctx, "initialize", params, &result); err != nil {
+	if err := createCallback(ctx, s, "initialize", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) Initialized(ctx context.Context, params *InitializedParams) error {
-	return s.sender.Notify(ctx, "initialized", params)
+func (s *CallbackServer) Initialized(ctx context.Context, params *InitializedParams) error {
+	return createNotify(ctx, s, "initialized", params)
 }
-func (s *serverDispatcher) Resolve(ctx context.Context, params *InlayHint) (*InlayHint, error) {
+func (s *CallbackServer) Resolve(ctx context.Context, params *InlayHint) (*InlayHint, error) {
 	var result *InlayHint
-	if err := s.sender.Call(ctx, "inlayHint/resolve", params, &result); err != nil {
+	if err := createCallback(ctx, s, "inlayHint/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) DidChangeNotebookDocument(ctx context.Context, params *DidChangeNotebookDocumentParams) error {
-	return s.sender.Notify(ctx, "notebookDocument/didChange", params)
+func (s *CallbackServer) DidChangeNotebookDocument(ctx context.Context, params *DidChangeNotebookDocumentParams) error {
+	return createNotify(ctx, s, "notebookDocument/didChange", params)
 }
-func (s *serverDispatcher) DidCloseNotebookDocument(ctx context.Context, params *DidCloseNotebookDocumentParams) error {
-	return s.sender.Notify(ctx, "notebookDocument/didClose", params)
+func (s *CallbackServer) DidCloseNotebookDocument(ctx context.Context, params *DidCloseNotebookDocumentParams) error {
+	return createNotify(ctx, s, "notebookDocument/didClose", params)
 }
-func (s *serverDispatcher) DidOpenNotebookDocument(ctx context.Context, params *DidOpenNotebookDocumentParams) error {
-	return s.sender.Notify(ctx, "notebookDocument/didOpen", params)
+func (s *CallbackServer) DidOpenNotebookDocument(ctx context.Context, params *DidOpenNotebookDocumentParams) error {
+	return createNotify(ctx, s, "notebookDocument/didOpen", params)
 }
-func (s *serverDispatcher) DidSaveNotebookDocument(ctx context.Context, params *DidSaveNotebookDocumentParams) error {
-	return s.sender.Notify(ctx, "notebookDocument/didSave", params)
+func (s *CallbackServer) DidSaveNotebookDocument(ctx context.Context, params *DidSaveNotebookDocumentParams) error {
+	return createNotify(ctx, s, "notebookDocument/didSave", params)
 }
-func (s *serverDispatcher) Shutdown(ctx context.Context) error {
-	return s.sender.Call(ctx, "shutdown", nil, nil)
+func (s *CallbackServer) Shutdown(ctx context.Context) error {
+	return createEmptyCallback(ctx, s, "shutdown")
 }
-func (s *serverDispatcher) CodeAction(ctx context.Context, params *CodeActionParams) ([]CodeAction, error) {
+func (s *CallbackServer) CodeAction(ctx context.Context, params *CodeActionParams) ([]CodeAction, error) {
 	var result []CodeAction
-	if err := s.sender.Call(ctx, "textDocument/codeAction", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/codeAction", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) CodeLens(ctx context.Context, params *CodeLensParams) ([]CodeLens, error) {
+func (s *CallbackServer) CodeLens(ctx context.Context, params *CodeLensParams) ([]CodeLens, error) {
 	var result []CodeLens
-	if err := s.sender.Call(ctx, "textDocument/codeLens", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/codeLens", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) ColorPresentation(ctx context.Context, params *ColorPresentationParams) ([]ColorPresentation, error) {
+func (s *CallbackServer) ColorPresentation(ctx context.Context, params *ColorPresentationParams) ([]ColorPresentation, error) {
 	var result []ColorPresentation
-	if err := s.sender.Call(ctx, "textDocument/colorPresentation", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/colorPresentation", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) Completion(ctx context.Context, params *CompletionParams) (*CompletionList, error) {
+func (s *CallbackServer) Completion(ctx context.Context, params *CompletionParams) (*CompletionList, error) {
 	var result *CompletionList
-	if err := s.sender.Call(ctx, "textDocument/completion", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/completion", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) Declaration(ctx context.Context, params *DeclarationParams) (*Or_textDocument_declaration, error) {
+func (s *CallbackServer) Declaration(ctx context.Context, params *DeclarationParams) (*Or_textDocument_declaration, error) {
 	var result *Or_textDocument_declaration
-	if err := s.sender.Call(ctx, "textDocument/declaration", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/declaration", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) Definition(ctx context.Context, params *DefinitionParams) ([]Location, error) {
+func (s *CallbackServer) Definition(ctx context.Context, params *DefinitionParams) ([]Location, error) {
 	var result []Location
-	if err := s.sender.Call(ctx, "textDocument/definition", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/definition", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) Diagnostic(ctx context.Context, params *DocumentDiagnosticParams) (*DocumentDiagnosticReport, error) {
+func (s *CallbackServer) Diagnostic(ctx context.Context, params *DocumentDiagnosticParams) (*DocumentDiagnosticReport, error) {
 	var result *DocumentDiagnosticReport
-	if err := s.sender.Call(ctx, "textDocument/diagnostic", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/diagnostic", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) DidChange(ctx context.Context, params *DidChangeTextDocumentParams) error {
-	return s.sender.Notify(ctx, "textDocument/didChange", params)
+func (s *CallbackServer) DidChange(ctx context.Context, params *DidChangeTextDocumentParams) error {
+	return createNotify(ctx, s, "textDocument/didChange", params)
 }
-func (s *serverDispatcher) DidClose(ctx context.Context, params *DidCloseTextDocumentParams) error {
-	return s.sender.Notify(ctx, "textDocument/didClose", params)
+func (s *CallbackServer) DidClose(ctx context.Context, params *DidCloseTextDocumentParams) error {
+	return createNotify(ctx, s, "textDocument/didClose", params)
 }
-func (s *serverDispatcher) DidOpen(ctx context.Context, params *DidOpenTextDocumentParams) error {
-	return s.sender.Notify(ctx, "textDocument/didOpen", params)
+func (s *CallbackServer) DidOpen(ctx context.Context, params *DidOpenTextDocumentParams) error {
+	return createNotify(ctx, s, "textDocument/didOpen", params)
 }
-func (s *serverDispatcher) DidSave(ctx context.Context, params *DidSaveTextDocumentParams) error {
-	return s.sender.Notify(ctx, "textDocument/didSave", params)
+func (s *CallbackServer) DidSave(ctx context.Context, params *DidSaveTextDocumentParams) error {
+	return createNotify(ctx, s, "textDocument/didSave", params)
 }
-func (s *serverDispatcher) DocumentColor(ctx context.Context, params *DocumentColorParams) ([]ColorInformation, error) {
+func (s *CallbackServer) DocumentColor(ctx context.Context, params *DocumentColorParams) ([]ColorInformation, error) {
 	var result []ColorInformation
-	if err := s.sender.Call(ctx, "textDocument/documentColor", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/documentColor", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) DocumentHighlight(ctx context.Context, params *DocumentHighlightParams) ([]DocumentHighlight, error) {
+func (s *CallbackServer) DocumentHighlight(ctx context.Context, params *DocumentHighlightParams) ([]DocumentHighlight, error) {
 	var result []DocumentHighlight
-	if err := s.sender.Call(ctx, "textDocument/documentHighlight", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/documentHighlight", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) DocumentLink(ctx context.Context, params *DocumentLinkParams) ([]DocumentLink, error) {
+func (s *CallbackServer) DocumentLink(ctx context.Context, params *DocumentLinkParams) ([]DocumentLink, error) {
 	var result []DocumentLink
-	if err := s.sender.Call(ctx, "textDocument/documentLink", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/documentLink", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) DocumentSymbol(ctx context.Context, params *DocumentSymbolParams) ([]any, error) {
+func (s *CallbackServer) DocumentSymbol(ctx context.Context, params *DocumentSymbolParams) ([]any, error) {
 	var result []any
-	if err := s.sender.Call(ctx, "textDocument/documentSymbol", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/documentSymbol", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) FoldingRange(ctx context.Context, params *FoldingRangeParams) ([]FoldingRange, error) {
+func (s *CallbackServer) FoldingRange(ctx context.Context, params *FoldingRangeParams) ([]FoldingRange, error) {
 	var result []FoldingRange
-	if err := s.sender.Call(ctx, "textDocument/foldingRange", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/foldingRange", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) Formatting(ctx context.Context, params *DocumentFormattingParams) ([]TextEdit, error) {
+func (s *CallbackServer) Formatting(ctx context.Context, params *DocumentFormattingParams) ([]TextEdit, error) {
 	var result []TextEdit
-	if err := s.sender.Call(ctx, "textDocument/formatting", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/formatting", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) Hover(ctx context.Context, params *HoverParams) (*Hover, error) {
+func (s *CallbackServer) Hover(ctx context.Context, params *HoverParams) (*Hover, error) {
 	var result *Hover
-	if err := s.sender.Call(ctx, "textDocument/hover", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/hover", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) Implementation(ctx context.Context, params *ImplementationParams) ([]Location, error) {
+func (s *CallbackServer) Implementation(ctx context.Context, params *ImplementationParams) ([]Location, error) {
 	var result []Location
-	if err := s.sender.Call(ctx, "textDocument/implementation", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/implementation", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) InlayHint(ctx context.Context, params *InlayHintParams) ([]InlayHint, error) {
+func (s *CallbackServer) InlayHint(ctx context.Context, params *InlayHintParams) ([]InlayHint, error) {
 	var result []InlayHint
-	if err := s.sender.Call(ctx, "textDocument/inlayHint", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/inlayHint", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) InlineCompletion(ctx context.Context, params *InlineCompletionParams) (*Or_Result_textDocument_inlineCompletion, error) {
+func (s *CallbackServer) InlineCompletion(ctx context.Context, params *InlineCompletionParams) (*Or_Result_textDocument_inlineCompletion, error) {
 	var result *Or_Result_textDocument_inlineCompletion
-	if err := s.sender.Call(ctx, "textDocument/inlineCompletion", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/inlineCompletion", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) InlineValue(ctx context.Context, params *InlineValueParams) ([]InlineValue, error) {
+func (s *CallbackServer) InlineValue(ctx context.Context, params *InlineValueParams) ([]InlineValue, error) {
 	var result []InlineValue
-	if err := s.sender.Call(ctx, "textDocument/inlineValue", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/inlineValue", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) LinkedEditingRange(ctx context.Context, params *LinkedEditingRangeParams) (*LinkedEditingRanges, error) {
+func (s *CallbackServer) LinkedEditingRange(ctx context.Context, params *LinkedEditingRangeParams) (*LinkedEditingRanges, error) {
 	var result *LinkedEditingRanges
-	if err := s.sender.Call(ctx, "textDocument/linkedEditingRange", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/linkedEditingRange", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) Moniker(ctx context.Context, params *MonikerParams) ([]Moniker, error) {
+func (s *CallbackServer) Moniker(ctx context.Context, params *MonikerParams) ([]Moniker, error) {
 	var result []Moniker
-	if err := s.sender.Call(ctx, "textDocument/moniker", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/moniker", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) OnTypeFormatting(ctx context.Context, params *DocumentOnTypeFormattingParams) ([]TextEdit, error) {
+func (s *CallbackServer) OnTypeFormatting(ctx context.Context, params *DocumentOnTypeFormattingParams) ([]TextEdit, error) {
 	var result []TextEdit
-	if err := s.sender.Call(ctx, "textDocument/onTypeFormatting", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/onTypeFormatting", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) PrepareCallHierarchy(ctx context.Context, params *CallHierarchyPrepareParams) ([]CallHierarchyItem, error) {
+func (s *CallbackServer) PrepareCallHierarchy(ctx context.Context, params *CallHierarchyPrepareParams) ([]CallHierarchyItem, error) {
 	var result []CallHierarchyItem
-	if err := s.sender.Call(ctx, "textDocument/prepareCallHierarchy", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/prepareCallHierarchy", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) PrepareRename(ctx context.Context, params *PrepareRenameParams) (*PrepareRenameResult, error) {
+func (s *CallbackServer) PrepareRename(ctx context.Context, params *PrepareRenameParams) (*PrepareRenameResult, error) {
 	var result *PrepareRenameResult
-	if err := s.sender.Call(ctx, "textDocument/prepareRename", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/prepareRename", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) PrepareTypeHierarchy(ctx context.Context, params *TypeHierarchyPrepareParams) ([]TypeHierarchyItem, error) {
+func (s *CallbackServer) PrepareTypeHierarchy(ctx context.Context, params *TypeHierarchyPrepareParams) ([]TypeHierarchyItem, error) {
 	var result []TypeHierarchyItem
-	if err := s.sender.Call(ctx, "textDocument/prepareTypeHierarchy", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/prepareTypeHierarchy", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) RangeFormatting(ctx context.Context, params *DocumentRangeFormattingParams) ([]TextEdit, error) {
+func (s *CallbackServer) RangeFormatting(ctx context.Context, params *DocumentRangeFormattingParams) ([]TextEdit, error) {
 	var result []TextEdit
-	if err := s.sender.Call(ctx, "textDocument/rangeFormatting", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/rangeFormatting", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) RangesFormatting(ctx context.Context, params *DocumentRangesFormattingParams) ([]TextEdit, error) {
+func (s *CallbackServer) RangesFormatting(ctx context.Context, params *DocumentRangesFormattingParams) ([]TextEdit, error) {
 	var result []TextEdit
-	if err := s.sender.Call(ctx, "textDocument/rangesFormatting", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/rangesFormatting", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) References(ctx context.Context, params *ReferenceParams) ([]Location, error) {
+func (s *CallbackServer) References(ctx context.Context, params *ReferenceParams) ([]Location, error) {
 	var result []Location
-	if err := s.sender.Call(ctx, "textDocument/references", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/references", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) Rename(ctx context.Context, params *RenameParams) (*WorkspaceEdit, error) {
+func (s *CallbackServer) Rename(ctx context.Context, params *RenameParams) (*WorkspaceEdit, error) {
 	var result *WorkspaceEdit
-	if err := s.sender.Call(ctx, "textDocument/rename", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/rename", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) SelectionRange(ctx context.Context, params *SelectionRangeParams) ([]SelectionRange, error) {
+func (s *CallbackServer) SelectionRange(ctx context.Context, params *SelectionRangeParams) ([]SelectionRange, error) {
 	var result []SelectionRange
-	if err := s.sender.Call(ctx, "textDocument/selectionRange", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/selectionRange", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) SemanticTokensFull(ctx context.Context, params *SemanticTokensParams) (*SemanticTokens, error) {
+func (s *CallbackServer) SemanticTokensFull(ctx context.Context, params *SemanticTokensParams) (*SemanticTokens, error) {
 	var result *SemanticTokens
-	if err := s.sender.Call(ctx, "textDocument/semanticTokens/full", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/semanticTokens/full", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) SemanticTokensFullDelta(ctx context.Context, params *SemanticTokensDeltaParams) (any, error) {
+func (s *CallbackServer) SemanticTokensFullDelta(ctx context.Context, params *SemanticTokensDeltaParams) (any, error) {
 	var result any
-	if err := s.sender.Call(ctx, "textDocument/semanticTokens/full/delta", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/semanticTokens/full/delta", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) SemanticTokensRange(ctx context.Context, params *SemanticTokensRangeParams) (*SemanticTokens, error) {
+func (s *CallbackServer) SemanticTokensRange(ctx context.Context, params *SemanticTokensRangeParams) (*SemanticTokens, error) {
 	var result *SemanticTokens
-	if err := s.sender.Call(ctx, "textDocument/semanticTokens/range", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/semanticTokens/range", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) SignatureHelp(ctx context.Context, params *SignatureHelpParams) (*SignatureHelp, error) {
+func (s *CallbackServer) SignatureHelp(ctx context.Context, params *SignatureHelpParams) (*SignatureHelp, error) {
 	var result *SignatureHelp
-	if err := s.sender.Call(ctx, "textDocument/signatureHelp", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/signatureHelp", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) TypeDefinition(ctx context.Context, params *TypeDefinitionParams) ([]Location, error) {
+func (s *CallbackServer) TypeDefinition(ctx context.Context, params *TypeDefinitionParams) ([]Location, error) {
 	var result []Location
-	if err := s.sender.Call(ctx, "textDocument/typeDefinition", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/typeDefinition", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) WillSave(ctx context.Context, params *WillSaveTextDocumentParams) error {
-	return s.sender.Notify(ctx, "textDocument/willSave", params)
+func (s *CallbackServer) WillSave(ctx context.Context, params *WillSaveTextDocumentParams) error {
+	return createNotify(ctx, s, "textDocument/willSave", params)
 }
-func (s *serverDispatcher) WillSaveWaitUntil(ctx context.Context, params *WillSaveTextDocumentParams) ([]TextEdit, error) {
+func (s *CallbackServer) WillSaveWaitUntil(ctx context.Context, params *WillSaveTextDocumentParams) ([]TextEdit, error) {
 	var result []TextEdit
-	if err := s.sender.Call(ctx, "textDocument/willSaveWaitUntil", params, &result); err != nil {
+	if err := createCallback(ctx, s, "textDocument/willSaveWaitUntil", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) Subtypes(ctx context.Context, params *TypeHierarchySubtypesParams) ([]TypeHierarchyItem, error) {
+func (s *CallbackServer) Subtypes(ctx context.Context, params *TypeHierarchySubtypesParams) ([]TypeHierarchyItem, error) {
 	var result []TypeHierarchyItem
-	if err := s.sender.Call(ctx, "typeHierarchy/subtypes", params, &result); err != nil {
+	if err := createCallback(ctx, s, "typeHierarchy/subtypes", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) Supertypes(ctx context.Context, params *TypeHierarchySupertypesParams) ([]TypeHierarchyItem, error) {
+func (s *CallbackServer) Supertypes(ctx context.Context, params *TypeHierarchySupertypesParams) ([]TypeHierarchyItem, error) {
 	var result []TypeHierarchyItem
-	if err := s.sender.Call(ctx, "typeHierarchy/supertypes", params, &result); err != nil {
+	if err := createCallback(ctx, s, "typeHierarchy/supertypes", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) WorkDoneProgressCancel(ctx context.Context, params *WorkDoneProgressCancelParams) error {
-	return s.sender.Notify(ctx, "window/workDoneProgress/cancel", params)
+func (s *CallbackServer) WorkDoneProgressCancel(ctx context.Context, params *WorkDoneProgressCancelParams) error {
+	return createNotify(ctx, s, "window/workDoneProgress/cancel", params)
 }
-func (s *serverDispatcher) DiagnosticWorkspace(ctx context.Context, params *WorkspaceDiagnosticParams) (*WorkspaceDiagnosticReport, error) {
+func (s *CallbackServer) DiagnosticWorkspace(ctx context.Context, params *WorkspaceDiagnosticParams) (*WorkspaceDiagnosticReport, error) {
 	var result *WorkspaceDiagnosticReport
-	if err := s.sender.Call(ctx, "workspace/diagnostic", params, &result); err != nil {
+	if err := createCallback(ctx, s, "workspace/diagnostic", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) DidChangeConfiguration(ctx context.Context, params *DidChangeConfigurationParams) error {
-	return s.sender.Notify(ctx, "workspace/didChangeConfiguration", params)
+func (s *CallbackServer) DidChangeConfiguration(ctx context.Context, params *DidChangeConfigurationParams) error {
+	return createNotify(ctx, s, "workspace/didChangeConfiguration", params)
 }
-func (s *serverDispatcher) DidChangeWatchedFiles(ctx context.Context, params *DidChangeWatchedFilesParams) error {
-	return s.sender.Notify(ctx, "workspace/didChangeWatchedFiles", params)
+func (s *CallbackServer) DidChangeWatchedFiles(ctx context.Context, params *DidChangeWatchedFilesParams) error {
+	return createNotify(ctx, s, "workspace/didChangeWatchedFiles", params)
 }
-func (s *serverDispatcher) DidChangeWorkspaceFolders(ctx context.Context, params *DidChangeWorkspaceFoldersParams) error {
-	return s.sender.Notify(ctx, "workspace/didChangeWorkspaceFolders", params)
+func (s *CallbackServer) DidChangeWorkspaceFolders(ctx context.Context, params *DidChangeWorkspaceFoldersParams) error {
+	return createNotify(ctx, s, "workspace/didChangeWorkspaceFolders", params)
 }
-func (s *serverDispatcher) DidCreateFiles(ctx context.Context, params *CreateFilesParams) error {
-	return s.sender.Notify(ctx, "workspace/didCreateFiles", params)
+func (s *CallbackServer) DidCreateFiles(ctx context.Context, params *CreateFilesParams) error {
+	return createNotify(ctx, s, "workspace/didCreateFiles", params)
 }
-func (s *serverDispatcher) DidDeleteFiles(ctx context.Context, params *DeleteFilesParams) error {
-	return s.sender.Notify(ctx, "workspace/didDeleteFiles", params)
+func (s *CallbackServer) DidDeleteFiles(ctx context.Context, params *DeleteFilesParams) error {
+	return createNotify(ctx, s, "workspace/didDeleteFiles", params)
 }
-func (s *serverDispatcher) DidRenameFiles(ctx context.Context, params *RenameFilesParams) error {
-	return s.sender.Notify(ctx, "workspace/didRenameFiles", params)
+func (s *CallbackServer) DidRenameFiles(ctx context.Context, params *RenameFilesParams) error {
+	return createNotify(ctx, s, "workspace/didRenameFiles", params)
 }
-func (s *serverDispatcher) ExecuteCommand(ctx context.Context, params *ExecuteCommandParams) (any, error) {
+func (s *CallbackServer) ExecuteCommand(ctx context.Context, params *ExecuteCommandParams) (any, error) {
 	var result any
-	if err := s.sender.Call(ctx, "workspace/executeCommand", params, &result); err != nil {
+	if err := createCallback(ctx, s, "workspace/executeCommand", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) Symbol(ctx context.Context, params *WorkspaceSymbolParams) ([]SymbolInformation, error) {
+func (s *CallbackServer) Symbol(ctx context.Context, params *WorkspaceSymbolParams) ([]SymbolInformation, error) {
 	var result []SymbolInformation
-	if err := s.sender.Call(ctx, "workspace/symbol", params, &result); err != nil {
+	if err := createCallback(ctx, s, "workspace/symbol", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) TextDocumentContent(ctx context.Context, params *TextDocumentContentParams) (*string, error) {
+func (s *CallbackServer) TextDocumentContent(ctx context.Context, params *TextDocumentContentParams) (*string, error) {
 	var result *string
-	if err := s.sender.Call(ctx, "workspace/textDocumentContent", params, &result); err != nil {
+	if err := createCallback(ctx, s, "workspace/textDocumentContent", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) WillCreateFiles(ctx context.Context, params *CreateFilesParams) (*WorkspaceEdit, error) {
+func (s *CallbackServer) WillCreateFiles(ctx context.Context, params *CreateFilesParams) (*WorkspaceEdit, error) {
 	var result *WorkspaceEdit
-	if err := s.sender.Call(ctx, "workspace/willCreateFiles", params, &result); err != nil {
+	if err := createCallback(ctx, s, "workspace/willCreateFiles", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) WillDeleteFiles(ctx context.Context, params *DeleteFilesParams) (*WorkspaceEdit, error) {
+func (s *CallbackServer) WillDeleteFiles(ctx context.Context, params *DeleteFilesParams) (*WorkspaceEdit, error) {
 	var result *WorkspaceEdit
-	if err := s.sender.Call(ctx, "workspace/willDeleteFiles", params, &result); err != nil {
+	if err := createCallback(ctx, s, "workspace/willDeleteFiles", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) WillRenameFiles(ctx context.Context, params *RenameFilesParams) (*WorkspaceEdit, error) {
+func (s *CallbackServer) WillRenameFiles(ctx context.Context, params *RenameFilesParams) (*WorkspaceEdit, error) {
 	var result *WorkspaceEdit
-	if err := s.sender.Call(ctx, "workspace/willRenameFiles", params, &result); err != nil {
+	if err := createCallback(ctx, s, "workspace/willRenameFiles", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *serverDispatcher) ResolveWorkspaceSymbol(ctx context.Context, params *WorkspaceSymbol) (*WorkspaceSymbol, error) {
+func (s *CallbackServer) ResolveWorkspaceSymbol(ctx context.Context, params *WorkspaceSymbol) (*WorkspaceSymbol, error) {
 	var result *WorkspaceSymbol
-	if err := s.sender.Call(ctx, "workspaceSymbol/resolve", params, &result); err != nil {
+	if err := createCallback(ctx, s, "workspaceSymbol/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil

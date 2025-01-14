@@ -98,7 +98,7 @@ func writeclient() {
 		`import (
 	"context"
 
-	"github.com/sourcegraph/jsonrpc2"
+	"github.com/creachadair/jrpc2"
 )
 `)
 	out.WriteString("type Client interface {\n")
@@ -106,9 +106,9 @@ func writeclient() {
 		out.WriteString(cdecls[k])
 	}
 	out.WriteString("}\n\n")
-	out.WriteString(`func clientDispatch(ctx context.Context, client Client, conn *jsonrpc2.Conn, r *jsonrpc2.Request) (bool, error) {
+	out.WriteString(`func clientDispatch(ctx context.Context, client Client, conn *jrpc2.Server, r *jrpc2.Request) (bool, error) {
 	defer recoverHandlerPanic(r.Method)
-	switch r.Method {
+	switch r.Method() {
 `)
 	for _, k := range ccases.keys() {
 		out.WriteString(ccases[k])
@@ -127,7 +127,7 @@ func writeserver() {
 		`import (
 	"context"
 
-	"github.com/sourcegraph/jsonrpc2"
+	"github.com/creachadair/jrpc2"
 )
 `)
 	out.WriteString("type Server interface {\n")
@@ -137,9 +137,9 @@ func writeserver() {
 	out.WriteString(`
 }
 
-func serverDispatch(ctx context.Context, server Server, conn *jsonrpc2.Conn, r *jsonrpc2.Request) (bool, error) {
+func serverDispatch(ctx context.Context, server Server, conn *jrpc2.Server, r *jrpc2.Request) (bool, error) {
 	defer recoverHandlerPanic(r.Method)
-	switch r.Method {
+	switch r.Method() {
 `)
 	for _, k := range scases.keys() {
 		out.WriteString(scases[k])

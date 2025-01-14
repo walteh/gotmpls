@@ -87,7 +87,7 @@ func genDecl(model *Model, method string, param, result *Type, dir string) {
 	}
 }
 
-func genCase(_ *Model, method string, param, result *Type, dir string) {
+func genCase_old(_ *Model, method string, param, result *Type, dir string) {
 	out := new(bytes.Buffer)
 	fmt.Fprintf(out, "\tcase %q:\n", method)
 	var p string
@@ -100,7 +100,7 @@ func genCase(_ *Model, method string, param, result *Type, dir string) {
 			nm = "ParamConfiguration" // gopls compatibility
 		}
 		fmt.Fprintf(out, "\t\tvar params %s\n", nm)
-		fmt.Fprintf(out, "\t\tif err := UnmarshalJSON(r.Params, &params); err != nil {\n")
+		fmt.Fprintf(out, "\t\tif err := UnmarshalJSON(r, &params); err != nil {\n")
 		fmt.Fprintf(out, "\t\t\treturn true, sendParseError(ctx, conn, r, err)\n\t\t}\n")
 		p = ", &params"
 	}
@@ -129,7 +129,7 @@ func genCase(_ *Model, method string, param, result *Type, dir string) {
 	}
 }
 
-func genFunc(_ *Model, method string, param, result *Type, dir string, isnotify bool) {
+func genFunc_old(_ *Model, method string, param, result *Type, dir string, isnotify bool) {
 	out := new(bytes.Buffer)
 	var p, r string
 	var goResult string

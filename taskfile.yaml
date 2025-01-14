@@ -133,16 +133,18 @@ tasks:
     sync-lsp-generator:
         desc: Sync LSP generator files from golang/tools
         cmds:
-          - task: sync-go-file
+          - task: sync-go-files
             vars:
                 SRC: github.com/golang/tools/blob/master/gopls/internal/protocol/generate
                 DEST: ./pkg/lsp/protocol/generator
                 STRINGS_TO_REPLACE:
                   - 'func processinline():func processinline_old()'
-                  - golang.org/x/tools/internal/jsonrpc2:github.com/sourcegraph/jsonrpc2
-                  - reply jsonrpc2.Replier, r jsonrpc2.Request:conn \*jsonrpc2.Conn, r \*jsonrpc2.Request
-                  - switch r.Method() {:switch r.Method {
-                  - UnmarshalJSON(r.Params(), \&params):UnmarshalJSON(r.Params, \&params)
+                  - golang.org/x/tools/internal/jsonrpc2:github.com/creachadair/jrpc2
+                  - reply jsonrpc2.Replier, r jsonrpc2.Request:conn \*jrpc2.Server, r \*jrpc2.Request
+                  - func genCase(:func genCase_old(
+                  - func genFunc(:func genFunc_old(
+                  - UnmarshalJSON(r.Params(), \&params):UnmarshalJSON(r, \&params)
                   - reply(ctx, :reply_fwd(ctx, conn, r,
                   - sendParseError(ctx, reply,:sendParseError(ctx, conn, r,
                   - recoverHandlerPanic(r.Method()):recoverHandlerPanic(r.Method)
+          - go generate ./pkg/lsp/protocol/generator

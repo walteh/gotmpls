@@ -17,11 +17,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/creachadair/jrpc2"
 	"github.com/neovim/go-client/nvim"
-	"github.com/rs/zerolog"
 	nvimlspconfig "github.com/walteh/go-tmpl-typer/gen/git-repo-tarballs/nvim-lspconfig"
 	"github.com/walteh/go-tmpl-typer/pkg/archive"
 	"github.com/walteh/go-tmpl-typer/pkg/lsp"
+	"github.com/walteh/go-tmpl-typer/pkg/lsp/integration"
 
 	// "github.com/walteh/go-tmpl-typer/pkg/lsp"
 	"github.com/walteh/go-tmpl-typer/pkg/lsp/protocol"
@@ -34,6 +35,8 @@ type NvimIntegrationTestRunner struct {
 	TmpDir       string
 	t            *testing.T
 }
+
+var _ integration.IntegrationTestRunner = &NvimIntegrationTestRunner{}
 
 func NewNvimIntegrationTestRunner(t *testing.T, files map[string]string) (*NvimIntegrationTestRunner, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -121,13 +124,14 @@ func NewNvimIntegrationTestRunner(t *testing.T, files map[string]string) (*NvimI
 		defer conn.Close()
 
 		t.Log("Starting server...")
-		verboseLogging := os.Getenv("DEBUG") == "1"
-		loggers := []io.Writer{}
-		if verboseLogging {
-			t.Log("Verbose logging enabled")
-			loggers = append(loggers, zerolog.NewTestWriter(t))
-		}
-		if err := lsp.Spawn(ctx, conn, conn, loggers...); err != nil {
+
+		server := lsp.NewServer(ctx)
+		opts := jrpc2.ServerOptions{}
+		opts.RPCLog = protocol.NewTestLogger(t, map[string]string{
+			tmpDir: "/[TEMP_DIR]",
+		})
+
+		if err := server.Run(ctx, conn, conn, &opts); err != nil {
 			if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
 				serverError <- errors.Errorf("LSP server error: %v", err)
 			}
@@ -445,25 +449,25 @@ func (s *NvimIntegrationTestRunner) TmpFilePathOf(path string) protocol.Document
 	return protocol.URIFromPath(filepath.Join(s.TmpDir, path))
 }
 
-func (s *NvimIntegrationTestRunner) RequestHover(t *testing.T, ctx context.Context, request *protocol.HoverParams) (*protocol.Hover, error) {
+func (s *NvimIntegrationTestRunner) Hover(t *testing.T, ctx context.Context, request *protocol.HoverParams) (*protocol.Hover, error) {
 	///////////////////////////
 
 	// TODO: eliminate this, since it doesnt work with larget packages
 
-	//Check for go.mod file
-	goModPath := filepath.Join(s.TmpDir, "go.mod")
-	if _, err := os.Stat(goModPath); os.IsNotExist(err) {
-		return nil, nil // Return nil if go.mod doesn't exist
-	}
+	// //Check for go.mod file
+	// goModPath := filepath.Join(s.TmpDir, "go.mod")
+	// if _, err := os.Stat(goModPath); os.IsNotExist(err) {
+	// 	return nil, nil // Return nil if go.mod doesn't exist
+	// }
 
-	//Check if go.mod is valid
-	goModContent, err := os.ReadFile(goModPath)
-	if err != nil {
-		return nil, nil // Return nil if can't read go.mod
-	}
-	if !strings.HasPrefix(string(goModContent), "module ") {
-		return nil, nil // Return nil if go.mod is invalid
-	}
+	// //Check if go.mod is valid
+	// goModContent, err := os.ReadFile(goModPath)
+	// if err != nil {
+	// 	return nil, nil // Return nil if can't read go.mod
+	// }
+	// if !strings.HasPrefix(string(goModContent), "module ") {
+	// 	return nil, nil // Return nil if go.mod is invalid
+	// }
 
 	///////////////////////////
 
@@ -478,12 +482,12 @@ func (s *NvimIntegrationTestRunner) RequestHover(t *testing.T, ctx context.Conte
 	}
 
 	// Get current buffer text
-	lines, err := s.nvimInstance.BufferLines(buffer, 0, -1, true)
-	if err != nil {
-		return nil, errors.Errorf("failed to get buffer lines: %w", err)
-	}
-	text := strings.Join(bytesSliceToStringSlice(lines), "\n")
-	t.Logf("Buffer content:\n%s", text)
+	// lines, err := s.nvimInstance.BufferLines(buffer, 0, -1, true)
+	// if err != nil {
+	// 	return nil, errors.Errorf("failed to get buffer lines: %w", err)
+	// }
+	// text := strings.Join(bytesSliceToStringSlice(lines), "\n")
+	// t.Logf("Buffer content:\n%s", text)
 
 	// Move cursor to the specified position
 	win, err := s.nvimInstance.CurrentWindow()
@@ -519,13 +523,13 @@ func (s *NvimIntegrationTestRunner) RequestHover(t *testing.T, ctx context.Conte
 		return nil, errors.Errorf("failed to request hover: %w", err)
 	}
 
-	t.Logf("Hover result: %v", hoverResult)
+	// t.Logf("Hover result: %v", hoverResult)
 
 	if hoverResult == nil {
 		return nil, nil // this is the case where there is no hover result, which is a valid case
 	}
 
-	t.Logf("Hover result string: %v", *hoverResult)
+	// t.Logf("Hover result string: %v", *hoverResult)
 
 	var hover protocol.Hover
 	err = json.Unmarshal([]byte(*hoverResult), &hover)

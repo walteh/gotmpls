@@ -5,20 +5,16 @@
 package protocol
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
 	"io"
 
-	"github.com/sourcegraph/jsonrpc2"
-	"go.lsp.dev/pkg/event"
-	"golang.org/x/telemetry/crashmonitor"
+	"github.com/creachadair/jrpc2"
+	"github.com/creachadair/jrpc2/handler"
 )
 
 // Core protocol constants and types
 var (
-	RequestCancelledError = &jsonrpc2.Error{Code: -32800, Message: "JSON RPC cancelled"}
+	RequestCancelledError = &jrpc2.Error{Code: -32800, Message: "JSON RPC cancelled"}
 )
 
 // Dispatcher types and interfaces
@@ -27,161 +23,153 @@ type ClientCloser interface {
 	io.Closer
 }
 
-type clientDispatcher struct {
-	sender *jsonrpc2.Conn
+type ServerCloser interface {
+	Server
+	io.Closer
 }
 
-type serverDispatcher struct {
-	sender *jsonrpc2.Conn
+type CallbackServer struct {
+	server *jrpc2.Client
 }
 
-// Dispatcher constructors and methods
-func (c *clientDispatcher) Close() error {
-	return c.sender.Close()
+func (c *CallbackServer) Notify(ctx context.Context, method string, params interface{}) error {
+	return c.server.Notify(ctx, method, params)
 }
 
-func NewClientDispatcher(conn *jsonrpc2.Conn) ClientCloser {
-	return &clientDispatcher{sender: conn}
+func (c *CallbackServer) Callback(ctx context.Context, method string, params interface{}) (*jrpc2.Response, error) {
+	return c.server.Call(ctx, method, params)
 }
 
-func NewServerDispatcher(conn *jsonrpc2.Conn) Server {
-	return &serverDispatcher{sender: conn}
+type CallbackClient struct {
+	serverOpts *jrpc2.ServerOptions
+	client     *jrpc2.Server
 }
 
-// Handler types and constructors
-type CancelHandler struct {
-	handler jsonrpc2.Handler
+func (c *CallbackClient) Notify(ctx context.Context, method string, params any) error {
+	if rl, ok := c.serverOpts.RPCLog.(CallbackRPCLogger); ok {
+		rl.LogCallbackRequestRaw(ctx, method, params)
+	}
+
+	if err := c.client.Notify(ctx, method, params); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-type ClientHandler struct {
-	client  Client
-	handler jsonrpc2.Handler
+func (c *CallbackClient) Callback(ctx context.Context, method string, params any) (*jrpc2.Response, error) {
+	if rl, ok := c.serverOpts.RPCLog.(CallbackRPCLogger); ok {
+		rl.LogCallbackRequestRaw(ctx, method, params)
+	}
+
+	res, err := c.client.Callback(ctx, method, params)
+	if err != nil {
+		return nil, err
+	}
+
+	if rl, ok := c.serverOpts.RPCLog.(CallbackRPCLogger); ok {
+		rl.LogCallbackResponse(ctx, res)
+	}
+
+	return res, nil
 }
 
-type ServerHandler struct {
-	server  Server
-	handler jsonrpc2.Handler
+func NewCallbackClient(server *jrpc2.Server, serverOpts *jrpc2.ServerOptions) *CallbackClient {
+	return &CallbackClient{client: server, serverOpts: serverOpts}
 }
 
-func Handlers(handler jsonrpc2.Handler) jsonrpc2.Handler {
-	return &CancelHandler{handler: jsonrpc2.AsyncHandler(handler)}
+func NewCallbackServer(server *jrpc2.Client) *CallbackServer {
+	return &CallbackServer{server: server}
 }
 
-func NewClientHandler(client Client, handler jsonrpc2.Handler) jsonrpc2.Handler {
-	return &ClientHandler{client: client, handler: handler}
-}
-
-func NewServerHandler(server Server, handler jsonrpc2.Handler) jsonrpc2.Handler {
-	return &ServerHandler{server: server, handler: handler}
-}
-
-// Handler implementations
-func (h *CancelHandler) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
-	if req.Method != "$/cancelRequest" {
+func Handlers(h handler.Func) jrpc2.Handler {
+	return handler.New(func(ctx context.Context, req *jrpc2.Request) (interface{}, error) {
+		if req.Method() == "$/cancelRequest" {
+			var params CancelParams
+			if err := req.UnmarshalParams(&params); err != nil {
+				return nil, err
+			}
+			return nil, nil
+		}
 		if ctx.Err() != nil {
 			ctx = Detach(ctx)
-			conn.ReplyWithError(ctx, req.ID, RequestCancelledError)
-			return
+			return nil, RequestCancelledError
 		}
-		h.handler.Handle(ctx, conn, req)
-		return
-	}
-	var params CancelParams
-	if err := UnmarshalJSON(req.Params, &params); err != nil {
-		sendParseError(ctx, conn, req, err)
-		return
-	}
-	conn.Reply(ctx, req.ID, nil)
+		return h(ctx, req)
+	})
 }
 
-func (h *ClientHandler) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
-	if ctx.Err() != nil {
-		ctx = Detach(ctx)
-		conn.ReplyWithError(ctx, req.ID, RequestCancelledError)
-		return
-	}
-	handled, err := clientDispatch(ctx, h.client, conn, req)
-	if handled || err != nil {
-		if err != nil {
-			if jsonErr, ok := err.(*jsonrpc2.Error); ok {
-				conn.ReplyWithError(ctx, req.ID, jsonErr)
-			} else {
-				conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
-					Code:    jsonrpc2.CodeInternalError,
-					Message: err.Error(),
-				})
-			}
-		}
-		return
-	}
-	h.handler.Handle(ctx, conn, req)
-}
+// func NewClientServer(client Client, opts *jrpc2.ServerOptions) *jrpc2.Server {
 
-func (h *ServerHandler) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
-	if ctx.Err() != nil {
-		ctx = Detach(ctx)
-		conn.ReplyWithError(ctx, req.ID, RequestCancelledError)
-		return
+// 	methods := buildClientDispatchMap(client)
+
+// 	// methods["$/cancelRequest"] = handler.New(func(ctx context.Context, req *jrpc2.Request) (interface{}, error) {
+// 	// 	var params CancelParams
+// 	// 	if err := req.UnmarshalParams(&params); err != nil {
+// 	// 		return nil, err
+// 	// 	}
+// 	// 	return nil, nil
+// 	// })
+
+// 	return jrpc2.NewServer(methods, opts)
+// }
+
+func NewServerServer(ctx context.Context, server Server, opts *jrpc2.ServerOptions) *jrpc2.Server {
+	methods := buildServerDispatchMap(server)
+	if opts == nil {
+		opts = &jrpc2.ServerOptions{}
 	}
-	handled, err := serverDispatch(ctx, h.server, conn, req)
-	if handled || err != nil {
-		if err != nil {
-			if jsonErr, ok := err.(*jsonrpc2.Error); ok {
-				conn.ReplyWithError(ctx, req.ID, jsonErr)
-			} else {
-				conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
-					Code:    jsonrpc2.CodeInternalError,
-					Message: err.Error(),
-				})
-			}
+
+	opts.AllowPush = true
+
+	var callbackServer *CallbackClient = nil
+
+	opts.NewContext = func() context.Context {
+		if callbackServer == nil {
+			return ctx
 		}
-		return
+
+		return ApplyClientToZerolog(ctx, callbackServer)
 	}
-	h.handler.Handle(ctx, conn, req)
+
+	// Create server with method handlers
+	result := jrpc2.NewServer(methods, opts)
+
+	callbackServer = NewCallbackClient(result, opts)
+
+	return result
 }
 
 // Utility functions used by generated code
-func reply_fwd(ctx context.Context, conn *jsonrpc2.Conn, id *jsonrpc2.Request, result any, err error) error {
+// func reply_fwd(ctx context.Context, _ *jrpc2.Server, req *jrpc2.Request, result interface{}, err error) (any, error) {
+// 	if err != nil {
+// 		return nil, &jrpc2.Error{
+// 			Code:    -32603,
+// 			Message: err.Error(),
+// 		}
+// 	}
+// 	if req.IsNotification() {
+// 		return nil, nil
+// 	}
+// 	return result, nil
+// }
+
+func Call(ctx context.Context, client *jrpc2.Client, method string, params interface{}, result interface{}) error {
+	rsp, err := client.Call(ctx, method, params)
 	if err != nil {
-		return conn.ReplyWithError(ctx, id.ID, &jsonrpc2.Error{
-			Code:    jsonrpc2.CodeInternalError,
-			Message: err.Error(),
-		})
+		return err
 	}
-	return conn.Reply(ctx, id.ID, result)
+	if result != nil {
+		return rsp.UnmarshalResult(result)
+	}
+	return nil
 }
 
-func Call(ctx context.Context, conn *jsonrpc2.Conn, method string, params any, result any) error {
-	err := conn.Call(ctx, method, params, result)
-	if ctx.Err() != nil {
-		cancelRequest(ctx, conn)
-	}
-	return err
-}
-
-func cancelRequest(ctx context.Context, conn *jsonrpc2.Conn) {
-	ctx = Detach(ctx)
-	ctx = event.Start(ctx, "protocol.canceller")
-	conn.Notify(ctx, "$/cancelRequest", &CancelParams{})
-}
-
-// JSON handling utilities
-func UnmarshalJSON(msg *json.RawMessage, v any) error {
-	if msg == nil {
-		return nil
-	}
-	if len(*msg) == 0 || bytes.Equal(*msg, []byte("null")) {
-		return nil
-	}
-	return json.Unmarshal(*msg, v)
-}
-
-func sendParseError(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request, err error) error {
-	return conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
-		Code:    jsonrpc2.CodeParseError,
-		Message: err.Error(),
-	})
-}
+// func cancelRequest(ctx context.Context, client *jrpc2.Client) {
+// 	ctx = Detach(ctx)
+// 	ctx = event.Start(ctx, "protocol.canceller")
+// 	client.Notify(ctx, "$/cancelRequest", &CancelParams{})
+// }
 
 // Helper functions
 func NonNilSlice[T comparable](x []T) []T {
@@ -191,63 +179,115 @@ func NonNilSlice[T comparable](x []T) []T {
 	return x
 }
 
-func recoverHandlerPanic(method string) {
-	if !crashmonitor.Supported() {
-		defer func() {
-			if x := recover(); x != nil {
-				event.Error(context.Background(), "panic in LSP handler", fmt.Errorf("method %s: %v", method, x))
-				panic(x)
-			}
-		}()
+// func recoverHandlerPanic(method string) {
+// 	if !crashmonitor.Supported() {
+// 		defer func() {
+// 			if x := recover(); x != nil {
+// 				event.Error(context.Background(), "panic in LSP handler", fmt.Errorf("method %s: %v", method, x))
+// 				panic(x)
+// 			}
+// 		}()
+// 	}
+// }
+
+func newParseError(err error) *jrpc2.Error {
+	return &jrpc2.Error{
+		Code:    -32700, // Parse error
+		Message: err.Error(),
 	}
 }
 
-// LSP method implementations for serverDispatcher
-func (s *serverDispatcher) PublishDiagnostics(ctx context.Context, params *PublishDiagnosticsParams) error {
-	return s.sender.Notify(ctx, "textDocument/publishDiagnostics", params)
+func createHandler[T any, O any](method func(ctx context.Context, params *T) (O, error)) handler.Func {
+	return handler.New(func(ctx context.Context, r *jrpc2.Request) (interface{}, error) {
+		ctx = ApplyRequestToZerolog(ctx, r)
+		var params T
+		if err := r.UnmarshalParams(&params); err != nil {
+			return nil, newParseError(err)
+		}
+		result, err := method(ctx, &params)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	})
 }
 
-func (s *serverDispatcher) ShowMessage(ctx context.Context, params *ShowMessageParams) error {
-	return s.sender.Notify(ctx, "window/showMessage", params)
+func createEmptyResultHandler[T any](method func(ctx context.Context, params *T) error) handler.Func {
+	return handler.New(func(ctx context.Context, r *jrpc2.Request) (interface{}, error) {
+		ctx = ApplyRequestToZerolog(ctx, r)
+		var params T
+		if err := r.UnmarshalParams(&params); err != nil {
+			return nil, newParseError(err)
+		}
+		return nil, method(ctx, &params)
+	})
 }
 
-func (s *serverDispatcher) LogMessage(ctx context.Context, params *LogMessageParams) error {
-	return s.sender.Notify(ctx, "window/logMessage", params)
+func createEmptyParamsHandler[T any](method func(ctx context.Context) (T, error)) handler.Func {
+	return handler.New(func(ctx context.Context, r *jrpc2.Request) (interface{}, error) {
+		ctx = ApplyRequestToZerolog(ctx, r)
+		result, err := method(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	})
 }
 
-// LSP method implementations for clientDispatcher
-func (c *clientDispatcher) Initialize(ctx context.Context, params *InitializeParams) (*InitializeResult, error) {
-	var result InitializeResult
-	if err := c.sender.Call(ctx, "initialize", params, &result); err != nil {
-		return nil, err
+func createEmptyHandler(method func(ctx context.Context) error) handler.Func {
+	return handler.New(func(ctx context.Context, r *jrpc2.Request) (interface{}, error) {
+		ctx = ApplyRequestToZerolog(ctx, r)
+		return nil, method(ctx)
+	})
+}
+
+type Callbacker interface {
+	Callback(ctx context.Context, method string, params interface{}) (*jrpc2.Response, error)
+	Notify(ctx context.Context, method string, params interface{}) error
+}
+
+func createCallback[I any, O any](ctx context.Context, client Callbacker, method string, params *I, result *O) error {
+	res, err := client.Callback(ctx, method, params)
+	if err != nil {
+		return err
 	}
-	return &result, nil
+	if result != nil {
+		return res.UnmarshalResult(result)
+	}
+	return nil
 }
 
-func (c *clientDispatcher) Initialized(ctx context.Context, params *InitializedParams) error {
-	return c.sender.Notify(ctx, "initialized", params)
+func createEmptyResultCallback[I any](ctx context.Context, client Callbacker, method string, params *I) error {
+	_, err := client.Callback(ctx, method, params)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func (c *clientDispatcher) Shutdown(ctx context.Context) error {
-	return c.sender.Call(ctx, "shutdown", nil, nil)
+func createEmptyCallback(ctx context.Context, client Callbacker, method string) error {
+	_, err := client.Callback(ctx, method, nil)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func (c *clientDispatcher) Exit(ctx context.Context) error {
-	return c.sender.Notify(ctx, "exit", nil)
+func createEmptyParamsCallback[O any](ctx context.Context, client Callbacker, method string, result *O) error {
+	res, err := client.Callback(ctx, method, nil)
+	if err != nil {
+		return err
+	}
+	if result != nil {
+		return res.UnmarshalResult(result)
+	}
+	return nil
 }
 
-func (c *clientDispatcher) DidOpen(ctx context.Context, params *DidOpenTextDocumentParams) error {
-	return c.sender.Notify(ctx, "textDocument/didOpen", params)
+func createNotify[I any](ctx context.Context, client Callbacker, method string, params *I) error {
+	return client.Notify(ctx, method, params)
 }
 
-func (c *clientDispatcher) DidChange(ctx context.Context, params *DidChangeTextDocumentParams) error {
-	return c.sender.Notify(ctx, "textDocument/didChange", params)
-}
-
-func (c *clientDispatcher) DidClose(ctx context.Context, params *DidCloseTextDocumentParams) error {
-	return c.sender.Notify(ctx, "textDocument/didClose", params)
-}
-
-func (c *clientDispatcher) DidSave(ctx context.Context, params *DidSaveTextDocumentParams) error {
-	return c.sender.Notify(ctx, "textDocument/didSave", params)
+func createEmptyNotify(ctx context.Context, client Callbacker, method string) error {
+	return client.Notify(ctx, method, nil)
 }
