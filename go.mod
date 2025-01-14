@@ -16,14 +16,14 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.10.0
 	gitlab.com/tozd/go/errors v0.10.0
-	go.lsp.dev/pkg v0.0.0-20210717090340-384b27a52fb2
-	golang.org/x/telemetry v0.0.0-20241106142447-58a1122356f5
 	golang.org/x/tools v0.29.0
+	gopkg.in/fsnotify.v1 v1.4.7
 )
 
 require (
 	github.com/creachadair/mds v0.21.4 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect

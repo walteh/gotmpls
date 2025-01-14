@@ -35,7 +35,7 @@ func (me *Handler) Run(ctx context.Context) error {
 	server := lsp.NewServer(ctx)
 
 	// Start the server using stdin/stdout
-	if err := server.Run(ctx, os.Stdin, os.Stdout); err != nil {
+	if err := server.Run(ctx, os.Stdin, os.Stdout, nil); err != nil {
 		return errors.Errorf("failed to start language server: %w", err)
 	}
 

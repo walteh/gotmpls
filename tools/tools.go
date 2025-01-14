@@ -20,5 +20,4 @@ import (
 	_ "github.com/srikrsna/protoc-gen-gotag"
 	_ "github.com/vektra/mockery/v2"
 	_ "github.com/walteh/retab/v2/cmd/retab"
-	_ "golang.org/x/tools/gopls/internal/protocol/generate"
 )

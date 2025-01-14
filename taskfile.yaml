@@ -5,6 +5,10 @@
 
 version: '3'
 
+vars:
+    GO_MODULES:
+        sh: cat go.work | grep -oEh  '\t+(\./*[^[:space:]]*)' | tr -d '\t'
+
 includes:
     tool:
         optional: true
@@ -45,27 +49,12 @@ tasks:
             REPO: '{{.REPO}}'
             ORG: '{{.ORG}}'
             REF: '{{.REF}}'
-            PATH: '{{.PATH}}'
             PKG: '{{.REPO | lower | replace "-" ""}}'
+            PATH: 'gen/git-repo-tarballs'
         cmds:
-          - mkdir -p gen/git-repo-tarballs/{{.REPO}}
-          - rm -f gen/git-repo-tarballs/{{.REPO}}/{{.REPO}}.tar.gz
-          - |
-            curl -fL https://github.com/{{.ORG}}/{{.REPO}}/archive/refs/{{.REF}}.tar.gz -o gen/git-repo-tarballs/{{.REPO}}/{{.REPO}}.tar.gz
-            if [ $? -ne 0 ] || [ ! -s gen/git-repo-tarballs/{{.REPO}}/{{.REPO}}.tar.gz ]; then
-              echo "Failed to download {{.REPO}} or file is empty"
-              rm -f gen/git-repo-tarballs/{{.REPO}}/{{.REPO}}.tar.gz
-              exit 1
-            fi
-          - echo "package {{.PKG}}" > gen/git-repo-tarballs/{{.REPO}}/embed.go
-
-          - echo "import _ \"embed\"" >> gen/git-repo-tarballs/{{.REPO}}/embed.go
-          - echo "//go:embed {{.REPO}}.tar.gz" >> gen/git-repo-tarballs/{{.REPO}}/embed.go
-
-          - echo "var Data []byte" >> gen/git-repo-tarballs/{{.REPO}}/embed.go
-          - echo "var Ref string = \"{{.REF}}\"" >> gen/git-repo-tarballs/{{.REPO}}/embed.go
+          - ./scripts/download-repo-tarball.sh --repo {{.REPO}} --org {{.ORG}} --ref {{.REF}} {{if .PKG}}--pkg {{.PKG}}{{end}} --path {{.PATH}}
         status:
-          - test -d gen/git-repo-tarballs/{{.REPO}}/{{.REPO}}.tar.gz
+          - test -d {{.PATH}}/{{.REPO}}/{{.REPO}}.tar.gz
 
     download-all-repos-as-tarballs:
         desc: Download all configured repositories
@@ -75,13 +64,11 @@ tasks:
                 REPO: nvim-lspconfig
                 ORG: neovim
                 REF: tags/v1.3.0
-                PATH: pkg/lsp/gen
           - task: download-repo-as-tarball
             vars:
                 REPO: vscode-languageserver-node
                 ORG: microsoft
                 REF: tags/release/jsonrpc/9.0.0-next.6
-                PATH: pkg/lsp/gen
 
     generate:
         cmds:
@@ -148,3 +135,17 @@ tasks:
                   - sendParseError(ctx, reply,:sendParseError(ctx, conn, r,
                   - recoverHandlerPanic(r.Method()):recoverHandlerPanic(r.Method)
           - go generate ./pkg/lsp/protocol/generator
+
+    go-mod-tidy:
+        env: { GOPROXY: https://proxy.golang.org, GOSUMDB: sum.golang.org, GOPRIVATE: github.com/walteh }
+        cmds:
+          - for: { var: GO_MODULES }
+            cmd: |
+                cd {{.ITEM}} && go mod tidy
+
+    go-mod-upgrade:
+        run: once
+        deps: [ local-setup-tools ]
+        env: { GOPROXY: https://proxy.golang.org, GOSUMDB: sum.golang.org, GOPRIVATE: github.com/walteh }
+        cmds:
+          - ./scripts/run-tool.sh go-mod-upgrade --force
