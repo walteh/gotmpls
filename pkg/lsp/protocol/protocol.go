@@ -11,117 +11,71 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/sourcegraph/jsonrpc2"
 	"go.lsp.dev/pkg/event"
 	"golang.org/x/telemetry/crashmonitor"
-
-	// "golang.org/x/tools/gopls/internal/util/bug"
-	// "golang.org/x/tools/internal/event"
-	// "golang.org/x/tools/internal/jsonrpc2"
-	// jsonrpc2_v2 "golang.org/x/tools/internal/jsonrpc2_v2"
-	// "golang.org/x/tools/internal/xcontext"
-	"github.com/sourcegraph/jsonrpc2"
 )
 
+// Core protocol constants and types
 var (
-	// RequestCancelledError should be used when a request is cancelled early.
 	RequestCancelledError = &jsonrpc2.Error{Code: -32800, Message: "JSON RPC cancelled"}
 )
 
+// Dispatcher types and interfaces
 type ClientCloser interface {
 	Client
 	io.Closer
 }
 
-type connSender interface {
-	io.Closer
-
-	Notify(ctx context.Context, method string, params any) error
-	Call(ctx context.Context, method string, params, result any) error
-}
-
 type clientDispatcher struct {
-	sender connSender
+	sender *jsonrpc2.Conn
 }
 
+type serverDispatcher struct {
+	sender *jsonrpc2.Conn
+}
+
+// Dispatcher constructors and methods
 func (c *clientDispatcher) Close() error {
 	return c.sender.Close()
 }
 
-// ClientDispatcher returns a Client that dispatches LSP requests across the
-// given jsonrpc2 connection.
-func ClientDispatcher(conn *jsonrpc2.Conn) ClientCloser {
-	return &clientDispatcher{sender: clientConn{conn}}
+func NewClientDispatcher(conn *jsonrpc2.Conn) ClientCloser {
+	return &clientDispatcher{sender: conn}
 }
 
-type clientConn struct {
-	conn *jsonrpc2.Conn
+func NewServerDispatcher(conn *jsonrpc2.Conn) Server {
+	return &serverDispatcher{sender: conn}
 }
 
-func (c clientConn) Close() error {
-	return c.conn.Close()
+// Handler types and constructors
+type CancelHandler struct {
+	handler jsonrpc2.Handler
 }
 
-func (c clientConn) Notify(ctx context.Context, method string, params any) error {
-	return c.conn.Notify(ctx, method, params)
+type ClientHandler struct {
+	client  Client
+	handler jsonrpc2.Handler
 }
 
-func (c clientConn) Call(ctx context.Context, method string, params any, result any) error {
-	err := c.conn.Call(ctx, method, params, result)
-	if ctx.Err() != nil {
-		// Create a new ID for cancellation since we can't access the original
-		cancelCall(ctx, c, jsonrpc2.ID{})
-	}
-	return err
-}
-
-// func ClientDispatcherV2(conn *jsonrpc2_v2.Connection) ClientCloser {
-// 	return &clientDispatcher{clientConnV2{conn}}
-// }
-
-// type clientConnV2 struct {
-// 	conn *jsonrpc2_v2.Connection
-// }
-
-// func (c clientConnV2) Close() error {
-// 	return c.conn.Close()
-// }
-
-// func (c clientConnV2) Notify(ctx context.Context, method string, params any) error {
-// 	return c.conn.Notify(ctx, method, params)
-// }
-
-// func (c clientConnV2) Call(ctx context.Context, method string, params any, result any) error {
-// 	call := c.conn.Call(ctx, method, params)
-// 	err := call.Await(ctx, result)
-// 	if ctx.Err() != nil {
-// 		detached := Detach(ctx)
-// 		c.conn.Notify(detached, "$/cancelRequest", &CancelParams{ID: call.ID().Raw()})
-// 	}
-// 	return err
-// }
-
-// ServerDispatcher returns a Server that dispatches LSP requests across the
-// given jsonrpc2 connection.
-func ServerDispatcher(conn *jsonrpc2.Conn) Server {
-	return &serverDispatcher{sender: clientConn{conn}}
-}
-
-// func ServerDispatcherV2(conn *jsonrpc2_v2.Connection) Server {
-// 	return &serverDispatcher{sender: clientConnV2{conn}}
-// }
-
-type serverDispatcher struct {
-	sender connSender
+type ServerHandler struct {
+	server  Server
+	handler jsonrpc2.Handler
 }
 
 func Handlers(handler jsonrpc2.Handler) jsonrpc2.Handler {
 	return &CancelHandler{handler: jsonrpc2.AsyncHandler(handler)}
 }
 
-type CancelHandler struct {
-	handler jsonrpc2.Handler
+func NewClientHandler(client Client, handler jsonrpc2.Handler) jsonrpc2.Handler {
+	return &ClientHandler{client: client, handler: handler}
 }
 
+func NewServerHandler(server Server, handler jsonrpc2.Handler) jsonrpc2.Handler {
+	return &ServerHandler{server: server, handler: handler}
+}
+
+// Handler implementations
 func (h *CancelHandler) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
 	if req.Method != "$/cancelRequest" {
 		if ctx.Err() != nil {
@@ -137,75 +91,7 @@ func (h *CancelHandler) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *js
 		sendParseError(ctx, conn, req, err)
 		return
 	}
-	// Handle cancellation request
 	conn.Reply(ctx, req.ID, nil)
-}
-
-func Call(ctx context.Context, conn *jsonrpc2.Conn, method string, params any, result any) error {
-	err := conn.Call(ctx, method, params, result)
-	if ctx.Err() != nil {
-		// Create a new ID for cancellation since we can't access the original
-		cancelCall(ctx, clientConn{conn}, jsonrpc2.ID{})
-	}
-	return err
-}
-
-func cancelCall(ctx context.Context, sender connSender, id jsonrpc2.ID) {
-	ctx = Detach(ctx)
-	ctx = event.Start(ctx, "protocol.canceller")
-
-	// Note that only *jsonrpc2.ID implements json.Marshaler.
-	sender.Notify(ctx, "$/cancelRequest", &CancelParams{ID: &id})
-}
-
-// UnmarshalJSON unmarshals msg into the variable pointed to by
-// params. In JSONRPC, optional messages may be
-// "null", in which case it is a no-op.
-func UnmarshalJSON(msg *json.RawMessage, v any) error {
-	if msg == nil {
-		return nil
-	}
-	if len(*msg) == 0 || bytes.Equal(*msg, []byte("null")) {
-		return nil
-	}
-	return json.Unmarshal(*msg, v)
-}
-
-func sendParseError(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request, err error) error {
-	return conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
-		Code:    jsonrpc2.CodeParseError,
-		Message: err.Error(),
-	})
-}
-
-// NonNilSlice returns x, or an empty slice if x was nil.
-//
-// (Many slice fields of protocol structs must be non-nil
-// to avoid being encoded as JSON "null".)
-func NonNilSlice[T comparable](x []T) []T {
-	if x == nil {
-		return []T{}
-	}
-	return x
-}
-
-// recoverHandlerPanic recovers from panics in handlers and logs them using zerolog
-func recoverHandlerPanic(method string) {
-	if !crashmonitor.Supported() {
-		defer func() {
-			if x := recover(); x != nil {
-				// Use zerolog for structured logging
-				event.Error(context.Background(), "panic in LSP handler", fmt.Errorf("method %s: %v", method, x))
-				panic(x) // Re-panic after logging
-			}
-		}()
-	}
-}
-
-// ClientHandler implements jsonrpc2.Handler for client-side LSP message handling
-type ClientHandler struct {
-	client  Client
-	handler jsonrpc2.Handler
 }
 
 func (h *ClientHandler) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
@@ -231,12 +117,6 @@ func (h *ClientHandler) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *js
 	h.handler.Handle(ctx, conn, req)
 }
 
-// ServerHandler implements jsonrpc2.Handler for server-side LSP message handling
-type ServerHandler struct {
-	server  Server
-	handler jsonrpc2.Handler
-}
-
 func (h *ServerHandler) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request) {
 	if ctx.Err() != nil {
 		ctx = Detach(ctx)
@@ -260,10 +140,114 @@ func (h *ServerHandler) Handle(ctx context.Context, conn *jsonrpc2.Conn, req *js
 	h.handler.Handle(ctx, conn, req)
 }
 
-func NewClientHandler(client Client, handler jsonrpc2.Handler) jsonrpc2.Handler {
-	return &ClientHandler{client: client, handler: handler}
+// Utility functions used by generated code
+func reply_fwd(ctx context.Context, conn *jsonrpc2.Conn, id *jsonrpc2.Request, result any, err error) error {
+	if err != nil {
+		return conn.ReplyWithError(ctx, id.ID, &jsonrpc2.Error{
+			Code:    jsonrpc2.CodeInternalError,
+			Message: err.Error(),
+		})
+	}
+	return conn.Reply(ctx, id.ID, result)
 }
 
-func NewServerHandler(server Server, handler jsonrpc2.Handler) jsonrpc2.Handler {
-	return &ServerHandler{server: server, handler: handler}
+func Call(ctx context.Context, conn *jsonrpc2.Conn, method string, params any, result any) error {
+	err := conn.Call(ctx, method, params, result)
+	if ctx.Err() != nil {
+		cancelRequest(ctx, conn)
+	}
+	return err
+}
+
+func cancelRequest(ctx context.Context, conn *jsonrpc2.Conn) {
+	ctx = Detach(ctx)
+	ctx = event.Start(ctx, "protocol.canceller")
+	conn.Notify(ctx, "$/cancelRequest", &CancelParams{})
+}
+
+// JSON handling utilities
+func UnmarshalJSON(msg *json.RawMessage, v any) error {
+	if msg == nil {
+		return nil
+	}
+	if len(*msg) == 0 || bytes.Equal(*msg, []byte("null")) {
+		return nil
+	}
+	return json.Unmarshal(*msg, v)
+}
+
+func sendParseError(ctx context.Context, conn *jsonrpc2.Conn, req *jsonrpc2.Request, err error) error {
+	return conn.ReplyWithError(ctx, req.ID, &jsonrpc2.Error{
+		Code:    jsonrpc2.CodeParseError,
+		Message: err.Error(),
+	})
+}
+
+// Helper functions
+func NonNilSlice[T comparable](x []T) []T {
+	if x == nil {
+		return []T{}
+	}
+	return x
+}
+
+func recoverHandlerPanic(method string) {
+	if !crashmonitor.Supported() {
+		defer func() {
+			if x := recover(); x != nil {
+				event.Error(context.Background(), "panic in LSP handler", fmt.Errorf("method %s: %v", method, x))
+				panic(x)
+			}
+		}()
+	}
+}
+
+// LSP method implementations for serverDispatcher
+func (s *serverDispatcher) PublishDiagnostics(ctx context.Context, params *PublishDiagnosticsParams) error {
+	return s.sender.Notify(ctx, "textDocument/publishDiagnostics", params)
+}
+
+func (s *serverDispatcher) ShowMessage(ctx context.Context, params *ShowMessageParams) error {
+	return s.sender.Notify(ctx, "window/showMessage", params)
+}
+
+func (s *serverDispatcher) LogMessage(ctx context.Context, params *LogMessageParams) error {
+	return s.sender.Notify(ctx, "window/logMessage", params)
+}
+
+// LSP method implementations for clientDispatcher
+func (c *clientDispatcher) Initialize(ctx context.Context, params *InitializeParams) (*InitializeResult, error) {
+	var result InitializeResult
+	if err := c.sender.Call(ctx, "initialize", params, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *clientDispatcher) Initialized(ctx context.Context, params *InitializedParams) error {
+	return c.sender.Notify(ctx, "initialized", params)
+}
+
+func (c *clientDispatcher) Shutdown(ctx context.Context) error {
+	return c.sender.Call(ctx, "shutdown", nil, nil)
+}
+
+func (c *clientDispatcher) Exit(ctx context.Context) error {
+	return c.sender.Notify(ctx, "exit", nil)
+}
+
+func (c *clientDispatcher) DidOpen(ctx context.Context, params *DidOpenTextDocumentParams) error {
+	return c.sender.Notify(ctx, "textDocument/didOpen", params)
+}
+
+func (c *clientDispatcher) DidChange(ctx context.Context, params *DidChangeTextDocumentParams) error {
+	return c.sender.Notify(ctx, "textDocument/didChange", params)
+}
+
+func (c *clientDispatcher) DidClose(ctx context.Context, params *DidCloseTextDocumentParams) error {
+	return c.sender.Notify(ctx, "textDocument/didClose", params)
+}
+
+func (c *clientDispatcher) DidSave(ctx context.Context, params *DidSaveTextDocumentParams) error {
+	return c.sender.Notify(ctx, "textDocument/didSave", params)
 }
