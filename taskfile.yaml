@@ -119,16 +119,14 @@ tasks:
           - bun install
           - bun run build
 
-    sync-go-file:
+    sync-go-files:
         desc: Sync Go files from a GitHub repository
         vars:
             SRC: '{{.SRC}}'
             DEST: '{{.DEST}}'
-        env:
-            SCRIPTS_DIR: "./scripts"
         cmds:
           - |
-            "${SCRIPTS_DIR}/sync-go-files.sh" {{.SRC}} {{.DEST}} {{if .STRINGS_TO_REPLACE}}{{range $index, $str := .STRINGS_TO_REPLACE}} --string-to-replace "{{$str}}"{{end}}{{end}}
+            ./scripts/sync-go-files.sh {{.SRC}} {{.DEST}} {{if .STRINGS_TO_REPLACE}}{{range $index, $str := .STRINGS_TO_REPLACE}} --string-to-replace "{{$str}}"{{end}}{{end}}
         status:
           - test -d {{.DEST}}
 

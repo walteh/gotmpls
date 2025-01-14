@@ -175,6 +175,10 @@ func BuildHoverResponseFromParse(ctx context.Context, info *parser.ParsedTemplat
 
 				typeInfo, err := ast.GenerateFieldInfoFromPosition(ctx, thd, variable.Position)
 				if err != nil {
+					// If the field doesn't exist, return nil hover info instead of an error
+					if strings.Contains(err.Error(), "field not found") {
+						return nil, nil
+					}
 					return nil, errors.Errorf("generating field info: %w", err)
 				}
 

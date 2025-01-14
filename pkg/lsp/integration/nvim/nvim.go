@@ -1,4 +1,4 @@
-package lsp_test
+package nvim
 
 import (
 	"archive/tar"
@@ -7,40 +7,38 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/neovim/go-client/nvim"
 	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/require"
+	nvimlspconfig "github.com/walteh/go-tmpl-typer/gen/git-repo-tarballs/nvim-lspconfig"
 	"github.com/walteh/go-tmpl-typer/pkg/archive"
 	"github.com/walteh/go-tmpl-typer/pkg/lsp"
+
+	// "github.com/walteh/go-tmpl-typer/pkg/lsp"
+	"github.com/walteh/go-tmpl-typer/pkg/lsp/protocol"
 	"gitlab.com/tozd/go/errors"
 )
 
-//go:embed testdata/gen/nvim-lspconfig.tar.gz
-var lspConfigTarGz []byte
-
-// testFiles represents a map of file paths to their contents
-type testFiles map[string]string
-
-// neovimTestSetup contains all the necessary components for a neovim LSP test
-type neovimTestSetup struct {
+// NvimIntegrationTestRunner contains all the necessary components for a neovim LSP test
+type NvimIntegrationTestRunner struct {
 	nvimInstance *nvim.Nvim
-	tmpDir       string
-	cleanup      func()
+	TmpDir       string
 	t            *testing.T
 }
 
-func setupNeovimTest(t *testing.T, files testFiles) (*neovimTestSetup, error) {
+func NewNvimIntegrationTestRunner(t *testing.T, files map[string]string) (*NvimIntegrationTestRunner, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
-	setup := &neovimTestSetup{
+	setup := &NvimIntegrationTestRunner{
 		t: t,
 	}
 
@@ -54,29 +52,51 @@ func setupNeovimTest(t *testing.T, files testFiles) (*neovimTestSetup, error) {
 	socketPath := filepath.Join(tmpDir, "lsp-test.sock")
 
 	// Create cleanup function that will be called when test is done
-	cleanup := func() {
+	t.Cleanup(func() {
 		cancel()
 		if setup.nvimInstance != nil {
 			if err := setup.nvimInstance.Close(); err != nil {
 				t.Logf("failed to close neovim: %v", err)
 			}
 		}
-		os.RemoveAll(tmpDir)
-		os.Remove(socketPath)
+
+		defer func() {
+			os.RemoveAll(tmpDir)
+			os.Remove(socketPath)
+		}()
+
 		// Check the Neovim log
 		nvimLogPath := filepath.Join(tmpDir, "nvim.log")
 		if nvimLog, err := os.ReadFile(nvimLogPath); err == nil {
-			lastLines := lastN(strings.Split(string(nvimLog), "\n"), 50)
-			t.Logf("Neovim log (last 50 lines):\n%s", strings.Join(lastLines, "\n"))
+			debugNvimLogLines := os.Getenv("DEBUG_NVIM_LOG_LINES")
+			var inter int
+			if debugNvimLogLines == "" {
+				t.Logf("DEBUG_NVIM_LOG_LINES not set, skipping log")
+				return
+			} else if debugNvimLogLines == "all" {
+				t.Logf("DEBUG_NVIM_LOG_LINES set to all, WARNING: this will print a lot of logs")
+				inter = math.MaxInt
+			} else {
+				inter, err = strconv.Atoi(debugNvimLogLines)
+				if err != nil {
+					t.Logf("could not parse DEBUG_NVIM_LOG_LINES (%s) as a number, using default of 50", debugNvimLogLines)
+					inter = 50
+				}
+			}
+			lastLines := lastN(strings.Split(string(nvimLog), "\n"), inter)
+			lastWord := "last"
+			if inter == math.MaxInt {
+				lastWord = "all"
+			}
+			t.Logf("nvim log (%s %d lines):\n%s", lastWord, len(lastLines), strings.Join(lastLines, "\n"))
 		}
-	}
-	setup.cleanup = cleanup
+
+	})
 
 	// Listen on the Unix socket
 	t.Log("Starting socket listener...")
 	listener, err := net.Listen("unix", socketPath)
 	if err != nil {
-		cleanup()
 		return nil, errors.Errorf("failed to create listener: %v", err)
 	}
 
@@ -101,7 +121,7 @@ func setupNeovimTest(t *testing.T, files testFiles) (*neovimTestSetup, error) {
 		defer conn.Close()
 
 		t.Log("Starting server...")
-		verboseLogging := os.Getenv("GO_TMPL_TYPER_VERBOSE_LOGGING") == "true"
+		verboseLogging := os.Getenv("DEBUG") == "1"
 		loggers := []io.Writer{}
 		if verboseLogging {
 			t.Log("Verbose logging enabled")
@@ -118,32 +138,29 @@ func setupNeovimTest(t *testing.T, files testFiles) (*neovimTestSetup, error) {
 	// Wait for the server to be ready or error
 	select {
 	case err := <-serverError:
-		cleanup()
 		return nil, errors.Errorf("LSP server failed to start: %v", err)
 	case <-serverStarted:
 		t.Log("LSP server ready")
 	case <-time.After(5 * time.Second):
-		cleanup()
 		return nil, errors.Errorf("timeout waiting for LSP server to start")
 	}
 
 	configPath, err := setupNeovimConfig(t, tmpDir, socketPath)
 	if err != nil {
-		cleanup()
 		return nil, errors.Errorf("failed to setup LSP config: %v", err)
 	}
-	setup.tmpDir = tmpDir
+	setup.TmpDir = tmpDir
 
 	// Create test files
 	for path, content := range files {
 		fullPath := filepath.Join(tmpDir, path)
 		dir := filepath.Dir(fullPath)
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			cleanup()
+
 			return nil, errors.Errorf("failed to create directory %s: %v", dir, err)
 		}
 		if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
-			cleanup()
+
 			return nil, errors.Errorf("failed to write file %s: %v", fullPath, err)
 		}
 	}
@@ -155,7 +172,7 @@ func setupNeovimTest(t *testing.T, files testFiles) (*neovimTestSetup, error) {
 		var err error
 		cmd, err = exec.LookPath("nvim")
 		if err != nil {
-			cleanup()
+
 			return nil, errors.Errorf("nvim not installed: %v", err)
 		}
 	}
@@ -179,7 +196,6 @@ func setupNeovimTest(t *testing.T, files testFiles) (*neovimTestSetup, error) {
 		nvim.ChildProcessLogf(t.Logf),
 	)
 	if err != nil {
-		cleanup()
 		return nil, errors.Errorf("failed to create neovim instance: %v", err)
 	}
 	setup.nvimInstance = nvimInstance
@@ -187,7 +203,7 @@ func setupNeovimTest(t *testing.T, files testFiles) (*neovimTestSetup, error) {
 	// Explicitly source our config
 	t.Log("Sourcing LSP config...")
 	if err := nvimInstance.Command("source " + configPath); err != nil {
-		cleanup()
+
 		return nil, errors.Errorf("failed to source config: %v", err)
 	}
 
@@ -195,7 +211,7 @@ func setupNeovimTest(t *testing.T, files testFiles) (*neovimTestSetup, error) {
 }
 
 // Helper method to wait for LSP to initialize
-func (s *neovimTestSetup) waitForLSP() error {
+func (s *NvimIntegrationTestRunner) WaitForLSP() error {
 	waitForLSP := func() bool {
 		var hasClients bool
 		err := s.nvimInstance.Eval(`luaeval('vim.lsp.get_active_clients() ~= nil and #vim.lsp.get_active_clients() > 0')`, &hasClients)
@@ -219,7 +235,7 @@ func (s *neovimTestSetup) waitForLSP() error {
 	}
 
 	var success bool
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 50; i++ {
 		if success = waitForLSP(); success {
 			break
 		}
@@ -234,7 +250,7 @@ func (s *neovimTestSetup) waitForLSP() error {
 func setupNeovimConfig(t *testing.T, tmpDir string, socketPath string) (string, error) {
 	lspConfigDir := filepath.Join(tmpDir, "nvim-lspconfig")
 	t.Log("Extracting nvim-lspconfig files...")
-	err := archive.ExtractTarGzWithOptions(lspConfigTarGz, lspConfigDir, archive.ExtractOptions{
+	err := archive.ExtractTarGzWithOptions(nvimlspconfig.Data, lspConfigDir, archive.ExtractOptions{
 		StripComponents: 1, // Remove the "nvim-lspconfig-master" prefix
 		Filter: func(header *tar.Header) bool {
 			return header.Name != "" // Skip empty paths
@@ -244,19 +260,39 @@ func setupNeovimConfig(t *testing.T, tmpDir string, socketPath string) (string, 
 		return "", errors.Errorf("failed to extract nvim-lspconfig: %w", err)
 	}
 
+	// list the files in the nvim-lspconfig dir
+	files, err := os.ReadDir(lspConfigDir)
+	if err != nil {
+		return "", errors.Errorf("failed to read nvim-lspconfig dir: %w", err)
+	}
+	t.Logf("Files in nvim-lspconfig dir: %v", files)
+
+	// actualLspConfigDir, err := filepath.Abs(filepath.Join(lspConfigDir, "nvim-lspconfig-"+strings.TrimPrefix(nvimlspconfig.Ref, "tags/v")))
+	// if err != nil {
+	// 	return "", errors.Errorf("failed to get actual nvim-lspconfig dir: %w", err)
+	// }
+	// t.Logf("Actual nvim-lspconfig dir: %s", actualLspConfigDir)
+
 	// Get absolute paths for commands
-	projectRoot, err := filepath.Abs("../..")
+	projectRoot, err := filepath.Abs("../../../..")
 	if err != nil {
 		return "", errors.Errorf("failed to get project root: %w", err)
 	}
+
+	// check for a go.work file in the project root
+	goWorkPath := filepath.Join(projectRoot, "go.work")
+	if _, err := os.Stat(goWorkPath); os.IsNotExist(err) {
+		return "", errors.Errorf("go.work file not found in project root: %s - the filepath.abs is likely wrong", projectRoot)
+	}
+
 	stdioProxyPath := filepath.Join(projectRoot, "cmd", "stdio-proxy")
 
 	// Create a temporary config.vim
 	vimConfig := fmt.Sprintf(`
 set verbose=20
-let s:lspconfig_path = '%[1]s/nvim-lspconfig'
+let s:lspconfig_path = '%[1]s'
 let &runtimepath = s:lspconfig_path . ',' . $VIMRUNTIME . ',' . s:lspconfig_path . '/after'
-set packpath=%[1]s/nvim-lspconfig
+set packpath=%[1]s
 
 " Set up filetype detection
 autocmd! BufEnter *.tmpl setlocal filetype=go-template
@@ -265,8 +301,14 @@ autocmd! BufEnter *.tmpl setlocal filetype=go-template
 runtime! plugin/lspconfig.lua
 
 lua <<EOF
+-- Enable debug logging
+vim.lsp.set_log_level("debug")
+
 local lspconfig = require 'lspconfig'
 local configs = require 'lspconfig.configs'
+
+-- Print loaded configs for debugging
+print("Available LSP configs:", vim.inspect(configs))
 
 -- Use an on_attach function to only map the following keys
 local on_attach = function(client, bufnr)
@@ -278,34 +320,45 @@ end
 if not configs.go_template then
     configs.go_template = {
         default_config = {
-            -- Use stdio-proxy to connect to the LSP server
             cmd = { 'go', 'run', '%[2]s', '%[3]s' },
             filetypes = { 'go-template' },
             root_dir = function(fname)
-                return vim.fn.getcwd()
+                local path = vim.fn.getcwd()
+                print("Setting root dir to:", path)
+                return path
             end,
+            on_attach = on_attach,
+            flags = {
+                debounce_text_changes = 150,
+            },
             settings = {},
             init_options = {}
         },
     }
+    print("Registered go_template config")
 end
 
--- Set up logging
-vim.lsp.set_log_level("debug")
-
--- Set up the LSP server
+-- Set up the LSP server with debug logging
 if lspconfig.go_template then
+    print("Setting up go_template server")
     lspconfig.go_template.setup {
-        on_attach = on_attach,
+        on_attach = function(client, bufnr)
+            print("go_template server attached to buffer", bufnr)
+            print("Client capabilities:", vim.inspect(client.server_capabilities))
+            on_attach(client, bufnr)
+        end,
         flags = {
             debounce_text_changes = 150,
             allow_incremental_sync = true,
         }
     }
+    print("go_template server setup complete")
+else
+    print("ERROR: go_template config not found!")
 end
 
 print("LSP setup complete")
-EOF`, tmpDir, stdioProxyPath, socketPath)
+EOF`, lspConfigDir, stdioProxyPath, socketPath)
 
 	configPath := filepath.Join(tmpDir, "config.vim")
 	if err := os.WriteFile(configPath, []byte(vimConfig), 0644); err != nil {
@@ -316,10 +369,12 @@ EOF`, tmpDir, stdioProxyPath, socketPath)
 }
 
 // Helper methods for neovimTestSetup
-func (s *neovimTestSetup) openFile(path string) (nvim.Buffer, error) {
-	path = strings.TrimPrefix(path, "file://")
+func (s *NvimIntegrationTestRunner) OpenFile(path protocol.DocumentURI) (nvim.Buffer, error) {
+	pathStr := strings.TrimPrefix(string(path.Path()), "file://")
 
-	err := s.nvimInstance.Command("edit " + path)
+	s.t.Logf("Opening file: %s", pathStr)
+
+	err := s.nvimInstance.Command("edit " + pathStr)
 	if err != nil {
 		return 0, errors.Errorf("failed to open file: %w", err)
 	}
@@ -337,8 +392,8 @@ func (s *neovimTestSetup) openFile(path string) (nvim.Buffer, error) {
 	return buffer, nil
 }
 
-func (s *neovimTestSetup) attachLSP(buffer nvim.Buffer) error {
-	err := s.waitForLSP()
+func (s *NvimIntegrationTestRunner) AttachLSP(buffer nvim.Buffer) error {
+	err := s.WaitForLSP()
 	if err != nil {
 		return errors.Errorf("failed to wait for LSP: %w", err)
 	}
@@ -381,14 +436,27 @@ func (s *neovimTestSetup) attachLSP(buffer nvim.Buffer) error {
 	return nil
 }
 
-func (s *neovimTestSetup) requestHover(t *testing.T, ctx context.Context, request *lsp.HoverParams) (*lsp.Hover, error) {
-	// Check for go.mod file
-	goModPath := filepath.Join(s.tmpDir, "go.mod")
+func (s *NvimIntegrationTestRunner) Command(cmd string) error {
+	return s.nvimInstance.Command(cmd)
+}
+
+func (s *NvimIntegrationTestRunner) TmpFilePathOf(path string) protocol.DocumentURI {
+
+	return protocol.URIFromPath(filepath.Join(s.TmpDir, path))
+}
+
+func (s *NvimIntegrationTestRunner) RequestHover(t *testing.T, ctx context.Context, request *protocol.HoverParams) (*protocol.Hover, error) {
+	///////////////////////////
+
+	// TODO: eliminate this, since it doesnt work with larget packages
+
+	//Check for go.mod file
+	goModPath := filepath.Join(s.TmpDir, "go.mod")
 	if _, err := os.Stat(goModPath); os.IsNotExist(err) {
 		return nil, nil // Return nil if go.mod doesn't exist
 	}
 
-	// Check if go.mod is valid
+	//Check if go.mod is valid
 	goModContent, err := os.ReadFile(goModPath)
 	if err != nil {
 		return nil, nil // Return nil if can't read go.mod
@@ -397,12 +465,14 @@ func (s *neovimTestSetup) requestHover(t *testing.T, ctx context.Context, reques
 		return nil, nil // Return nil if go.mod is invalid
 	}
 
-	buffer, err := s.openFile(request.TextDocument.URI)
+	///////////////////////////
+
+	buffer, err := s.OpenFile(request.TextDocument.URI)
 	if err != nil {
 		return nil, errors.Errorf("failed to open file: %w", err)
 	}
 
-	err = s.attachLSP(buffer)
+	err = s.AttachLSP(buffer)
 	if err != nil {
 		return nil, errors.Errorf("failed to attach LSP: %w", err)
 	}
@@ -421,7 +491,7 @@ func (s *neovimTestSetup) requestHover(t *testing.T, ctx context.Context, reques
 		return nil, errors.Errorf("failed to get current window: %w", err)
 	}
 
-	err = s.nvimInstance.SetWindowCursor(win, [2]int{request.Position.Line + 1, request.Position.Character})
+	err = s.nvimInstance.SetWindowCursor(win, [2]int{int(request.Position.Line) + 1, int(request.Position.Character)})
 	if err != nil {
 		return nil, errors.Errorf("failed to set cursor position: %w", err)
 	}
@@ -457,7 +527,7 @@ func (s *neovimTestSetup) requestHover(t *testing.T, ctx context.Context, reques
 
 	t.Logf("Hover result string: %v", *hoverResult)
 
-	var hover lsp.Hover
+	var hover protocol.Hover
 	err = json.Unmarshal([]byte(*hoverResult), &hover)
 	if err != nil {
 		return nil, errors.Errorf("unmarshalling hover: %w", err)
@@ -465,8 +535,8 @@ func (s *neovimTestSetup) requestHover(t *testing.T, ctx context.Context, reques
 	return &hover, nil
 }
 
-func (s *neovimTestSetup) saveAndQuit() error {
-	outFile := filepath.Join(s.tmpDir, "nvim.out")
+func (s *NvimIntegrationTestRunner) SaveAndQuit() error {
+	outFile := filepath.Join(s.TmpDir, "nvim.out")
 	err := s.nvimInstance.Command("write! " + outFile)
 	if err != nil {
 		return errors.Errorf("failed to write file: %w", err)
@@ -480,57 +550,19 @@ func (s *neovimTestSetup) saveAndQuit() error {
 	return nil
 }
 
-func (s *neovimTestSetup) saveAndQuitWithOutput() (string, error) {
-	err := s.saveAndQuit()
+func (s *NvimIntegrationTestRunner) SaveAndQuitWithOutput() (string, error) {
+	err := s.SaveAndQuit()
 	if err != nil {
 		return "", errors.Errorf("failed to save and quit: %w", err)
 	}
 
-	outFile := filepath.Join(s.tmpDir, "nvim.out")
+	outFile := filepath.Join(s.TmpDir, "nvim.out")
 	content, err := os.ReadFile(outFile)
 	if err != nil {
 		return "", errors.Errorf("failed to read output file: %w", err)
 	}
 
 	return string(content), nil
-}
-
-func TestNeovimBasic(t *testing.T) {
-	ctx := context.Background()
-
-	files := testFiles{
-		"test.tmpl": "{{- /*gotype: test.Items*/ -}}\n{{ .Value }}",
-		"go.mod":    "module test",
-		"test.go": `
-package test
-type Items struct {
-	Value string
-}`,
-	}
-
-	setup, err := setupNeovimTest(t, files)
-	require.NoError(t, err)
-	defer setup.cleanup()
-
-	// // Open test file and set up LSP
-	testFile := filepath.Join(setup.tmpDir, "test.tmpl")
-
-	// Test hover at the start of the file
-	hoverResult, err := setup.requestHover(t, ctx, &lsp.HoverParams{
-		TextDocument: lsp.TextDocumentIdentifier{URI: "file://" + testFile},
-		Position:     lsp.Position{Line: 1, Character: 6},
-	})
-	require.NoError(t, err)
-	require.NotNil(t, hoverResult)
-	// Save and quit
-	output, err := setup.saveAndQuitWithOutput()
-	require.NoError(t, err)
-
-	// Verify the output
-	require.NotEmpty(t, output, "neovim output should not be empty")
-
-	require.Equal(t, "**Variable**: Items.Value\n**Type**: string", hoverResult.Contents.Value)
-
 }
 
 // Helper function to convert [][]byte to []string

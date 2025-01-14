@@ -3,15 +3,22 @@ package lsp
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/sourcegraph/jsonrpc2"
+	"github.com/walteh/go-tmpl-typer/pkg/ast"
 	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
+	"github.com/walteh/go-tmpl-typer/pkg/hover"
+	"github.com/walteh/go-tmpl-typer/pkg/parser"
+	"github.com/walteh/go-tmpl-typer/pkg/position"
+	"gitlab.com/tozd/go/errors"
 )
 
 type handlerFunc func(ctx context.Context, req *jsonrpc2.Request) (interface{}, error)
@@ -179,6 +186,285 @@ func (s *Server) router(ctx context.Context, method string) handlerFunc {
 	default:
 		return nil
 	}
+}
+
+func (s *Server) handleTextDocumentDidOpen(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
+	if s.debug {
+		s.debugf(ctx, "handling textDocument/didOpen")
+	}
+
+	var params DidOpenTextDocumentParams
+	if err := json.Unmarshal(*req.Params, &params); err != nil {
+		s.debugf(ctx, "failed to unmarshal didOpen params: %v", err)
+		return nil, errors.Errorf("failed to unmarshal didOpen params: %w", err)
+	}
+
+	s.debugf(ctx, "storing document in memory: %s", params.TextDocument.URI)
+	s.storeDocument(params.TextDocument.URI, params.TextDocument.Text)
+	s.debugf(ctx, "document stored successfully, validating...")
+	return s.validateDocument(ctx, params.TextDocument.URI, params.TextDocument.Text)
+}
+
+func (s *Server) handleTextDocumentDidChange(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
+	if s.debug {
+		s.debugf(ctx, "handling textDocument/didChange")
+	}
+
+	var params DidChangeTextDocumentParams
+	if err := json.Unmarshal(*req.Params, &params); err != nil {
+		return nil, errors.Errorf("failed to unmarshal didChange params: %w", err)
+	}
+
+	// For now, we'll just use the full content sync
+	if len(params.ContentChanges) > 0 {
+		s.storeDocument(params.TextDocument.URI, params.ContentChanges[0].Text)
+		return s.validateDocument(ctx, params.TextDocument.URI, params.ContentChanges[0].Text)
+	}
+
+	return nil, nil
+}
+
+func (s *Server) handleTextDocumentDidClose(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
+	if s.debug {
+		s.debugf(ctx, "handling textDocument/didClose")
+	}
+
+	var params DidCloseTextDocumentParams
+	if err := json.Unmarshal(*req.Params, &params); err != nil {
+		return nil, errors.Errorf("failed to unmarshal didClose params: %w", err)
+	}
+
+	s.documents.Delete(s.normalizeURI(params.TextDocument.URI))
+	return nil, nil
+}
+
+func (s *Server) handleInitialize(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
+	if s.debug {
+		s.debugf(ctx, "handling initialize request")
+	}
+
+	var params InitializeParams
+	if err := json.Unmarshal(*req.Params, &params); err != nil {
+		return nil, errors.Errorf("failed to unmarshal initialize params: %w", err)
+	}
+
+	// Convert workspace URI to filesystem path
+	workspacePath, err := uriToPath(params.RootURI)
+	if err != nil {
+		return nil, errors.Errorf("invalid workspace URI: %w", err)
+	}
+
+	s.workspace = workspacePath
+	s.debugf(ctx, "workspace path: %s", s.workspace)
+
+	// Schedule a workspace scan after initialization
+	go func() {
+		if err := s.scanWorkspace(ctx); err != nil {
+			s.debugf(ctx, "failed to scan workspace: %v", err)
+		}
+	}()
+
+	return InitializeResult{
+		Capabilities: ServerCapabilities{
+			TextDocumentSync: TextDocumentSyncKind{
+				Change: 1, // Incremental
+			},
+			HoverProvider: true,
+			// CompletionProvider: CompletionOptions{
+			// 	TriggerCharacters: []string{"."},
+			// },
+		},
+	}, nil
+}
+
+func (s *Server) scanWorkspace(ctx context.Context) error {
+	// Walk through the workspace and validate all .tmpl files
+	return filepath.Walk(s.workspace, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && filepath.Ext(path) == ".tmpl" {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return errors.Errorf("reading template file: %w", err)
+			}
+			uri := pathToURI(path)
+			s.storeDocument(uri, string(content))
+			if _, err := s.validateDocument(ctx, uri, string(content)); err != nil {
+				s.debugf(ctx, "failed to validate document %s: %v", path, err)
+			}
+		}
+		return nil
+	})
+}
+
+func pathToURI(path string) string {
+	return "file://" + path
+}
+
+func (s *Server) handleTextDocumentHover(ctx context.Context, req *jsonrpc2.Request) (interface{}, error) {
+	if s.debug {
+		s.debugf(ctx, "handling textDocument/hover")
+	}
+
+	var params HoverParams
+	if err := json.Unmarshal(*req.Params, &params); err != nil {
+		return nil, errors.Errorf("failed to unmarshal hover params: %w", err)
+	}
+
+	zerolog.Ctx(ctx).Debug().Msgf("hover request received: %+v", params)
+
+	uri := s.normalizeURI(params.TextDocument.URI)
+
+	// // Get document content
+	// content, ok := s.getDocument(uri)
+	// if !ok {
+	// 	return nil, errors.Errorf("document not found: %s", uri)
+	// }
+
+	reg, err := ast.AnalyzePackage(ctx, uri)
+	if err != nil {
+		return nil, errors.Errorf("analyzing package for hover: %w", err)
+	}
+
+	content, _, ok := reg.GetTemplateFile(uri)
+	if !ok {
+		return nil, errors.Errorf("template %s not found, make sure its embeded", uri)
+	}
+
+	// // Parse the template
+	info, err := parser.Parse(ctx, uri, []byte(content))
+	if err != nil {
+		return nil, errors.Errorf("parsing template for hover: %w", err)
+	}
+
+	pos := position.NewRawPositionFromLineAndColumn(params.Position.Line, params.Position.Character, string(content[params.Position.Character]), content)
+
+	// hoverInfo, err := hover.BuildHoverResponseFromParse(ctx, info, pos, func(arg parser.VariableLocationOrType, th parser.TypeHint) []types.Type {
+	// 	if arg.Type != nil {
+	// 		return []types.Type{arg.Type}
+	// 	}
+
+	// 	if arg.Variable != nil {
+	// 		// typ := arg.Variable.GetTypePaths(&th)
+
+	// 		args := append([]string{th.LocalTypeName()}, strings.Split(arg.Variable.LongName(), ".")...)
+	// 		scope := pkg.Package.Types.Scope().Lookup(args[0])
+	// 	HERE:
+	// 		for _, typ := range args[1:] {
+	// 			if sig, ok := scope.Type().(*types.Struct); ok {
+	// 				for i := range sig.NumFields() {
+	// 					if sig.Field(i).Name() == typ {
+	// 						scope = sig.Field(i)
+	// 						break HERE
+	// 					}
+	// 				}
+	// 			}
+	// 		}
+
+	// 		if sig, ok := scope.Type().(*types.Signature); ok {
+	// 			typs := []types.Type{}
+	// 			for i := range sig.Results().Len() {
+	// 				typs = append(typs, sig.Results().At(i).Type())
+	// 			}
+	// 			return typs
+	// 		}
+
+	// 		return []types.Type{}
+	// 	}
+
+	// 	return []types.Type{}
+	// })
+	hoverInfo, err := hover.BuildHoverResponseFromParse(ctx, info, pos, reg)
+	if err != nil {
+		return nil, errors.Errorf("building hover response: %w", err)
+	}
+
+	if hoverInfo == nil {
+		return nil, nil
+	}
+
+	hovers := make([]Hover, len(hoverInfo.Content))
+	for i, hcontent := range hoverInfo.Content {
+		hovers[i] = Hover{
+			Contents: MarkupContent{
+				Kind:  "markdown",
+				Value: hcontent,
+			},
+			Range: rangeToLSP(hoverInfo.Position.GetRange(content)),
+		}
+	}
+
+	// TODO: Return more than one
+	if len(hovers) > 0 {
+		return &hovers[0], nil
+	}
+
+	return nil, nil
+}
+
+// rangeToLSP converts a position.Range to an LSP Range
+func rangeToLSP(r position.Range) *Range {
+	return &Range{
+		Start: Position{
+			Line:      r.Start.Line,
+			Character: r.Start.Character,
+		},
+		End: Position{
+			Line:      r.End.Line,
+			Character: r.End.Character,
+		},
+	}
+}
+
+func (s *Server) validateDocument(ctx context.Context, uri string, content string) (interface{}, error) {
+	if s.debug {
+		s.debugf(ctx, "validating document: %s", uri)
+	}
+
+	uri = s.normalizeURI(uri)
+
+	registry, err := ast.AnalyzePackage(ctx, uri)
+	if err != nil {
+		return nil, errors.Errorf("analyzing package: %w", err)
+	}
+
+	nodes, err := parser.Parse(ctx, uri, []byte(content))
+	if err != nil {
+		return nil, errors.Errorf("parsing template for validation: %w", err)
+	}
+
+	diagnostics, err := diagnostic.GetDiagnosticsFromParsed(ctx, nodes, registry)
+	if err != nil {
+		return nil, errors.Errorf("getting diagnostics: %w", err)
+	}
+
+	// Parse the template to get type hints
+	// info, err := parser.Parse(ctx, []byte(content), uri)
+	// if err != nil {
+	// 	return nil, errors.Errorf("parsing template for validation: %w", err)
+	// }
+
+	// Add success diagnostic for type hint if present and valid
+	// for _, block := range info.Blocks {
+	// 	if block.TypeHint != nil {
+	// 		if typeInfo, err := ast.GenerateTypeInfoFromRegistry(ctx, block.TypeHint.TypePath, registry); err == nil {
+	// 			// Add success diagnostic
+	// 			diagnostics = append(diagnostics, &diagnostic.Diagnostic{
+	// 				Message:  "Type hint successfully loaded: " + typeInfo.Name,
+	// 				Location: block.TypeHint.Position,
+	// 				Severity: diagnostic.SeverityInformation,
+	// 			})
+	// 		}
+	// 	}
+	// }
+
+	// Publish diagnostics
+	if err := s.publishDiagnostics(ctx, uri, content, diagnostics); err != nil {
+		return nil, errors.Errorf("publishing diagnostics: %w", err)
+	}
+
+	return nil, nil
 }
 
 func (s *Server) publishDiagnostics(ctx context.Context, uri string, content string, diagnostics []*diagnostic.Diagnostic) error {
