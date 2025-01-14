@@ -387,32 +387,22 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 		return nil, nil
 	}
 
-	hovers := make([]protocol.Hover, len(hoverInfo.Content))
-	for i, hcontent := range hoverInfo.Content {
-		hovers[i] = protocol.Hover{
-			Contents: protocol.MarkupContent{
-				Kind:  "markdown",
-				Value: hcontent,
+	return &protocol.Hover{
+		Contents: protocol.MarkupContent{
+			Kind:  "markdown",
+			Value: strings.Join(hoverInfo.Content, "\n"),
+		},
+		Range: protocol.Range{
+			Start: protocol.Position{
+				Line:      uint32(hoverInfo.Position.GetRange(content).Start.Line),
+				Character: uint32(hoverInfo.Position.GetRange(content).Start.Character),
 			},
-			Range: protocol.Range{
-				Start: protocol.Position{
-					Line:      uint32(hoverInfo.Position.GetRange(content).Start.Line),
-					Character: uint32(hoverInfo.Position.GetRange(content).Start.Character),
-				},
-				End: protocol.Position{
-					Line:      uint32(hoverInfo.Position.GetRange(content).End.Line),
-					Character: uint32(hoverInfo.Position.GetRange(content).End.Character),
-				},
+			End: protocol.Position{
+				Line:      uint32(hoverInfo.Position.GetRange(content).End.Line),
+				Character: uint32(hoverInfo.Position.GetRange(content).End.Character),
 			},
-		}
-	}
-
-	// TODO: Return more than one
-	if len(hovers) > 0 {
-		return &hovers[0], nil
-	}
-
-	return nil, nil
+		},
+	}, nil
 }
 
 func (s *Server) Implementation(ctx context.Context, params *protocol.ImplementationParams) ([]protocol.Location, error) {

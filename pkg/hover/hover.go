@@ -131,7 +131,7 @@ func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation,
 		Msg("formatted hover response")
 
 	return &HoverInfo{
-		Content:  []string{strings.Join(content, "\n")},
+		Content:  content,
 		Position: variable.Position,
 	}, nil
 }
