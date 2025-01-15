@@ -503,6 +503,8 @@ func getUnmarshaledInterceptedMessages[T any](s *NvimIntegrationTestRunner, meth
 		if err := json.Unmarshal([]byte(msg), &m); err != nil {
 			return nil, errors.Errorf("failed to unmarshal message: %w", err)
 		}
+		s.t.Logf("MESSAGE parsed to type %T: [before: %s] [after: %+v]", m, msg, m)
+
 		res = append(res, m)
 	}
 	return res, nil
