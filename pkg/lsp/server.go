@@ -579,14 +579,16 @@ func (s *Server) validateDocument(ctx context.Context, urid protocol.DocumentURI
 	}
 
 	// Publish diagnostics
-	if err := s.publishDiagnostics(ctx, urid, content, diagnostics); err != nil {
-		return errors.Errorf("publishing diagnostics: %w", err)
-	}
-
-	return nil
+	return s.publishDiagnostics(ctx, urid, diagnostics, content)
 }
 
-func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentURI, content string, diagnostics []*diagnostic.Diagnostic) error {
+func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentURI, diagnostics []*diagnostic.Diagnostic, content string) error {
+	logger := zerolog.Ctx(ctx)
+	logger.Debug().
+		Str("uri", string(uri)).
+		Int("diagnostic_count", len(diagnostics)).
+		Msg("🔍 publishing diagnostics")
+
 	params := &protocol.PublishDiagnosticsParams{
 		URI:         uri,
 		Diagnostics: make([]protocol.Diagnostic, len(diagnostics)),
@@ -607,7 +609,18 @@ func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentUR
 			Severity: protocol.DiagnosticSeverity(d.Severity),
 			Message:  d.Message,
 		}
+		logger.Debug().
+			Str("message", d.Message).
+			Int("severity", d.Severity).
+			Interface("range", params.Diagnostics[i].Range).
+			Msg("📝 diagnostic detail")
 	}
 
-	return s.instance.CallbackClient().PublishDiagnostics(ctx, params)
+	err := s.instance.CallbackClient().PublishDiagnostics(ctx, params)
+	if err != nil {
+		logger.Error().Err(err).Msg("❌ failed to publish diagnostics")
+		return errors.Errorf("publishing diagnostics: %w", err)
+	}
+	logger.Debug().Msg("✅ diagnostics published successfully")
+	return nil
 }

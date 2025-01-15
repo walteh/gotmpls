@@ -29,32 +29,32 @@ type CallbackServer struct {
 }
 
 func (c *CallbackServer) Notify(ctx context.Context, method string, params interface{}) error {
-	// zerolog.Ctx(ctx).Debug().
-	// 	Str("method", method).
-	// 	Interface("params", params).
-	// 	Msg("forwarding notification to gopls")
+	zerolog.Ctx(ctx).Debug().
+		Str("method", method).
+		Interface("params", params).
+		Msg("🔄 forwarding notification to gopls")
 	return c.client.Notify(ctx, method, params)
 }
 
 func (c *CallbackServer) Callback(ctx context.Context, method string, params interface{}) (*jrpc2.Response, error) {
-	// zerolog.Ctx(ctx).Debug().
-	// 	Str("method", method).
-	// 	Interface("params", params).
-	// 	Msg("forwarding callback to gopls")
+	zerolog.Ctx(ctx).Debug().
+		Str("method", method).
+		Interface("params", params).
+		Msg("🎯 forwarding callback to gopls")
 
 	res, err := c.client.Call(ctx, method, params)
 	if err != nil {
-		// zerolog.Ctx(ctx).Error().
-		// 	Str("method", method).
-		// 	Err(err).
-		// 	Msg("gopls callback error")
+		zerolog.Ctx(ctx).Error().
+			Str("method", method).
+			Err(err).
+			Msg("❌ gopls callback error")
 		return nil, err
 	}
 
-	// zerolog.Ctx(ctx).Debug().
-	// 	Str("method", method).
-	// 	Str("result", res.ResultString()).
-	// 	Msg("received response from gopls")
+	zerolog.Ctx(ctx).Debug().
+		Str("method", method).
+		Str("result", res.ResultString()).
+		Msg("✅ received response from gopls")
 
 	return res, nil
 }

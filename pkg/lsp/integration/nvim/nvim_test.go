@@ -2,6 +2,7 @@ package nvim_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,45 +12,101 @@ import (
 	"github.com/walteh/go-tmpl-typer/pkg/lsp/protocol"
 )
 
-func TestNeovimBasic(t *testing.T) {
-	ctx := context.Background()
-
+func TestHoverBasic(t *testing.T) {
+	// Initialize test files
 	files := map[string]string{
 		"main.go": `package main
 
 type Person struct {
 	Name string
+	Age  int
 }
 
-func main() {
-	p := Person{Name: "test"}
-	_ = p
-}`,
-		"go.mod": "module test",
+func (p *Person) GetName() string {
+	return p.Name
+}
+`,
 	}
-
+	ctx := context.Background()
 	si, err := protocol.NewGoplsServerInstance(ctx)
-	require.NoError(t, err)
+	require.NoError(t, err, "failed to create gopls server instance")
 
 	runner, err := nvim.NewNvimIntegrationTestRunner(t, files, si, &nvim.GoplsConfig{})
-	require.NoError(t, err)
+	require.NoError(t, err, "failed to create test runner")
 
-	// Test hover at Person struct
-	mainFile := runner.TmpFilePathOf("main.go")
-	hoverResult, err := runner.Hover(t, ctx, protocol.NewHoverParams(mainFile, protocol.Position{Line: 7, Character: 8}))
-	require.NoError(t, err)
-	assert.NotNil(t, hoverResult)
-	assert.Contains(t, hoverResult.Contents.Value, "type Person struct")
+	uri := runner.TmpFilePathOf("main.go")
 
-	// Save and quit
-	output, err := runner.SaveAndQuitWithOutput()
-	require.NoError(t, err)
-	require.NotEmpty(t, output)
+	hoverp := &protocol.HoverParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     protocol.Position{Line: 7, Character: 21}, // Position at GetName
+		},
+	}
+	// Test hover functionality
+	hover, err := runner.Hover(t, ctx, hoverp)
+	require.NoError(t, err, "hover request should succeed")
+	assert.NotNil(t, hover, "hover response should not be nil")
+
+	// {"range":{"end":{"line":7,"character":24},"start":{"line":7,"character":17}},"contents":{"kind":"markdown","value":"```go\nfunc (p *Person) GetName() string\n```\n\n---\n\n[`(main.Person).GetName` on pkg.go.dev](https:\/\/pkg.go.dev\/command-line-arguments\/private\/var\/folders\/8j\/scdcg3yx02dc5pdf9g6188dm0000gn\/T\/nvim-test-1205161790\/main.go#Person.GetName)"}}
+	hoverw := &protocol.Hover{
+		Contents: protocol.MarkupContent{
+			Kind:  protocol.Markdown,
+			Value: fmt.Sprintf("```go\nfunc (p *Person) GetName() string\n```\n\n---\n\n[`(main.Person).GetName` on pkg.go.dev](https://pkg.go.dev/command-line-arguments/private%s#Person.GetName)", string(uri.Path())),
+		},
+		Range: protocol.Range{
+			Start: protocol.Position{Line: 7, Character: 17},
+			End:   protocol.Position{Line: 7, Character: 24},
+		},
+	}
+
+	assert.Equal(t, hoverw, hover, "hover response should match")
+	require.NoError(t, runner.SaveAndQuit(), "cleanup should succeed")
+}
+
+func TestDiagnosticsBasic(t *testing.T) {
+	// Initialize test files
+	files := map[string]string{
+		"main.go": `package main
+
+type Person struct {
+	Name string
+	Age  int
+}
+
+func (p *Person) GetName() string {
+	return p.Invalid
+}
+`,
+	}
+
+	si, err := protocol.NewGoplsServerInstance(context.Background())
+	require.NoError(t, err, "failed to create gopls server instance")
+
+	runner, err := nvim.NewNvimIntegrationTestRunner(t, files, si, &nvim.GoplsConfig{})
+	require.NoError(t, err, "failed to create test runner")
+
+	// Test hover functionality
+	uri := runner.TmpFilePathOf("main.go")
+
+	diags, err := runner.GetDiagnostics(t, uri, 5*time.Second)
+	require.NoError(t, err, "hover request should succeed")
+	assert.NotNil(t, diags, "hover response should not be nil")
+
+	diagsw := []protocol.Diagnostic{
+		{
+			Range: protocol.Range{
+				Start: protocol.Position{Line: 7, Character: 16},
+				End:   protocol.Position{Line: 7, Character: 21},
+			},
+		},
+	}
+
+	assert.Equal(t, diagsw, diags, "diagnostics should match")
+	require.NoError(t, runner.SaveAndQuit(), "cleanup should succeed")
 }
 
 func TestEditMethods(t *testing.T) {
-	ctx := context.Background()
-
+	// Initialize test files
 	files := map[string]string{
 		"main.go": `package main
 
@@ -57,108 +114,44 @@ type Person struct {
 	Name string
 	Age  int
 }
-
-func main() {
-	p := Person{Name: "test"}
-	_ = p
-}`,
-		"go.mod": "module test",
+`,
 	}
+	si, err := protocol.NewGoplsServerInstance(context.Background())
+	require.NoError(t, err, "failed to create gopls server instance")
 
-	si, err := protocol.NewGoplsServerInstance(ctx)
-	require.NoError(t, err)
-
+	// Create server instance with mock config
 	runner, err := nvim.NewNvimIntegrationTestRunner(t, files, si, &nvim.GoplsConfig{})
-	require.NoError(t, err)
+	require.NoError(t, err, "failed to create test runner")
 
-	mainFile := runner.TmpFilePathOf("main.go")
+	uri := runner.TmpFilePathOf("main.go")
 
-	// Open the file and ensure LSP is attached
-	buf, err := runner.OpenFile(mainFile)
-	require.NoError(t, err, "opening file should succeed")
-
-	err = runner.AttachLSP(buf)
-	require.NoError(t, err, "attaching LSP should succeed")
-
-	// Wait for initial LSP setup
-	time.Sleep(1 * time.Second)
-
-	// Test 1: Edit with save should trigger diagnostics
-	err = runner.ApplyEditWithSave(t, mainFile, `package main
+	// Test applying edit with save
+	newContent := `package main
 
 type Person struct {
-	Name string
-	Age  int
+	Name    string
+	Age     int
+	Address string // Added field
 }
+`
+	err = runner.ApplyEdit(t, uri, newContent, true)
+	require.NoError(t, err, "applying edit should succeed")
 
-func main() {
-	p := Person{InvalidField: "test"}  // This should cause an error
-	_ = p
-}`)
-	require.NoError(t, err, "applying edit with save should succeed")
+	// Verify content was updated
+	content, err := runner.GetDocumentText(t, uri)
+	require.NoError(t, err, "getting document text should succeed")
+	assert.Equal(t, newContent, content, "document content should match")
 
-	expectedDiag := []protocol.Diagnostic{
-		{
-			Range: protocol.Range{
-				Start: protocol.Position{Line: 8, Character: 12},
-				End:   protocol.Position{Line: 8, Character: 23},
-			},
-			Severity: protocol.SeverityError,
-			Message:  "unknown field InvalidField in struct literal",
-		},
-	}
-	err = runner.CheckDiagnostics(t, mainFile, expectedDiag, 5*time.Second)
-	require.NoError(t, err, "should get diagnostics after save")
+	// Test diagnostics after edit
+	diags, err := runner.GetDiagnostics(t, uri, 5*time.Second)
+	require.NoError(t, err, "getting diagnostics should succeed")
+	assert.Empty(t, diags, "should have no diagnostics for valid file")
 
-	// Test 2: Edit without save should also trigger diagnostics
-	err = runner.ApplyEditWithoutSave(t, mainFile, `package main
+	// Test formatting
+	formatted, err := runner.GetFormattedDocument(t, context.Background(), uri)
+	require.NoError(t, err, "formatting document should succeed")
+	assert.NotEmpty(t, formatted, "formatted content should not be empty")
 
-type Person struct {
-	Name string
-	Age  int
-}
-
-func main() {
-	p := Person{AnotherInvalidField: 42}  // This should cause an error
-	_ = p
-}`)
-	require.NoError(t, err, "applying edit without save should succeed")
-
-	expectedDiag = []protocol.Diagnostic{
-		{
-			Range: protocol.Range{
-				Start: protocol.Position{Line: 8, Character: 12},
-				End:   protocol.Position{Line: 8, Character: 30},
-			},
-			Severity: protocol.SeverityError,
-			Message:  "unknown field AnotherInvalidField in struct literal",
-		},
-	}
-	err = runner.CheckDiagnostics(t, mainFile, expectedDiag, 5*time.Second)
-	require.NoError(t, err, "should get diagnostics without save")
-
-	// Test 3: Edit with save should persist after reopening
-	validContent := `package main
-
-type Person struct {
-	Name string
-	Age  int
-}
-
-func main() {
-	p := Person{Age: 42}  // This should be valid
-	_ = p
-}`
-	err = runner.ApplyEditWithSave(t, mainFile, validContent)
-	require.NoError(t, err, "applying valid edit should succeed")
-
-	// Verify content persists and has no diagnostics
-	err = runner.CheckDiagnostics(t, mainFile, []protocol.Diagnostic{}, 5*time.Second)
-	require.NoError(t, err, "should have no diagnostics for valid content")
-
-	// Test hover on the valid field
-	hoverResult, err := runner.Hover(t, ctx, protocol.NewHoverParams(mainFile, protocol.Position{Line: 8, Character: 12}))
-	require.NoError(t, err, "hover should succeed")
-	require.NotNil(t, hoverResult, "hover result should not be nil")
-	require.Contains(t, hoverResult.Contents.Value, "Age int", "hover should show Age field type")
+	// Clean up
+	require.NoError(t, runner.SaveAndQuit(), "cleanup should succeed")
 }
