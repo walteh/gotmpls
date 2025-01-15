@@ -7,9 +7,14 @@ package protocol
 import (
 	"context"
 	"io"
+	"os"
+	"os/exec"
 
 	"github.com/creachadair/jrpc2"
+	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
+	"github.com/rs/zerolog"
+	"gitlab.com/tozd/go/errors"
 )
 
 // Core protocol constants and types
@@ -18,31 +23,45 @@ var (
 )
 
 // Dispatcher types and interfaces
-type ClientCloser interface {
-	Client
-	io.Closer
-}
-
-type ServerCloser interface {
-	Server
-	io.Closer
-}
 
 type CallbackServer struct {
-	server *jrpc2.Client
+	client *jrpc2.Client
 }
 
 func (c *CallbackServer) Notify(ctx context.Context, method string, params interface{}) error {
-	return c.server.Notify(ctx, method, params)
+	// zerolog.Ctx(ctx).Debug().
+	// 	Str("method", method).
+	// 	Interface("params", params).
+	// 	Msg("forwarding notification to gopls")
+	return c.client.Notify(ctx, method, params)
 }
 
 func (c *CallbackServer) Callback(ctx context.Context, method string, params interface{}) (*jrpc2.Response, error) {
-	return c.server.Call(ctx, method, params)
+	// zerolog.Ctx(ctx).Debug().
+	// 	Str("method", method).
+	// 	Interface("params", params).
+	// 	Msg("forwarding callback to gopls")
+
+	res, err := c.client.Call(ctx, method, params)
+	if err != nil {
+		// zerolog.Ctx(ctx).Error().
+		// 	Str("method", method).
+		// 	Err(err).
+		// 	Msg("gopls callback error")
+		return nil, err
+	}
+
+	// zerolog.Ctx(ctx).Debug().
+	// 	Str("method", method).
+	// 	Str("result", res.ResultString()).
+	// 	Msg("received response from gopls")
+
+	return res, nil
 }
 
 type CallbackClient struct {
 	serverOpts *jrpc2.ServerOptions
-	client     *jrpc2.Server
+	server     *jrpc2.Server
 }
 
 func (c *CallbackClient) Notify(ctx context.Context, method string, params any) error {
@@ -50,7 +69,7 @@ func (c *CallbackClient) Notify(ctx context.Context, method string, params any) 
 		rl.LogCallbackRequestRaw(ctx, method, params)
 	}
 
-	if err := c.client.Notify(ctx, method, params); err != nil {
+	if err := c.server.Notify(ctx, method, params); err != nil {
 		return err
 	}
 
@@ -62,7 +81,7 @@ func (c *CallbackClient) Callback(ctx context.Context, method string, params any
 		rl.LogCallbackRequestRaw(ctx, method, params)
 	}
 
-	res, err := c.client.Callback(ctx, method, params)
+	res, err := c.server.Callback(ctx, method, params)
 	if err != nil {
 		return nil, err
 	}
@@ -75,46 +94,146 @@ func (c *CallbackClient) Callback(ctx context.Context, method string, params any
 }
 
 func NewCallbackClient(server *jrpc2.Server, serverOpts *jrpc2.ServerOptions) *CallbackClient {
-	return &CallbackClient{client: server, serverOpts: serverOpts}
+	return &CallbackClient{server: server, serverOpts: serverOpts}
 }
 
 func NewCallbackServer(server *jrpc2.Client) *CallbackServer {
-	return &CallbackServer{server: server}
+	return &CallbackServer{client: server}
 }
 
-func Handlers(h handler.Func) jrpc2.Handler {
-	return handler.New(func(ctx context.Context, req *jrpc2.Request) (interface{}, error) {
-		if req.Method() == "$/cancelRequest" {
-			var params CancelParams
-			if err := req.UnmarshalParams(&params); err != nil {
-				return nil, err
+type ServerInstance struct {
+	server         *jrpc2.Server
+	callbackClient *CallbackClient
+	creationCtx    context.Context
+
+	ServerOpts    *jrpc2.ServerOptions
+	methods       jrpc2.Assigner
+	backgroundCmd *exec.Cmd
+	// backgroundCmdFlags []string
+}
+
+func (s *ServerInstance) Server() *jrpc2.Server {
+	if s.server == nil {
+		panic("server not started")
+	}
+	return s.server
+}
+
+func (s *ServerInstance) CallbackClient() *CallbackClient {
+	if s.callbackClient == nil {
+		panic("callback client not started")
+	}
+	return s.callbackClient
+}
+
+func (s *ServerInstance) newContext() context.Context {
+	return ApplyClientToZerolog(s.creationCtx, s.callbackClient)
+}
+
+func (s *ServerInstance) StartAndDetach(reader io.Reader, writer io.WriteCloser) (*jrpc2.Server, error) {
+	if s.backgroundCmd != nil {
+		if tl, ok := s.ServerOpts.RPCLog.(*rpcTestLogger); ok {
+			if tl.enableBackgroundCmdToStderr {
+				s.backgroundCmd.Stderr = os.Stderr
 			}
-			return nil, nil
 		}
-		if ctx.Err() != nil {
-			ctx = Detach(ctx)
-			return nil, RequestCancelledError
+
+		if err := s.backgroundCmd.Start(); err != nil {
+			return nil, errors.Errorf("starting external server: %w", err)
 		}
-		return h(ctx, req)
-	})
+
+		go func() {
+			if err := s.backgroundCmd.Wait(); err != nil {
+				panic(err)
+			}
+		}()
+	}
+
+	s.server = jrpc2.NewServer(s.methods, s.ServerOpts)
+
+	s.callbackClient = NewCallbackClient(s.server, s.ServerOpts)
+
+	s.server = s.server.Start(channel.LSP(reader, writer))
+
+	return s.server, nil
 }
 
-// func NewClientServer(client Client, opts *jrpc2.ServerOptions) *jrpc2.Server {
+func (s *ServerInstance) StartAndWait(reader io.Reader, writer io.WriteCloser) error {
 
-// 	methods := buildClientDispatchMap(client)
+	server, err := s.StartAndDetach(reader, writer)
+	if err != nil {
+		return errors.Errorf("starting external server: %w", err)
+	}
 
-// 	// methods["$/cancelRequest"] = handler.New(func(ctx context.Context, req *jrpc2.Request) (interface{}, error) {
-// 	// 	var params CancelParams
-// 	// 	if err := req.UnmarshalParams(&params); err != nil {
-// 	// 		return nil, err
-// 	// 	}
-// 	// 	return nil, nil
-// 	// })
+	return server.Wait()
+}
 
-// 	return jrpc2.NewServer(methods, opts)
-// }
+func NewGoplsServerInstance(ctx context.Context) (*ServerInstance, error) {
 
-func NewServerServer(ctx context.Context, server Server, opts *jrpc2.ServerOptions) (*jrpc2.Server, *CallbackClient) {
+	ctx = zerolog.New(os.Stderr).With().Str("name", "gopls").Logger().WithContext(ctx)
+
+	cmd := exec.CommandContext(ctx, "gopls", "-v", "-vv", "-rpc.trace")
+	copts := &jrpc2.ClientOptions{
+		// Logger: func(msg string) {
+		// 	zerolog.Ctx(ctx).Info().Msgf("gopls [client]: %s", msg)
+		// },
+	}
+	sopts := &jrpc2.ServerOptions{
+		// Logger: func(msg string) {
+		// 	zerolog.Ctx(ctx).Info().Msgf("gopls [server]: %s", msg)
+		// },
+	}
+
+	inst, err := NewCmdServerInstance(ctx, cmd, copts, sopts)
+	if err != nil {
+		return nil, errors.Errorf("creating server instance: %w", err)
+	}
+
+	return inst, nil
+}
+
+func NewCmdServerInstance(ctx context.Context, cmd *exec.Cmd, copts *jrpc2.ClientOptions, sopts *jrpc2.ServerOptions) (*ServerInstance, error) {
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, errors.Errorf("getting stdout pipe: %w", err)
+	}
+	in, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, errors.Errorf("getting stdin pipe: %w", err)
+	}
+
+	sopts.AllowPush = true
+
+	type handlerft struct {
+		f func(ctx context.Context, r *jrpc2.Request) (interface{}, error)
+	}
+
+	handlerf := &handlerft{
+		f: func(ctx context.Context, r *jrpc2.Request) (interface{}, error) {
+			return nil, nil
+		},
+	}
+
+	copts.OnCallback = handlerf.f
+
+	client := jrpc2.NewClient(channel.LSP(out, in), copts)
+	cbs := NewCallbackServer(client)
+	instance := NewServerInstance(ctx, cbs, sopts)
+
+	handlerf.f = func(ctx context.Context, r *jrpc2.Request) (interface{}, error) {
+		var params interface{}
+		if err := r.UnmarshalParams(&params); err != nil {
+			return nil, err
+		}
+		return instance.server.Callback(ctx, r.Method(), params)
+	}
+
+	instance.backgroundCmd = cmd
+
+	return instance, nil
+}
+
+func NewServerInstance(ctx context.Context, server Server, opts *jrpc2.ServerOptions) *ServerInstance {
 	methods := buildServerDispatchMap(server)
 	if opts == nil {
 		opts = &jrpc2.ServerOptions{}
@@ -122,37 +241,14 @@ func NewServerServer(ctx context.Context, server Server, opts *jrpc2.ServerOptio
 
 	opts.AllowPush = true
 
-	var callbackServer *CallbackClient = nil
+	instance := &ServerInstance{creationCtx: ctx}
 
-	opts.NewContext = func() context.Context {
-		if callbackServer == nil {
-			return ctx
-		}
+	opts.NewContext = instance.newContext
 
-		return ApplyClientToZerolog(ctx, callbackServer)
-	}
-
-	// Create server with method handlers
-	result := jrpc2.NewServer(methods, opts)
-
-	callbackServer = NewCallbackClient(result, opts)
-
-	return result, callbackServer
+	instance.ServerOpts = opts
+	instance.methods = methods
+	return instance
 }
-
-// Utility functions used by generated code
-// func reply_fwd(ctx context.Context, _ *jrpc2.Server, req *jrpc2.Request, result interface{}, err error) (any, error) {
-// 	if err != nil {
-// 		return nil, &jrpc2.Error{
-// 			Code:    -32603,
-// 			Message: err.Error(),
-// 		}
-// 	}
-// 	if req.IsNotification() {
-// 		return nil, nil
-// 	}
-// 	return result, nil
-// }
 
 func Call(ctx context.Context, client *jrpc2.Client, method string, params interface{}, result interface{}) error {
 	rsp, err := client.Call(ctx, method, params)
@@ -165,12 +261,6 @@ func Call(ctx context.Context, client *jrpc2.Client, method string, params inter
 	return nil
 }
 
-// func cancelRequest(ctx context.Context, client *jrpc2.Client) {
-// 	ctx = Detach(ctx)
-// 	ctx = event.Start(ctx, "protocol.canceller")
-// 	client.Notify(ctx, "$/cancelRequest", &CancelParams{})
-// }
-
 // Helper functions
 func NonNilSlice[T comparable](x []T) []T {
 	if x == nil {
@@ -178,17 +268,6 @@ func NonNilSlice[T comparable](x []T) []T {
 	}
 	return x
 }
-
-// func recoverHandlerPanic(method string) {
-// 	if !crashmonitor.Supported() {
-// 		defer func() {
-// 			if x := recover(); x != nil {
-// 				event.Error(context.Background(), "panic in LSP handler", fmt.Errorf("method %s: %v", method, x))
-// 				panic(x)
-// 			}
-// 		}()
-// 	}
-// }
 
 func newParseError(err error) *jrpc2.Error {
 	return &jrpc2.Error{

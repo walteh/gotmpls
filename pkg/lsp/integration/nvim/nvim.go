@@ -17,11 +17,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/creachadair/jrpc2"
 	"github.com/neovim/go-client/nvim"
+	"github.com/rs/zerolog"
 	nvimlspconfig "github.com/walteh/go-tmpl-typer/gen/git-repo-tarballs/nvim-lspconfig"
 	"github.com/walteh/go-tmpl-typer/pkg/archive"
-	"github.com/walteh/go-tmpl-typer/pkg/lsp"
 	"github.com/walteh/go-tmpl-typer/pkg/lsp/integration"
 
 	// "github.com/walteh/go-tmpl-typer/pkg/lsp"
@@ -31,24 +30,27 @@ import (
 
 // NvimIntegrationTestRunner contains all the necessary components for a neovim LSP test
 type NvimIntegrationTestRunner struct {
-	nvimInstance *nvim.Nvim
-	TmpDir       string
-	t            *testing.T
+	nvimInstance   *nvim.Nvim
+	serverInstance *protocol.ServerInstance
+	TmpDir         string
+	t              *testing.T
 }
 
 var _ integration.IntegrationTestRunner = &NvimIntegrationTestRunner{}
 
-func NewNvimIntegrationTestRunner(t *testing.T, files map[string]string) (*NvimIntegrationTestRunner, error) {
+func NewNvimIntegrationTestRunner(t *testing.T, files map[string]string, si *protocol.ServerInstance, config NeovimConfig) (*NvimIntegrationTestRunner, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-
-	setup := &NvimIntegrationTestRunner{
-		t: t,
-	}
 
 	tmpDir, err := os.MkdirTemp("", "nvim-test-*")
 	if err != nil {
 		cancel()
 		return nil, errors.Errorf("failed to create temp dir: %v", err)
+	}
+
+	setup := &NvimIntegrationTestRunner{
+		t:              t,
+		serverInstance: si,
+		TmpDir:         tmpDir,
 	}
 
 	// Create a Unix domain socket for LSP communication in the temp directory
@@ -125,13 +127,15 @@ func NewNvimIntegrationTestRunner(t *testing.T, files map[string]string) (*NvimI
 
 		t.Log("Starting server...")
 
-		server := lsp.NewServer(ctx)
-		opts := jrpc2.ServerOptions{}
-		opts.RPCLog = protocol.NewTestLogger(t, map[string]string{
+		// server := lsp.NewServer(ctx)
+		// opts := jrpc2.ServerOptions{}
+		si.ServerOpts.RPCLog = protocol.NewTestLogger(t, map[string]string{
 			tmpDir: "/[TEMP_DIR]",
 		})
+		// si.AddBackgroundCmdFlag(fmt.Sprintf("-logfile=%s/gopls.log", tmpDir))
+		zerolog.Ctx(ctx).Info().Msg("Starting server...")
 
-		if err := server.Run(ctx, conn, conn, &opts); err != nil {
+		if err := si.StartAndWait(conn, conn); err != nil {
 			if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
 				serverError <- errors.Errorf("LSP server error: %v", err)
 			}
@@ -149,7 +153,7 @@ func NewNvimIntegrationTestRunner(t *testing.T, files map[string]string) (*NvimI
 		return nil, errors.Errorf("timeout waiting for LSP server to start")
 	}
 
-	configPath, err := setupNeovimConfig(t, tmpDir, socketPath)
+	configPath, err := setupNeovimConfig(t, tmpDir, socketPath, config)
 	if err != nil {
 		return nil, errors.Errorf("failed to setup LSP config: %v", err)
 	}
@@ -251,7 +255,7 @@ func (s *NvimIntegrationTestRunner) WaitForLSP() error {
 	return nil
 }
 
-func setupNeovimConfig(t *testing.T, tmpDir string, socketPath string) (string, error) {
+func setupNeovimConfig(t *testing.T, tmpDir string, socketPath string, config NeovimConfig) (string, error) {
 	lspConfigDir := filepath.Join(tmpDir, "nvim-lspconfig")
 	t.Log("Extracting nvim-lspconfig files...")
 	err := archive.ExtractTarGzWithOptions(nvimlspconfig.Data, lspConfigDir, archive.ExtractOptions{
@@ -271,27 +275,6 @@ func setupNeovimConfig(t *testing.T, tmpDir string, socketPath string) (string, 
 	}
 	t.Logf("Files in nvim-lspconfig dir: %v", files)
 
-	// actualLspConfigDir, err := filepath.Abs(filepath.Join(lspConfigDir, "nvim-lspconfig-"+strings.TrimPrefix(nvimlspconfig.Ref, "tags/v")))
-	// if err != nil {
-	// 	return "", errors.Errorf("failed to get actual nvim-lspconfig dir: %w", err)
-	// }
-	// t.Logf("Actual nvim-lspconfig dir: %s", actualLspConfigDir)
-
-	// // Get absolute paths for commands
-	// projectRoot, err := filepath.Abs("../../../..")
-	// if err != nil {
-	// 	return "", errors.Errorf("failed to get project root: %w", err)
-	// }
-
-	// // check for a go.work file in the project root
-	// goWorkPath := filepath.Join(projectRoot, "go.work")
-	// if _, err := os.Stat(goWorkPath); os.IsNotExist(err) {
-	// 	return "", errors.Errorf("go.work file not found in project root: %s - the filepath.abs is likely wrong", projectRoot)
-	// }
-
-	// stdioProxyPath := filepath.Join(projectRoot, "cmd", "stdio-proxy")
-
-	// Create a temporary config.vim
 	vimConfig := fmt.Sprintf(`
 set verbose=20
 let s:lspconfig_path = '%[1]s'
@@ -305,64 +288,51 @@ autocmd! BufEnter *.tmpl setlocal filetype=go-template
 runtime! plugin/lspconfig.lua
 
 lua <<EOF
+
 -- Enable debug logging
 vim.lsp.set_log_level("debug")
 
 local lspconfig = require 'lspconfig'
 local configs = require 'lspconfig.configs'
-
+local util = require 'lspconfig.util'
+local async = require 'lspconfig.async'
 -- Print loaded configs for debugging
 print("Available LSP configs:", vim.inspect(configs))
+
+-- Configure capabilities
+local capabilities = vim.lsp.protocol.make_client_capabilities()
+capabilities.textDocument.hover = {
+    dynamicRegistration = true,
+    contentFormat = { "plaintext", "markdown" }
+}
+-- Disable semantic tokens
+-- capabilities.textDocument.semanticTokens = nil
 
 -- Use an on_attach function to only map the following keys
 local on_attach = function(client, bufnr)
     print("LSP client attached:", vim.inspect(client))
     print("Buffer:", bufnr)
+    print("Client capabilities:", vim.inspect(client.server_capabilities))
+    
+    -- Disable semantic tokens
+    -- client.server_capabilities.semanticTokensProvider = nil
+
+    -- Set buffer options
+    vim.api.nvim_buf_set_option(bufnr, 'omnifunc', 'v:lua.vim.lsp.omnifunc')
 end
 
--- Configure the go-template language server
-if not configs.go_template then
-    configs.go_template = {
-        default_config = {
-            cmd = { 'go', 'run', 'github.com/walteh/go-tmpl-typer/cmd/stdio-proxy', '%[2]s' },
-            filetypes = { 'go-template' },
-            root_dir = function(fname)
-                local path = vim.fn.getcwd()
-                print("Setting root dir to:", path)
-                return path
-            end,
-            on_attach = on_attach,
-            flags = {
-                debounce_text_changes = 150,
-            },
-            settings = {},
-            init_options = {}
-        },
-    }
-    print("Registered go_template config")
-end
+print("start default config")
+%[2]s
+print("end default config")
 
--- Set up the LSP server with debug logging
-if lspconfig.go_template then
-    print("Setting up go_template server")
-    lspconfig.go_template.setup {
-        on_attach = function(client, bufnr)
-            print("go_template server attached to buffer", bufnr)
-            print("Client capabilities:", vim.inspect(client.server_capabilities))
-            on_attach(client, bufnr)
-        end,
-        flags = {
-            debounce_text_changes = 150,
-            allow_incremental_sync = true,
-        }
-    }
-    print("go_template server setup complete")
-else
-    print("ERROR: go_template config not found!")
-end
+print("start default setup")
+%[3]s
+print("end default setup")
 
 print("LSP setup complete")
-EOF`, lspConfigDir, socketPath)
+EOF`, lspConfigDir, config.DefaultConfig(socketPath), config.DefaultSetup())
+
+	fmt.Printf("vimConfig: %s", vimConfig)
 
 	configPath := filepath.Join(tmpDir, "config.vim")
 	if err := os.WriteFile(configPath, []byte(vimConfig), 0644); err != nil {
@@ -388,19 +358,31 @@ func (s *NvimIntegrationTestRunner) OpenFile(path protocol.DocumentURI) (nvim.Bu
 		return 0, errors.Errorf("failed to get current buffer: %w", err)
 	}
 
-	err = s.nvimInstance.SetBufferOption(buffer, "filetype", "go-template")
-	if err != nil {
-		return 0, errors.Errorf("failed to set filetype: %w", err)
+	// Set filetype to Go for .go files
+	if strings.HasSuffix(pathStr, ".go") {
+		err = s.nvimInstance.SetBufferOption(buffer, "filetype", "go")
+		if err != nil {
+			return 0, errors.Errorf("failed to set filetype: %w", err)
+		}
 	}
 
 	return buffer, nil
 }
 
-func (s *NvimIntegrationTestRunner) AttachLSP(buffer nvim.Buffer) error {
+func (s *NvimIntegrationTestRunner) AttachLSP(buf nvim.Buffer) error {
+	s.t.Log("Waiting for LSP to initialize...")
 	err := s.WaitForLSP()
 	if err != nil {
 		return errors.Errorf("failed to wait for LSP: %w", err)
 	}
+
+	// Get buffer info for logging
+	bufPath, err := s.nvimInstance.BufferName(buf)
+	if err != nil {
+		return errors.Errorf("getting buffer name: %w", err)
+	}
+
+	s.t.Logf("Attaching LSP to buffer %s", bufPath)
 
 	// Attach LSP client using Lua
 	err = s.nvimInstance.Eval(`luaeval('vim.lsp.buf_attach_client(0, 1)')`, nil)
@@ -409,22 +391,19 @@ func (s *NvimIntegrationTestRunner) AttachLSP(buffer nvim.Buffer) error {
 	}
 
 	// Get current buffer text
-	lines, err := s.nvimInstance.BufferLines(buffer, 0, -1, true)
+	lines, err := s.nvimInstance.BufferLines(buf, 0, -1, true)
 	if err != nil {
 		return errors.Errorf("failed to get buffer lines: %w", err)
 	}
 	text := strings.Join(bytesSliceToStringSlice(lines), "\n")
 
-	// Send file contents to LSP server using Lua
-	bufPath, err := s.nvimInstance.BufferName(buffer)
-	if err != nil {
-		return errors.Errorf("failed to get buffer name: %w", err)
-	}
+	s.t.Logf("Sending initial didOpen notification for %s", bufPath)
 
+	// Send file contents to LSP server using Lua
 	notifyCmd := fmt.Sprintf(`luaeval('vim.lsp.buf_notify(0, "textDocument/didOpen", {
 		textDocument = {
 			uri = "file://%s",
-			languageId = "go-template",
+			languageId = "go",
 			version = 1,
 			text = [[%s]]
 		}
@@ -499,6 +478,75 @@ func (s *NvimIntegrationTestRunner) Hover(t *testing.T, ctx context.Context, req
 	if err != nil {
 		return nil, errors.Errorf("failed to set cursor position: %w", err)
 	}
+
+	// Request hover using Lua
+	// var hoverResult *string
+	// hoverCmd := `
+	// 	-- Enable debug logging
+	// 	vim.lsp.set_log_level("debug")
+
+	// 	-- Print current buffer and cursor info
+	// 	print("Current buffer:", vim.api.nvim_get_current_buf())
+	// 	print("Cursor position:", vim.inspect(vim.api.nvim_win_get_cursor(0)))
+
+	// 	-- Get active clients
+	// 	local clients = vim.lsp.get_active_clients()
+	// 	print("Active clients:", vim.inspect(clients))
+
+	// 	local function waitForLspClient()
+	// 		local count = 0
+	// 		while count < 50 do  -- 5 second timeout
+	// 			local clients = vim.lsp.get_active_clients()
+	// 			if #clients > 0 then
+	// 				print("LSP client ready")
+	// 				return clients[1]
+	// 			end
+	// 			print("Waiting for LSP client...")
+	// 			vim.cmd('sleep 100m')  -- 100ms sleep
+	// 			count = count + 1
+	// 		end
+	// 		return nil
+	// 	end
+
+	// 	-- Store the original hover handler
+	// 	local orig_handler = vim.lsp.handlers['textDocument/hover']
+	// 	local result = nil
+	// 	local done = false
+
+	// 	-- Set up a custom handler to capture the result
+	// 	vim.lsp.handlers['textDocument/hover'] = function(err, method, result_)
+	// 		result = result_
+	// 		done = true
+	// 		return orig_handler(err, method, result_)
+	// 	end
+
+	// 	-- Wait for LSP client
+	// 	local client = waitForLspClient()
+	// 	if not client then
+	// 		print("No LSP client found after timeout")
+	// 		return vim.json.encode({error = "LSP not ready"})
+	// 	end
+
+	// 	-- Make the hover request
+	// 	vim.lsp.buf.hover()
+
+	// 	-- Wait for result
+	// 	local count = 0
+	// 	while not done and count < 50 do  -- 5 second timeout
+	// 		vim.cmd('sleep 100m')  -- 100ms sleep
+	// 		count = count + 1
+	// 	end
+
+	// 	-- Restore the original handler
+	// 	vim.lsp.handlers['textDocument/hover'] = orig_handler
+
+	// 	if result then
+	// 		return vim.json.encode(result)
+	// 	else
+	// 		print("No hover result")
+	// 		return vim.json.encode({error = "No hover result"})
+	// 	end
+	// `
 
 	bufPath, err := s.nvimInstance.BufferName(buffer)
 	if err != nil {
@@ -584,4 +632,220 @@ func lastN[T any](vals []T, n int) []T {
 	}
 
 	return vals[len(vals)-n:]
+}
+
+// GetDiagnostics returns the current diagnostics for a given file URI
+func (s *NvimIntegrationTestRunner) GetDiagnostics(uri protocol.DocumentURI) []protocol.Diagnostic {
+	// Wait a bit to ensure diagnostics have been processed
+	time.Sleep(500 * time.Millisecond)
+
+	// Open the file to make it the current buffer
+	_, err := s.OpenFile(uri)
+	if err != nil {
+		s.t.Fatalf("failed to get buffer for diagnostics: %v", err)
+	}
+
+	// Get diagnostics using LSP API
+	var diagnosticsResult *string
+	getDiagnosticsCmd := `
+		local diagnostics = vim.diagnostic.get(0)
+		if diagnostics and #diagnostics > 0 then
+			return vim.json.encode(diagnostics)
+		end
+		return nil
+	`
+
+	err = s.nvimInstance.ExecLua(getDiagnosticsCmd, &diagnosticsResult)
+	if err != nil {
+		s.t.Fatalf("failed to get diagnostics: %v", err)
+	}
+
+	if diagnosticsResult == nil {
+		return nil
+	}
+
+	var diagnostics []protocol.Diagnostic
+	err = json.Unmarshal([]byte(*diagnosticsResult), &diagnostics)
+	if err != nil {
+		s.t.Fatalf("failed to unmarshal diagnostics: %v", err)
+	}
+
+	return diagnostics
+}
+
+func (s *NvimIntegrationTestRunner) SaveFile(buffer nvim.Buffer) error {
+	// Save the file
+	err := s.nvimInstance.Command("w")
+	if err != nil {
+		return errors.Errorf("failed to save file: %w", err)
+	}
+
+	// Get current buffer text
+	lines, err := s.nvimInstance.BufferLines(buffer, 0, -1, true)
+	if err != nil {
+		return errors.Errorf("failed to get buffer lines: %w", err)
+	}
+	text := strings.Join(bytesSliceToStringSlice(lines), "\n")
+
+	// Send file contents to LSP server using Lua
+	bufPath, err := s.nvimInstance.BufferName(buffer)
+	if err != nil {
+		return errors.Errorf("failed to get buffer name: %w", err)
+	}
+
+	s.t.Logf("Sending didChange notification for %s with text: %s", bufPath, text)
+
+	// Notify LSP server about the change
+	notifyCmd := fmt.Sprintf(`luaeval('vim.lsp.buf_notify(0, "textDocument/didChange", {
+		textDocument = {
+			uri = "file://%s",
+			version = 2
+		},
+		contentChanges = {
+			{
+				text = [[%s]]
+			}
+		}
+	})')`, bufPath, text)
+
+	err = s.nvimInstance.Eval(notifyCmd, nil)
+	if err != nil {
+		return errors.Errorf("failed to notify LSP: %w", err)
+	}
+
+	// Also send a didSave notification
+	saveCmd := fmt.Sprintf(`luaeval('vim.lsp.buf_notify(0, "textDocument/didSave", {
+		textDocument = {
+			uri = "file://%s"
+		},
+		text = [[%s]]
+	})')`, bufPath, text)
+
+	err = s.nvimInstance.Eval(saveCmd, nil)
+	if err != nil {
+		return errors.Errorf("failed to notify LSP of save: %w", err)
+	}
+
+	return nil
+}
+
+// CheckDiagnostics waits for and verifies expected diagnostics
+func (s *NvimIntegrationTestRunner) CheckDiagnostics(t *testing.T, uri protocol.DocumentURI, expectedDiagnostics []protocol.Diagnostic, timeout time.Duration) error {
+	start := time.Now()
+	var lastDiags []protocol.Diagnostic
+
+	s.t.Logf("Waiting for diagnostics (timeout: %v)", timeout)
+	s.t.Logf("Expected diagnostics: %+v", expectedDiagnostics)
+
+	for time.Since(start) < timeout {
+		diags := s.GetDiagnostics(uri)
+		lastDiags = diags
+		s.t.Logf("Current diagnostics: %+v", diags)
+
+		// Check if diagnostics match
+		if len(diags) == len(expectedDiagnostics) {
+			match := true
+			for i, expected := range expectedDiagnostics {
+				actual := diags[i]
+				if expected.Message != actual.Message ||
+					expected.Range.Start.Line != actual.Range.Start.Line ||
+					expected.Range.Start.Character != actual.Range.Start.Character ||
+					expected.Range.End.Line != actual.Range.End.Line ||
+					expected.Range.End.Character != actual.Range.End.Character ||
+					expected.Severity != actual.Severity {
+					match = false
+					s.t.Logf("Diagnostic mismatch at index %d:\nExpected: %+v\nActual: %+v", i, expected, actual)
+					break
+				}
+			}
+			if match {
+				s.t.Log("Diagnostics matched successfully")
+				return nil
+			}
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// If we get here, the timeout was reached
+	return errors.Errorf("timeout waiting for expected diagnostics.\nExpected: %+v\nGot: %+v", expectedDiagnostics, lastDiags)
+}
+
+// ApplyEditWithSave applies an edit to a file and saves it
+func (s *NvimIntegrationTestRunner) ApplyEditWithSave(t *testing.T, uri protocol.DocumentURI, newContent string) error {
+	buf, err := s.OpenFile(uri)
+	if err != nil {
+		return errors.Errorf("opening file: %w", err)
+	}
+
+	// Delete all content and insert new content
+	err = s.nvimInstance.Command("normal! ggdG")
+	if err != nil {
+		return errors.Errorf("deleting content: %w", err)
+	}
+
+	// Insert new content
+	err = s.nvimInstance.Command(fmt.Sprintf("normal! i%s", newContent))
+	if err != nil {
+		return errors.Errorf("inserting content: %w", err)
+	}
+
+	// Save the file
+	err = s.SaveFile(buf)
+	if err != nil {
+		return errors.Errorf("saving file: %w", err)
+	}
+
+	return nil
+}
+
+// ApplyEditWithoutSave applies an edit to a file without saving it
+func (s *NvimIntegrationTestRunner) ApplyEditWithoutSave(t *testing.T, uri protocol.DocumentURI, newContent string) error {
+	buf, err := s.OpenFile(uri)
+	if err != nil {
+		return errors.Errorf("opening file: %w", err)
+	}
+
+	// Delete all content and insert new content
+	err = s.nvimInstance.Command("normal! ggdG")
+	if err != nil {
+		return errors.Errorf("deleting content: %w", err)
+	}
+
+	// Insert new content
+	err = s.nvimInstance.Command(fmt.Sprintf("normal! i%s", newContent))
+	if err != nil {
+		return errors.Errorf("inserting content: %w", err)
+	}
+
+	// Notify LSP about the change without saving
+	lines, err := s.nvimInstance.BufferLines(buf, 0, -1, true)
+	if err != nil {
+		return errors.Errorf("getting buffer lines: %w", err)
+	}
+	text := strings.Join(bytesSliceToStringSlice(lines), "\n")
+
+	bufPath, err := s.nvimInstance.BufferName(buf)
+	if err != nil {
+		return errors.Errorf("getting buffer name: %w", err)
+	}
+
+	notifyCmd := fmt.Sprintf(`luaeval('vim.lsp.buf_notify(0, "textDocument/didChange", {
+		textDocument = {
+			uri = "file://%s",
+			version = 2
+		},
+		contentChanges = {
+			{
+				text = [[%s]]
+			}
+		}
+	})')`, bufPath, text)
+
+	err = s.nvimInstance.Eval(notifyCmd, nil)
+	if err != nil {
+		return errors.Errorf("failed to notify LSP: %w", err)
+	}
+
+	return nil
 }

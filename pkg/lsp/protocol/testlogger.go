@@ -13,13 +13,14 @@ import (
 )
 
 type rpcTestLogger struct {
-	logger             zerolog.TestingLog
-	rewrites           map[string]string
-	enableTelemetry    bool
-	enableBigRequests  bool
-	enableBigResponses bool
-	enableRPCLogs      bool
-	isHuman            bool
+	logger                      zerolog.TestingLog
+	rewrites                    map[string]string
+	enableTelemetry             bool
+	enableBigRequests           bool
+	enableBigResponses          bool
+	enableRPCLogs               bool
+	isHuman                     bool
+	enableBackgroundCmdToStderr bool
 }
 
 func DebugAll() bool {
@@ -37,11 +38,12 @@ func NewTestLogger(t zerolog.TestingLog, rewrites map[string]string) jrpc2.RPCLo
 
 	lgr := &rpcTestLogger{
 		logger: t, rewrites: rewrites,
-		isHuman:            DebugIsHuman(),
-		enableTelemetry:    DebugAll(),
-		enableRPCLogs:      DebugAll(),
-		enableBigRequests:  os.Getenv("DEBUG_LSP_BIG_REQUESTS") == "1",
-		enableBigResponses: os.Getenv("DEBUG_LSP_BIG_RESPONSES") == "1",
+		isHuman:                     DebugIsHuman(),
+		enableTelemetry:             DebugAll(),
+		enableRPCLogs:               DebugAll(),
+		enableBigRequests:           os.Getenv("DEBUG_LSP_BIG_REQUESTS") == "1",
+		enableBigResponses:          os.Getenv("DEBUG_LSP_BIG_RESPONSES") == "1",
+		enableBackgroundCmdToStderr: os.Getenv("DEBUG_LSP_BACKGROUND_CMD") == "1",
 	}
 
 	for k, v := range rewrites {
@@ -68,7 +70,12 @@ func NewTestLogger(t zerolog.TestingLog, rewrites map[string]string) jrpc2.RPCLo
 		lgr.logger.Logf("FYI: json logs will not be formatted for humans - set HUMAN=1 to see more readable json")
 	} else {
 		lgr.logger.Logf("FYI: json logs will be formatted for humans - warning: this might overflow ai context windows: set HUMAN=0 to make them more compact.")
+	}
 
+	if lgr.enableBackgroundCmdToStderr {
+		lgr.logger.Logf("FYI: background command output will be written to stderr")
+	} else {
+		lgr.logger.Logf("FYI: background command output will be suppressed. Set DEBUG_LSP_BACKGROUND_CMD=1 to see it")
 	}
 
 	if !DebugAll() {

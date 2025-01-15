@@ -3,8 +3,10 @@ package lsp_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/walteh/go-tmpl-typer/pkg/lsp"
 	"github.com/walteh/go-tmpl-typer/pkg/lsp/integration/nvim"
 	"github.com/walteh/go-tmpl-typer/pkg/lsp/protocol"
 )
@@ -27,7 +29,9 @@ type Person struct {
 	Name string
 }`,
 		}
-		_, err := nvim.NewNvimIntegrationTestRunner(t, files)
+		si := lsp.NewServer(ctx).BuildServerInstance(ctx, nil)
+
+		_, err := nvim.NewNvimIntegrationTestRunner(t, files, si, &nvim.GoTemplateConfig{})
 		require.NoError(t, err, "setup should succeed")
 
 		// The fact that setupNeovimTest succeeded means the server initialized correctly
@@ -54,8 +58,9 @@ type Person struct {
 	Age  int
 }`,
 		}
+		si := lsp.NewServer(ctx).BuildServerInstance(ctx, nil)
 
-		runner, err := nvim.NewNvimIntegrationTestRunner(t, files)
+		runner, err := nvim.NewNvimIntegrationTestRunner(t, files, si, &nvim.GoTemplateConfig{})
 		require.NoError(t, err, "setup should succeed")
 
 		// Test hover in first file
@@ -97,8 +102,9 @@ type Person struct {
 	Name string
 }`,
 		}
+		si := lsp.NewServer(ctx).BuildServerInstance(ctx, nil)
 
-		runner, err := nvim.NewNvimIntegrationTestRunner(t, files)
+		runner, err := nvim.NewNvimIntegrationTestRunner(t, files, si, &nvim.GoTemplateConfig{})
 		require.NoError(t, err, "setup should succeed")
 
 		testFile := runner.TmpFilePathOf("test.tmpl")
@@ -152,8 +158,9 @@ type Person struct {
 	}
 }`,
 		}
+		si := lsp.NewServer(ctx).BuildServerInstance(ctx, nil)
 
-		runner, err := nvim.NewNvimIntegrationTestRunner(t, files)
+		runner, err := nvim.NewNvimIntegrationTestRunner(t, files, si, &nvim.GoTemplateConfig{})
 		require.NoError(t, err, "setup should succeed")
 
 		testFile := runner.TmpFilePathOf("test.tmpl")
@@ -182,8 +189,9 @@ type Person struct {
 	}
 }`,
 		}
+		si := lsp.NewServer(ctx).BuildServerInstance(ctx, nil)
 
-		runner, err := nvim.NewNvimIntegrationTestRunner(t, files)
+		runner, err := nvim.NewNvimIntegrationTestRunner(t, files, si, &nvim.GoTemplateConfig{})
 		require.NoError(t, err, "setup should succeed")
 
 		testFile := runner.TmpFilePathOf("test.tmpl")
@@ -234,8 +242,9 @@ type Person struct {
 	Name string
 }`,
 		}
+		si := lsp.NewServer(ctx).BuildServerInstance(ctx, nil)
 
-		runner, err := nvim.NewNvimIntegrationTestRunner(t, files)
+		runner, err := nvim.NewNvimIntegrationTestRunner(t, files, si, &nvim.GoTemplateConfig{})
 		require.NoError(t, err, "setup should succeed")
 
 		testFile := runner.TmpFilePathOf("subdir/test.tmpl")
@@ -244,4 +253,179 @@ type Person struct {
 		require.NotNil(t, hoverResult, "hover result should not be nil")
 		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```go-template\n.Name\n```", hoverResult.Contents.Value)
 	})
+}
+
+func TestDiagnosticsAfterFileChange(t *testing.T) {
+	files := map[string]string{
+		"test.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .Name }}",
+		"go.mod":    "module test",
+		"test.go": `
+package test
+import _ "embed"
+
+//go:embed test.tmpl
+var TestTemplate string
+type Person struct {
+	Name string
+}`,
+	}
+
+	ctx := context.Background()
+
+	si := lsp.NewServer(ctx).BuildServerInstance(ctx, nil)
+
+	runner, err := nvim.NewNvimIntegrationTestRunner(t, files, si, &nvim.GoTemplateConfig{})
+	require.NoError(t, err, "setup should succeed")
+
+	testFile := runner.TmpFilePathOf("test.tmpl")
+
+	// Open the file and ensure LSP is attached
+	buf, err := runner.OpenFile(testFile)
+	require.NoError(t, err, "opening file should succeed")
+
+	err = runner.AttachLSP(buf)
+	require.NoError(t, err, "attaching LSP should succeed")
+
+	// First verify we get diagnostics for an invalid field
+	err = runner.Command("normal! ggdG")
+	require.NoError(t, err, "delete content should succeed")
+	err = runner.Command("normal! i{{- /*gotype: test.Person*/ -}}\n{{ .InvalidField }}")
+	require.NoError(t, err, "insert content should succeed")
+	err = runner.Command("w")
+	require.NoError(t, err, "save should succeed")
+
+	// Wait longer for diagnostics to be published
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify we get diagnostics for the invalid field
+	diags := runner.GetDiagnostics(testFile)
+	require.NotEmpty(t, diags, "should have diagnostics for invalid field")
+	require.Contains(t, diags[0].Message, "InvalidField", "diagnostic should mention the invalid field")
+
+	// Now change to a valid field
+	err = runner.Command("normal! ggdG")
+	require.NoError(t, err, "delete content should succeed")
+	err = runner.Command("normal! i{{- /*gotype: test.Person*/ -}}\n{{ .Name }}")
+	require.NoError(t, err, "insert content should succeed")
+	err = runner.Command("w")
+	require.NoError(t, err, "save should succeed")
+
+	// Wait longer for diagnostics to be published
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify diagnostics are cleared
+	diags = runner.GetDiagnostics(testFile)
+	require.Empty(t, diags, "diagnostics should be cleared after fixing the error")
+
+	// Make another change that introduces an error
+	err = runner.Command("normal! ggdG")
+	require.NoError(t, err, "delete content should succeed")
+	err = runner.Command("normal! i{{- /*gotype: test.Person*/ -}}\n{{ .AnotherInvalidField }}")
+	require.NoError(t, err, "insert content should succeed")
+	err = runner.Command("w")
+	require.NoError(t, err, "save should succeed")
+
+	// Wait longer for diagnostics to be published
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify we get diagnostics for the new invalid field
+	diags = runner.GetDiagnostics(testFile)
+	require.NotEmpty(t, diags, "should have diagnostics for new invalid field")
+	require.Contains(t, diags[0].Message, "AnotherInvalidField", "diagnostic should mention the new invalid field")
+}
+
+func TestDiagnosticHarness(t *testing.T) {
+	files := map[string]string{
+		"test.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .Name }}",
+		"go.mod":    "module test",
+		"test.go": `
+package test
+import _ "embed"
+
+//go:embed test.tmpl
+var TestTemplate string
+type Person struct {
+	Name string
+}`,
+	}
+
+	ctx := context.Background()
+	si := lsp.NewServer(ctx).BuildServerInstance(ctx, nil)
+
+	runner, err := nvim.NewNvimIntegrationTestRunner(t, files, si, &nvim.GoTemplateConfig{})
+	require.NoError(t, err, "setup should succeed")
+
+	testFile := runner.TmpFilePathOf("test.tmpl")
+
+	// Open the file and ensure LSP is attached
+	buf, err := runner.OpenFile(testFile)
+	require.NoError(t, err, "opening file should succeed")
+
+	err = runner.AttachLSP(buf)
+	require.NoError(t, err, "attaching LSP should succeed")
+
+	// Test Case 1: Valid template should have no diagnostics
+	err = runner.CheckDiagnostics(t, testFile, []protocol.Diagnostic{}, 2*time.Second)
+	require.NoError(t, err, "should have no diagnostics for valid template")
+
+	// Test Case 2: Invalid field should show diagnostic
+	err = runner.Command("normal! ggdG")
+	require.NoError(t, err, "delete content should succeed")
+	err = runner.Command("normal! i{{- /*gotype: test.Person*/ -}}\n{{ .InvalidField }}")
+	require.NoError(t, err, "insert content should succeed")
+	err = runner.Command("w")
+	require.NoError(t, err, "save should succeed")
+
+	expectedDiag := []protocol.Diagnostic{
+		{
+			Range: protocol.Range{
+				Start: protocol.Position{Line: 1, Character: 3},
+				End:   protocol.Position{Line: 1, Character: 15},
+			},
+			Severity: protocol.SeverityError,
+			Message:  "field InvalidField not found in type Person",
+		},
+	}
+	err = runner.CheckDiagnostics(t, testFile, expectedDiag, 2*time.Second)
+	require.NoError(t, err, "should show diagnostic for invalid field")
+
+	// Test Case 3: Multiple diagnostics
+	err = runner.Command("normal! ggdG")
+	require.NoError(t, err, "delete content should succeed")
+	err = runner.Command("normal! i{{- /*gotype: test.Person*/ -}}\n{{ .Field1 }}\n{{ .Field2 }}")
+	require.NoError(t, err, "insert content should succeed")
+	err = runner.Command("w")
+	require.NoError(t, err, "save should succeed")
+
+	expectedDiags := []protocol.Diagnostic{
+		{
+			Range: protocol.Range{
+				Start: protocol.Position{Line: 1, Character: 3},
+				End:   protocol.Position{Line: 1, Character: 9},
+			},
+			Severity: protocol.SeverityError,
+			Message:  "field Field1 not found in type Person",
+		},
+		{
+			Range: protocol.Range{
+				Start: protocol.Position{Line: 2, Character: 3},
+				End:   protocol.Position{Line: 2, Character: 9},
+			},
+			Severity: protocol.SeverityError,
+			Message:  "field Field2 not found in type Person",
+		},
+	}
+	err = runner.CheckDiagnostics(t, testFile, expectedDiags, 2*time.Second)
+	require.NoError(t, err, "should show diagnostics for multiple invalid fields")
+
+	// Test Case 4: Fixing errors should clear diagnostics
+	err = runner.Command("normal! ggdG")
+	require.NoError(t, err, "delete content should succeed")
+	err = runner.Command("normal! i{{- /*gotype: test.Person*/ -}}\n{{ .Name }}")
+	require.NoError(t, err, "insert content should succeed")
+	err = runner.Command("w")
+	require.NoError(t, err, "save should succeed")
+
+	err = runner.CheckDiagnostics(t, testFile, []protocol.Diagnostic{}, 2*time.Second)
+	require.NoError(t, err, "should have no diagnostics after fixing errors")
 }

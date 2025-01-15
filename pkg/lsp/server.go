@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/creachadair/jrpc2"
-	"github.com/creachadair/jrpc2/channel"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/walteh/go-tmpl-typer/pkg/ast"
@@ -115,7 +114,7 @@ type Server struct {
 	cancelFuncs *sync.Map // map[string]context.CancelFunc
 
 	// LSP client for notifications
-	client protocol.Client
+	instance *protocol.ServerInstance
 }
 
 func NewServer(ctx context.Context) *Server {
@@ -127,24 +126,23 @@ func NewServer(ctx context.Context) *Server {
 	}
 }
 
-func (s *Server) Run(ctx context.Context, reader io.Reader, writer io.WriteCloser, opts *jrpc2.ServerOptions) error {
+// func (s *Server) Run(ctx context.Context, reader io.Reader, writer io.WriteCloser, opts *jrpc2.ServerOptions) error {
+// 	server := s.Detach(ctx, reader, writer, opts)
+// 	return server.Wait()
+// }
+
+func (s *Server) BuildServerInstance(ctx context.Context, opts *jrpc2.ServerOptions) *protocol.ServerInstance {
 	logger := zerolog.Ctx(ctx)
 	logger.Info().Msg("starting LSP server")
 
-	if opts == nil {
-		opts = &jrpc2.ServerOptions{
-			AllowPush: true,
-		}
+	if s.instance != nil {
+		s.instance.ServerOpts = opts
+		return s.instance
 	}
 
-	server, client := protocol.NewServerServer(ctx, s, opts)
-	stream := channel.LSP(reader, writer)
-	server = server.Start(stream)
+	s.instance = protocol.NewServerInstance(ctx, s, opts)
 
-	// Store client for notifications
-	s.client = client
-
-	return server.Wait()
+	return s.instance
 }
 
 // Required interface methods
@@ -309,7 +307,21 @@ func (s *Server) DidDeleteFiles(ctx context.Context, params *protocol.DeleteFile
 
 func (s *Server) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocumentParams) error {
 	logger := zerolog.Ctx(ctx)
-	logger.Debug().Str("uri", string(params.TextDocument.URI)).Msg("document opened")
+	logger.Info().
+		Str("uri", string(params.TextDocument.URI)).
+		Int32("version", params.TextDocument.Version).
+		Str("language", string(params.TextDocument.LanguageID)).
+		Msg("document opened")
+
+	// Check if document already exists
+	if existing, ok := s.documents.store.Load(params.TextDocument.URI); ok {
+		doc := existing.(*Document)
+		logger.Warn().
+			Str("uri", string(params.TextDocument.URI)).
+			Int32("existing_version", doc.Version).
+			Int32("new_version", params.TextDocument.Version).
+			Msg("document already exists")
+	}
 
 	doc := &Document{
 		URI:        string(params.TextDocument.URI),
@@ -597,5 +609,5 @@ func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentUR
 		}
 	}
 
-	return s.client.PublishDiagnostics(ctx, params)
+	return s.instance.CallbackClient().PublishDiagnostics(ctx, params)
 }
