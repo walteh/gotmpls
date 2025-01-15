@@ -307,21 +307,7 @@ func (s *Server) DidDeleteFiles(ctx context.Context, params *protocol.DeleteFile
 
 func (s *Server) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocumentParams) error {
 	logger := zerolog.Ctx(ctx)
-	logger.Info().
-		Str("uri", string(params.TextDocument.URI)).
-		Int32("version", params.TextDocument.Version).
-		Str("language", string(params.TextDocument.LanguageID)).
-		Msg("document opened")
-
-	// Check if document already exists
-	if existing, ok := s.documents.store.Load(params.TextDocument.URI); ok {
-		doc := existing.(*Document)
-		logger.Warn().
-			Str("uri", string(params.TextDocument.URI)).
-			Int32("existing_version", doc.Version).
-			Int32("new_version", params.TextDocument.Version).
-			Msg("document already exists")
-	}
+	logger.Debug().Str("uri", string(params.TextDocument.URI)).Msg("document opened")
 
 	doc := &Document{
 		URI:        string(params.TextDocument.URI),
@@ -579,16 +565,14 @@ func (s *Server) validateDocument(ctx context.Context, urid protocol.DocumentURI
 	}
 
 	// Publish diagnostics
-	return s.publishDiagnostics(ctx, urid, diagnostics, content)
+	if err := s.publishDiagnostics(ctx, urid, content, diagnostics); err != nil {
+		return errors.Errorf("publishing diagnostics: %w", err)
+	}
+
+	return nil
 }
 
-func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentURI, diagnostics []*diagnostic.Diagnostic, content string) error {
-	logger := zerolog.Ctx(ctx)
-	logger.Debug().
-		Str("uri", string(uri)).
-		Int("diagnostic_count", len(diagnostics)).
-		Msg("🔍 publishing diagnostics")
-
+func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentURI, content string, diagnostics []*diagnostic.Diagnostic) error {
 	params := &protocol.PublishDiagnosticsParams{
 		URI:         uri,
 		Diagnostics: make([]protocol.Diagnostic, len(diagnostics)),
@@ -609,18 +593,7 @@ func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentUR
 			Severity: protocol.DiagnosticSeverity(d.Severity),
 			Message:  d.Message,
 		}
-		logger.Debug().
-			Str("message", d.Message).
-			Int("severity", d.Severity).
-			Interface("range", params.Diagnostics[i].Range).
-			Msg("📝 diagnostic detail")
 	}
 
-	err := s.instance.CallbackClient().PublishDiagnostics(ctx, params)
-	if err != nil {
-		logger.Error().Err(err).Msg("❌ failed to publish diagnostics")
-		return errors.Errorf("publishing diagnostics: %w", err)
-	}
-	logger.Debug().Msg("✅ diagnostics published successfully")
-	return nil
+	return s.instance.CallbackClient().PublishDiagnostics(ctx, params)
 }

@@ -298,7 +298,8 @@ type Person struct {
 	time.Sleep(500 * time.Millisecond)
 
 	// Verify we get diagnostics for the invalid field
-	diags := runner.GetDiagnostics(testFile)
+	diags, err := runner.GetDiagnostics(t, testFile, 2*time.Second)
+	require.NoError(t, err, "getting diagnostics should succeed")
 	require.NotEmpty(t, diags, "should have diagnostics for invalid field")
 	require.Contains(t, diags[0].Message, "InvalidField", "diagnostic should mention the invalid field")
 
@@ -314,7 +315,8 @@ type Person struct {
 	time.Sleep(500 * time.Millisecond)
 
 	// Verify diagnostics are cleared
-	diags = runner.GetDiagnostics(testFile)
+	diags, err = runner.GetDiagnostics(t, testFile, 2*time.Second)
+	require.NoError(t, err, "getting diagnostics should succeed")
 	require.Empty(t, diags, "diagnostics should be cleared after fixing the error")
 
 	// Make another change that introduces an error
@@ -329,7 +331,8 @@ type Person struct {
 	time.Sleep(500 * time.Millisecond)
 
 	// Verify we get diagnostics for the new invalid field
-	diags = runner.GetDiagnostics(testFile)
+	diags, err = runner.GetDiagnostics(t, testFile, 2*time.Second)
+	require.NoError(t, err, "getting diagnostics should succeed")
 	require.NotEmpty(t, diags, "should have diagnostics for new invalid field")
 	require.Contains(t, diags[0].Message, "AnotherInvalidField", "diagnostic should mention the new invalid field")
 }

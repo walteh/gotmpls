@@ -92,11 +92,21 @@ func (p *Person) GetName() string {
 	require.NoError(t, err, "hover request should succeed")
 	assert.NotNil(t, diags, "hover response should not be nil")
 
-	diagsw := []protocol.Diagnostic{
-		{
-			Range: protocol.Range{
-				Start: protocol.Position{Line: 7, Character: 16},
-				End:   protocol.Position{Line: 7, Character: 21},
+	diagsw := &protocol.FullDocumentDiagnosticReport{
+		Kind: "",
+		Items: []protocol.Diagnostic{
+			{
+				Message: "p.Invalid undefined (type *Person has no field or method Invalid)",
+				Range: protocol.Range{
+					Start: protocol.Position{Line: 8, Character: 10},
+					End:   protocol.Position{Line: 8, Character: 17},
+				},
+				Severity: protocol.SeverityError,
+				Source:   "compiler",
+				Code:     "MissingFieldOrMethod",
+				CodeDescription: &protocol.CodeDescription{
+					Href: "https://pkg.go.dev/golang.org/x/tools/internal/typesinternal#MissingFieldOrMethod",
+				},
 			},
 		},
 	}

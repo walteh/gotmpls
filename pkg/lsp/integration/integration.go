@@ -11,7 +11,7 @@ import (
 // IntegrationTestRunner defines the interface for LSP integration testing
 type IntegrationTestRunner interface {
 	// Document State Operations
-	GetDiagnostics(t *testing.T, uri protocol.DocumentURI, timeout time.Duration) ([]protocol.Diagnostic, error)
+	GetDiagnostics(t *testing.T, uri protocol.DocumentURI, timeout time.Duration) (*protocol.FullDocumentDiagnosticReport, error)
 	GetDocumentText(t *testing.T, uri protocol.DocumentURI) (string, error)
 	GetFormattedDocument(t *testing.T, ctx context.Context, uri protocol.DocumentURI) (string, error)
 

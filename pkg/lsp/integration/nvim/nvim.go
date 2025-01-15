@@ -451,8 +451,9 @@ func (s *NvimIntegrationTestRunner) setupLSPInterceptors(t *testing.T) error {
 		local methods_to_intercept = {
 			"textDocument/hover",
 			"textDocument/publishDiagnostics",
-			-- Add more methods as needed
-		}
+			"textDocument/diagnostic",
+				-- Add more methods as needed
+			}
 
 		for _, method in ipairs(methods_to_intercept) do
 			if not _G.original_handlers[method] then
@@ -460,6 +461,7 @@ func (s *NvimIntegrationTestRunner) setupLSPInterceptors(t *testing.T) error {
 				vim.lsp.handlers[method] = function(err, result, ctx, config)
 					-- Store the intercepted message
 					if result then
+						print("intercepted message", method, result)
 						intercept_message(method, result)
 					end
 					-- Call original handler
@@ -490,50 +492,156 @@ func (s *NvimIntegrationTestRunner) getInterceptedMessages(method string) ([]str
 	return messages, nil
 }
 
+func getUnmarshaledInterceptedMessages[T any](s *NvimIntegrationTestRunner, method string) ([]T, error) {
+	var res []T
+	messages, err := s.getInterceptedMessages(method)
+	if err != nil {
+		return nil, errors.Errorf("failed to get intercepted messages: %w", err)
+	}
+	for _, msg := range messages {
+		var m T
+		if err := json.Unmarshal([]byte(msg), &m); err != nil {
+			return nil, errors.Errorf("failed to unmarshal message: %w", err)
+		}
+		res = append(res, m)
+	}
+	return res, nil
+}
+
+func getUnmarshaledIntercepedMessage[T any](s *NvimIntegrationTestRunner, method string) (*T, error) {
+	messages, err := getUnmarshaledInterceptedMessages[T](s, method)
+	if err != nil {
+		return nil, errors.Errorf("failed to get intercepted messages: %w", err)
+	}
+	return &messages[len(messages)-1], nil
+}
+
+func getUnmarshaledIntercepedMessageWithTimeout[T any](s *NvimIntegrationTestRunner, method string, timeout time.Duration) (*T, error) {
+	messages, err := getUnmarshaledIntercepedMessagesWithTimeout[T](s, method, timeout)
+	if err != nil {
+		return new(T), errors.Errorf("failed to get intercepted messages: %w", err)
+	}
+	return &messages[len(messages)-1], nil
+}
+
+func getUnmarshaledIntercepedMessagesWithTimeout[T any](s *NvimIntegrationTestRunner, method string, timeout time.Duration) ([]T, error) {
+	start := time.Now()
+	for time.Since(start) < timeout {
+		messages, err := getUnmarshaledInterceptedMessages[T](s, method)
+		if err != nil {
+			return nil, errors.Errorf("failed to get intercepted messages: %w", err)
+		}
+		if len(messages) > 0 {
+			return messages, nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return nil, errors.Errorf("timeout waiting for %s message", method)
+}
+
 // clearInterceptedMessages clears stored messages
 func (s *NvimIntegrationTestRunner) clearInterceptedMessages() error {
 	clearCmd := `_G.intercepted_messages = {}`
 	return s.nvimInstance.ExecLua(clearCmd, nil)
 }
 
+// Helper function to convert [][]byte to []string
+func bytesSliceToStringSlice(b [][]byte) []string {
+	s := make([]string, len(b))
+	for i, v := range b {
+		s[i] = string(v)
+	}
+	return s
+}
+
+func lastN[T any](vals []T, n int) []T {
+	if len(vals) <= n {
+		return vals
+	}
+	return vals[len(vals)-n:]
+}
+
+func withFileResult[T any](s *NvimIntegrationTestRunner, uri protocol.DocumentURI, operation func(buffer nvim.Buffer) (T, error)) (T, error) {
+	var res T
+	err := s.withFile(uri, func(buffer nvim.Buffer) error {
+		var err error
+		res, err = operation(buffer)
+		return err
+	})
+	return res, err
+}
+
+func withFileResultsMethodTimeout[T any](s *NvimIntegrationTestRunner, uri protocol.DocumentURI, method string, timeout time.Duration, operation func(buffer nvim.Buffer) error) ([]T, error) {
+	return withFileResult(s, uri, func(buffer nvim.Buffer) ([]T, error) {
+		if err := operation(buffer); err != nil {
+			return nil, err
+		}
+		return getUnmarshaledIntercepedMessagesWithTimeout[T](s, method, timeout)
+	})
+}
+
+func withFileResultMethodTimeout[T any](s *NvimIntegrationTestRunner, uri protocol.DocumentURI, method string, timeout time.Duration, operation func(buffer nvim.Buffer) error) (*T, error) {
+	return withFileResult(s, uri, func(buffer nvim.Buffer) (*T, error) {
+		if err := operation(buffer); err != nil {
+			return nil, err
+		}
+		return getUnmarshaledIntercepedMessageWithTimeout[T](s, method, timeout)
+	})
+}
+
 // withFile ensures atomic and consistent file handling for LSP operations
 func (s *NvimIntegrationTestRunner) withFile(uri protocol.DocumentURI, operation func(buffer nvim.Buffer) error) error {
-	// Lock to ensure atomic file operations
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Open file and get buffer
-	buffer, err := s.OpenFile(uri)
+	// Get buffer for URI
+	buffers, err := s.nvimInstance.Buffers()
 	if err != nil {
-		return errors.Errorf("opening file: %w", err)
+		return errors.Errorf("failed to get buffers: %w", err)
 	}
 
-	// Attach LSP
-	if err := s.attachLSP(buffer); err != nil {
-		return errors.Errorf("attaching LSP: %w", err)
+	var buffer nvim.Buffer
+	for _, b := range buffers {
+		name, err := s.nvimInstance.BufferName(b)
+		if err != nil {
+			continue
+		}
+		if strings.HasSuffix(name, string(uri)) {
+			buffer = b
+			break
+		}
 	}
 
-	// Set up interceptors if not already set
-	if err := s.setupLSPInterceptors(s.t); err != nil {
-		return errors.Errorf("setting up LSP interceptors: %w", err)
+	// If buffer not found, try to open the file
+	if buffer == 0 {
+		buffer, err = s.OpenFile(uri)
+		if err != nil {
+			return errors.Errorf("failed to open file: %w", err)
+		}
+
+		// Attach LSP
+		if err := s.attachLSP(buffer); err != nil {
+			return errors.Errorf("failed to attach LSP: %w", err)
+		}
+
+		// Set up interceptors if not already set
+		if err := s.setupLSPInterceptors(s.t); err != nil {
+			return errors.Errorf("failed to setup LSP interceptors: %w", err)
+		}
+
+		// Clear any previous messages
+		if err := s.clearInterceptedMessages(); err != nil {
+			return errors.Errorf("failed to clear intercepted messages: %w", err)
+		}
 	}
 
-	// Clear any previous messages
-	if err := s.clearInterceptedMessages(); err != nil {
-		return errors.Errorf("clearing intercepted messages: %w", err)
-	}
-
-	// Run the operation
-	if err := operation(buffer); err != nil {
-		return err
-	}
-
-	return nil
+	// Execute the function with the buffer
+	return operation(buffer)
 }
 
 func (s *NvimIntegrationTestRunner) Hover(t *testing.T, ctx context.Context, request *protocol.HoverParams) (*protocol.Hover, error) {
-	var hover *protocol.Hover
-	err := s.withFile(request.TextDocument.URI, func(buffer nvim.Buffer) error {
+	return withFileResultMethodTimeout[protocol.Hover](s, request.TextDocument.URI, "textDocument/hover", time.Second, func(buffer nvim.Buffer) error {
+		t.Logf("🎯 Moving cursor to position: %v", request.Position)
 		// Move cursor to the specified position
 		win, err := s.nvimInstance.CurrentWindow()
 		if err != nil {
@@ -550,38 +658,8 @@ func (s *NvimIntegrationTestRunner) Hover(t *testing.T, ctx context.Context, req
 		if err != nil {
 			return errors.Errorf("failed to trigger hover: %w", err)
 		}
-
-		// Wait for and get hover response
-		start := time.Now()
-		for time.Since(start) < time.Second {
-			messages, err := s.getInterceptedMessages("textDocument/hover")
-			if err != nil {
-				return errors.Errorf("failed to get hover messages: %w", err)
-			}
-
-			if len(messages) > 0 {
-				// Use the most recent message
-				lastMessage := messages[len(messages)-1]
-				t.Logf("Received hover message: %s", lastMessage)
-
-				err = json.Unmarshal([]byte(lastMessage), &hover)
-				if err != nil {
-					return errors.Errorf("failed to unmarshal hover response: %w", err)
-				}
-				return nil
-			}
-
-			time.Sleep(50 * time.Millisecond)
-		}
-
 		return nil
 	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return hover, nil
 }
 
 func (s *NvimIntegrationTestRunner) SaveAndQuit() error {
@@ -619,101 +697,30 @@ func (s *NvimIntegrationTestRunner) SaveAndQuitWithOutput() (string, error) {
 	return string(content), nil
 }
 
-// Helper function to convert [][]byte to []string
-func bytesSliceToStringSlice(b [][]byte) []string {
-	s := make([]string, len(b))
-	for i, v := range b {
-		s[i] = string(v)
-	}
-	return s
-}
-
-func lastN[T any](vals []T, n int) []T {
-	if len(vals) <= n {
-		return vals
-	}
-
-	return vals[len(vals)-n:]
-}
-
 // GetDiagnostics returns the current diagnostics for a given file URI
-func (s *NvimIntegrationTestRunner) GetDiagnostics(t *testing.T, uri protocol.DocumentURI, timeout time.Duration) ([]protocol.Diagnostic, error) {
-	var diagnostics []protocol.Diagnostic
-	err := s.withFile(uri, func(buffer nvim.Buffer) error {
-		start := time.Now()
-		s.t.Logf("Getting diagnostics (timeout: %v)", timeout)
+func (s *NvimIntegrationTestRunner) GetDiagnostics(t *testing.T, uri protocol.DocumentURI, timeout time.Duration) (*protocol.FullDocumentDiagnosticReport, error) {
+	return withFileResultMethodTimeout[protocol.FullDocumentDiagnosticReport](s, uri, "textDocument/diagnostic", timeout, func(buffer nvim.Buffer) error {
+		t.Log("🔄 Getting diagnostics (timeout:", timeout, ")")
 
-		// Set up interceptors if not already set
-		if err := s.setupLSPInterceptors(t); err != nil {
-			return errors.Errorf("failed to set up LSP interceptors: %w", err)
-		}
-
-		// Clear any previous messages
-		if err := s.clearInterceptedMessages(); err != nil {
-			return errors.Errorf("failed to clear intercepted messages: %w", err)
-		}
-
-		// Force LSP synchronization
-		syncCmd := `
-			vim.cmd('write!')  -- Force save the file
-			if vim.lsp.buf.format then
-				vim.lsp.buf.format({async = false})  -- New API for formatting
+		// Get diagnostics directly from gopls
+		luaCmd := `
+			local bufnr = vim.api.nvim_get_current_buf()
+			local client = vim.lsp.get_active_clients()[1]
+			if client then
+				-- Request diagnostics from gopls
+				client.request('textDocument/diagnostic', {
+					textDocument = {
+						uri = vim.uri_from_bufnr(bufnr)
+					}
+				})
 			end
-			vim.cmd('edit!')  -- Force reload the file
-			vim.cmd('write!')  -- Force save again to trigger diagnostics
 		`
-		if err := s.nvimInstance.ExecLua(syncCmd, nil); err != nil {
-			return errors.Errorf("failed to sync LSP: %w", err)
+		if err := s.nvimInstance.ExecLua(luaCmd, nil); err != nil {
+			return errors.Errorf("failed to get diagnostics: %w", err)
 		}
 
-		// Wait for diagnostics to be published
-		for time.Since(start) < timeout {
-			messages, err := s.getInterceptedMessages("textDocument/publishDiagnostics")
-			if err != nil {
-				s.t.Logf("Error getting diagnostic messages: %v", err)
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-
-			if len(messages) > 0 {
-				// Use the most recent message
-				lastMessage := messages[len(messages)-1]
-				s.t.Logf("Received diagnostic message: %s", lastMessage)
-
-				var diagResponse struct {
-					URI         protocol.DocumentURI  `json:"uri"`
-					Diagnostics []protocol.Diagnostic `json:"diagnostics"`
-					Version     int                   `json:"version"`
-				}
-
-				if err := json.Unmarshal([]byte(lastMessage), &diagResponse); err != nil {
-					s.t.Logf("Error unmarshalling diagnostics: %v", err)
-					time.Sleep(100 * time.Millisecond)
-					continue
-				}
-
-				// Only check diagnostics for the requested URI
-				if diagResponse.URI != uri {
-					s.t.Logf("Received diagnostics for different URI: %s (expected %s)", diagResponse.URI, uri)
-					continue
-				}
-
-				diagnostics = diagResponse.Diagnostics
-				s.t.Logf("Current diagnostics: %+v", diagnostics)
-				return nil
-			}
-
-			time.Sleep(100 * time.Millisecond)
-		}
-
-		return errors.Errorf("timeout waiting for diagnostics")
+		return nil
 	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return diagnostics, nil
 }
 
 func (s *NvimIntegrationTestRunner) SaveFile(buffer nvim.Buffer) error {
@@ -829,66 +836,26 @@ func (s *NvimIntegrationTestRunner) GetFormattedDocument(t *testing.T, ctx conte
 
 // GetDefinition returns the definition locations for a symbol
 func (s *NvimIntegrationTestRunner) GetDefinition(t *testing.T, ctx context.Context, params *protocol.DefinitionParams) ([]protocol.Location, error) {
-	var locations []protocol.Location
-	err := s.withFile(params.TextDocument.URI, func(buffer nvim.Buffer) error {
-		// Set up interceptors if not already set
-		if err := s.setupLSPInterceptors(t); err != nil {
-			return errors.Errorf("failed to set up LSP interceptors: %w", err)
-		}
-
-		// Clear any previous messages
-		if err := s.clearInterceptedMessages(); err != nil {
-			return errors.Errorf("failed to clear intercepted messages: %w", err)
-		}
-
+	return withFileResult(s, params.TextDocument.URI, func(buffer nvim.Buffer) ([]protocol.Location, error) {
 		// Move cursor to the specified position
 		win, err := s.nvimInstance.CurrentWindow()
 		if err != nil {
-			return errors.Errorf("failed to get current window: %w", err)
+			return nil, errors.Errorf("failed to get current window: %w", err)
 		}
 
 		err = s.nvimInstance.SetWindowCursor(win, [2]int{int(params.Position.Line) + 1, int(params.Position.Character)})
 		if err != nil {
-			return errors.Errorf("failed to set cursor position: %w", err)
+			return nil, errors.Errorf("failed to set cursor position: %w", err)
 		}
 
 		// Trigger definition lookup
 		err = s.nvimInstance.Command("lua vim.lsp.buf.definition()")
 		if err != nil {
-			return errors.Errorf("failed to trigger definition lookup: %w", err)
+			return nil, errors.Errorf("failed to trigger definition lookup: %w", err)
 		}
 
-		// Wait for and get definition response
-		start := time.Now()
-		for time.Since(start) < time.Second {
-			messages, err := s.getInterceptedMessages("textDocument/definition")
-			if err != nil {
-				return errors.Errorf("failed to get definition messages: %w", err)
-			}
-
-			if len(messages) > 0 {
-				// Use the most recent message
-				lastMessage := messages[len(messages)-1]
-				t.Logf("Received definition message: %s", lastMessage)
-
-				err = json.Unmarshal([]byte(lastMessage), &locations)
-				if err != nil {
-					return errors.Errorf("failed to unmarshal definition response: %w", err)
-				}
-				return nil
-			}
-
-			time.Sleep(50 * time.Millisecond)
-		}
-
-		return nil
+		return getUnmarshaledIntercepedMessagesWithTimeout[protocol.Location](s, "textDocument/definition", time.Second)
 	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return locations, nil
 }
 
 // ApplyEdit applies changes to a document with optional save
@@ -938,119 +905,39 @@ func (s *NvimIntegrationTestRunner) ApplyEdit(t *testing.T, uri protocol.Documen
 
 // GetReferences returns all references to a symbol
 func (s *NvimIntegrationTestRunner) GetReferences(t *testing.T, ctx context.Context, params *protocol.ReferenceParams) ([]protocol.Location, error) {
-	var locations []protocol.Location
-	err := s.withFile(params.TextDocument.URI, func(buffer nvim.Buffer) error {
-		// Set up interceptors if not already set
-		if err := s.setupLSPInterceptors(t); err != nil {
-			return errors.Errorf("failed to set up LSP interceptors: %w", err)
-		}
-
-		// Clear any previous messages
-		if err := s.clearInterceptedMessages(); err != nil {
-			return errors.Errorf("failed to clear intercepted messages: %w", err)
-		}
-
+	return withFileResult(s, params.TextDocument.URI, func(buffer nvim.Buffer) ([]protocol.Location, error) {
 		// Move cursor to the specified position
 		win, err := s.nvimInstance.CurrentWindow()
 		if err != nil {
-			return errors.Errorf("failed to get current window: %w", err)
+			return nil, errors.Errorf("failed to get current window: %w", err)
 		}
 
 		err = s.nvimInstance.SetWindowCursor(win, [2]int{int(params.Position.Line) + 1, int(params.Position.Character)})
 		if err != nil {
-			return errors.Errorf("failed to set cursor position: %w", err)
+			return nil, errors.Errorf("failed to set cursor position: %w", err)
 		}
 
 		// Trigger references lookup
 		err = s.nvimInstance.Command("lua vim.lsp.buf.references()")
 		if err != nil {
-			return errors.Errorf("failed to trigger references lookup: %w", err)
+			return nil, errors.Errorf("failed to trigger references lookup: %w", err)
 		}
 
-		// Wait for and get references response
-		start := time.Now()
-		for time.Since(start) < time.Second {
-			messages, err := s.getInterceptedMessages("textDocument/references")
-			if err != nil {
-				return errors.Errorf("failed to get references messages: %w", err)
-			}
-
-			if len(messages) > 0 {
-				// Use the most recent message
-				lastMessage := messages[len(messages)-1]
-				t.Logf("Received references message: %s", lastMessage)
-
-				err = json.Unmarshal([]byte(lastMessage), &locations)
-				if err != nil {
-					return errors.Errorf("failed to unmarshal references response: %w", err)
-				}
-				return nil
-			}
-
-			time.Sleep(50 * time.Millisecond)
-		}
-
-		return nil
+		return getUnmarshaledIntercepedMessagesWithTimeout[protocol.Location](s, "textDocument/references", time.Second)
 	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return locations, nil
 }
 
 // GetDocumentSymbols returns all symbols in a document
 func (s *NvimIntegrationTestRunner) GetDocumentSymbols(t *testing.T, ctx context.Context, params *protocol.DocumentSymbolParams) ([]protocol.DocumentSymbol, error) {
-	var symbols []protocol.DocumentSymbol
-	err := s.withFile(params.TextDocument.URI, func(buffer nvim.Buffer) error {
-		// Set up interceptors if not already set
-		if err := s.setupLSPInterceptors(t); err != nil {
-			return errors.Errorf("failed to set up LSP interceptors: %w", err)
-		}
-
-		// Clear any previous messages
-		if err := s.clearInterceptedMessages(); err != nil {
-			return errors.Errorf("failed to clear intercepted messages: %w", err)
-		}
-
+	return withFileResult(s, params.TextDocument.URI, func(buffer nvim.Buffer) ([]protocol.DocumentSymbol, error) {
 		// Trigger document symbols request
 		err := s.nvimInstance.Command("lua vim.lsp.buf.document_symbol()")
 		if err != nil {
-			return errors.Errorf("failed to trigger document symbols: %w", err)
+			return nil, errors.Errorf("failed to trigger document symbols: %w", err)
 		}
 
-		// Wait for and get symbols response
-		start := time.Now()
-		for time.Since(start) < time.Second {
-			messages, err := s.getInterceptedMessages("textDocument/documentSymbol")
-			if err != nil {
-				return errors.Errorf("failed to get document symbols messages: %w", err)
-			}
-
-			if len(messages) > 0 {
-				// Use the most recent message
-				lastMessage := messages[len(messages)-1]
-				t.Logf("Received document symbols message: %s", lastMessage)
-
-				err = json.Unmarshal([]byte(lastMessage), &symbols)
-				if err != nil {
-					return errors.Errorf("failed to unmarshal document symbols response: %w", err)
-				}
-				return nil
-			}
-
-			time.Sleep(50 * time.Millisecond)
-		}
-
-		return nil
+		return getUnmarshaledIntercepedMessagesWithTimeout[protocol.DocumentSymbol](s, "textDocument/documentSymbol", time.Second)
 	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return symbols, nil
 }
 
 // ApplyRename applies a rename operation to a symbol
@@ -1125,27 +1012,17 @@ func (s *NvimIntegrationTestRunner) ApplyRename(t *testing.T, ctx context.Contex
 
 // GetCodeActions returns available code actions for a given range
 func (s *NvimIntegrationTestRunner) GetCodeActions(t *testing.T, ctx context.Context, params *protocol.CodeActionParams) ([]protocol.CodeAction, error) {
-	var actions []protocol.CodeAction
-	err := s.withFile(params.TextDocument.URI, func(buffer nvim.Buffer) error {
-		// Set up interceptors if not already set
-		if err := s.setupLSPInterceptors(t); err != nil {
-			return errors.Errorf("failed to set up LSP interceptors: %w", err)
-		}
-
-		// Clear any previous messages
-		if err := s.clearInterceptedMessages(); err != nil {
-			return errors.Errorf("failed to clear intercepted messages: %w", err)
-		}
+	return withFileResult(s, params.TextDocument.URI, func(buffer nvim.Buffer) ([]protocol.CodeAction, error) {
 
 		// Move cursor to the start of the range
 		win, err := s.nvimInstance.CurrentWindow()
 		if err != nil {
-			return errors.Errorf("failed to get current window: %w", err)
+			return nil, errors.Errorf("failed to get current window: %w", err)
 		}
 
 		err = s.nvimInstance.SetWindowCursor(win, [2]int{int(params.Range.Start.Line) + 1, int(params.Range.Start.Character)})
 		if err != nil {
-			return errors.Errorf("failed to set cursor position: %w", err)
+			return nil, errors.Errorf("failed to set cursor position: %w", err)
 		}
 
 		// Set visual selection to the range if it's not empty
@@ -1153,173 +1030,96 @@ func (s *NvimIntegrationTestRunner) GetCodeActions(t *testing.T, ctx context.Con
 			visualCmd := fmt.Sprintf("normal! v%dG%d|", params.Range.End.Line+1, params.Range.End.Character+1)
 			err = s.nvimInstance.Command(visualCmd)
 			if err != nil {
-				return errors.Errorf("failed to set visual selection: %w", err)
+				return nil, errors.Errorf("failed to set visual selection: %w", err)
 			}
 		}
 
 		// Trigger code actions
 		err = s.nvimInstance.Command("lua vim.lsp.buf.code_action()")
 		if err != nil {
-			return errors.Errorf("failed to trigger code actions: %w", err)
+			return nil, errors.Errorf("failed to trigger code actions: %w", err)
 		}
 
-		// Wait for and get code actions response
-		start := time.Now()
-		for time.Since(start) < time.Second {
-			messages, err := s.getInterceptedMessages("textDocument/codeAction")
-			if err != nil {
-				return errors.Errorf("failed to get code actions messages: %w", err)
-			}
-
-			if len(messages) > 0 {
-				// Use the most recent message
-				lastMessage := messages[len(messages)-1]
-				t.Logf("Received code actions message: %s", lastMessage)
-
-				err = json.Unmarshal([]byte(lastMessage), &actions)
-				if err != nil {
-					return errors.Errorf("failed to unmarshal code actions response: %w", err)
-				}
-				return nil
-			}
-
-			time.Sleep(50 * time.Millisecond)
-		}
-
-		return nil
+		return getUnmarshaledIntercepedMessagesWithTimeout[protocol.CodeAction](s, "textDocument/codeAction", time.Second)
 	})
 
-	if err != nil {
-		return nil, err
-	}
-
-	return actions, nil
 }
 
 // GetCompletion returns completion items at the current position
 func (s *NvimIntegrationTestRunner) GetCompletion(t *testing.T, ctx context.Context, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
-	var completions *protocol.CompletionList
-	err := s.withFile(params.TextDocument.URI, func(buffer nvim.Buffer) error {
-		// Set up interceptors if not already set
-		if err := s.setupLSPInterceptors(t); err != nil {
-			return errors.Errorf("failed to set up LSP interceptors: %w", err)
-		}
-
-		// Clear any previous messages
-		if err := s.clearInterceptedMessages(); err != nil {
-			return errors.Errorf("failed to clear intercepted messages: %w", err)
-		}
-
+	return withFileResult(s, params.TextDocument.URI, func(buffer nvim.Buffer) (*protocol.CompletionList, error) {
 		// Move cursor to the specified position
 		win, err := s.nvimInstance.CurrentWindow()
 		if err != nil {
-			return errors.Errorf("failed to get current window: %w", err)
+			return nil, errors.Errorf("failed to get current window: %w", err)
 		}
 
 		err = s.nvimInstance.SetWindowCursor(win, [2]int{int(params.Position.Line) + 1, int(params.Position.Character)})
 		if err != nil {
-			return errors.Errorf("failed to set cursor position: %w", err)
+			return nil, errors.Errorf("failed to set cursor position: %w", err)
 		}
 
 		// Trigger completion
 		err = s.nvimInstance.Command("lua vim.lsp.buf.completion()")
 		if err != nil {
-			return errors.Errorf("failed to trigger completion: %w", err)
+			return nil, errors.Errorf("failed to trigger completion: %w", err)
 		}
 
-		// Wait for and get completion response
-		start := time.Now()
-		for time.Since(start) < time.Second {
-			messages, err := s.getInterceptedMessages("textDocument/completion")
-			if err != nil {
-				return errors.Errorf("failed to get completion messages: %w", err)
-			}
-
-			if len(messages) > 0 {
-				// Use the most recent message
-				lastMessage := messages[len(messages)-1]
-				t.Logf("Received completion message: %s", lastMessage)
-
-				err = json.Unmarshal([]byte(lastMessage), &completions)
-				if err != nil {
-					return errors.Errorf("failed to unmarshal completion response: %w", err)
-				}
-				return nil
-			}
-
-			time.Sleep(50 * time.Millisecond)
-		}
-
-		return nil
+		return getUnmarshaledIntercepedMessageWithTimeout[protocol.CompletionList](s, "textDocument/completion", time.Second)
 	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return completions, nil
 }
 
 // GetSignatureHelp returns signature help for the current position
 func (s *NvimIntegrationTestRunner) GetSignatureHelp(t *testing.T, ctx context.Context, params *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error) {
-	var signatureHelp *protocol.SignatureHelp
-	err := s.withFile(params.TextDocument.URI, func(buffer nvim.Buffer) error {
-		// Set up interceptors if not already set
-		if err := s.setupLSPInterceptors(t); err != nil {
-			return errors.Errorf("failed to set up LSP interceptors: %w", err)
-		}
-
-		// Clear any previous messages
-		if err := s.clearInterceptedMessages(); err != nil {
-			return errors.Errorf("failed to clear intercepted messages: %w", err)
-		}
-
+	return withFileResult(s, params.TextDocument.URI, func(buffer nvim.Buffer) (*protocol.SignatureHelp, error) {
 		// Move cursor to the specified position
 		win, err := s.nvimInstance.CurrentWindow()
 		if err != nil {
-			return errors.Errorf("failed to get current window: %w", err)
+			return nil, errors.Errorf("failed to get current window: %w", err)
 		}
 
 		err = s.nvimInstance.SetWindowCursor(win, [2]int{int(params.Position.Line) + 1, int(params.Position.Character)})
 		if err != nil {
-			return errors.Errorf("failed to set cursor position: %w", err)
+			return nil, errors.Errorf("failed to set cursor position: %w", err)
 		}
 
 		// Trigger signature help
 		err = s.nvimInstance.Command("lua vim.lsp.buf.signature_help()")
 		if err != nil {
-			return errors.Errorf("failed to trigger signature help: %w", err)
+			return nil, errors.Errorf("failed to trigger signature help: %w", err)
 		}
 
-		// Wait for and get signature help response
-		start := time.Now()
-		for time.Since(start) < time.Second {
-			messages, err := s.getInterceptedMessages("textDocument/signatureHelp")
-			if err != nil {
-				return errors.Errorf("failed to get signature help messages: %w", err)
-			}
-
-			if len(messages) > 0 {
-				// Use the most recent message
-				lastMessage := messages[len(messages)-1]
-				t.Logf("Received signature help message: %s", lastMessage)
-
-				err = json.Unmarshal([]byte(lastMessage), &signatureHelp)
-				if err != nil {
-					return errors.Errorf("failed to unmarshal signature help response: %w", err)
-				}
-				return nil
-			}
-
-			time.Sleep(50 * time.Millisecond)
-		}
-
-		return nil
+		return getUnmarshaledIntercepedMessageWithTimeout[protocol.SignatureHelp](s, "textDocument/signatureHelp", time.Second)
 	})
+}
 
+// withFileDiagnostics is used specifically for diagnostic operations
+func (s *NvimIntegrationTestRunner) withFileDiagnostics(t *testing.T, uri protocol.DocumentURI, fn func() ([]protocol.Diagnostic, error)) ([]protocol.Diagnostic, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Get buffer for URI
+	buffers, err := s.nvimInstance.Buffers()
 	if err != nil {
-		return nil, err
+		return nil, errors.Errorf("failed to get buffers: %w", err)
 	}
 
-	return signatureHelp, nil
+	var buffer nvim.Buffer
+	for _, b := range buffers {
+		name, err := s.nvimInstance.BufferName(b)
+		if err != nil {
+			continue
+		}
+		if strings.HasSuffix(name, string(uri)) {
+			buffer = b
+			break
+		}
+	}
+
+	if buffer == 0 {
+		return nil, errors.Errorf("buffer not found for URI %s", uri)
+	}
+
+	// Execute the function with the buffer
+	return fn()
 }
