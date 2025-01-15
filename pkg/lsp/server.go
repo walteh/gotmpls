@@ -248,7 +248,25 @@ func (s *Server) Definition(ctx context.Context, params *protocol.DefinitionPara
 }
 
 func (s *Server) Diagnostic(ctx context.Context, params *protocol.DocumentDiagnosticParams) (*protocol.DocumentDiagnosticReport, error) {
-	return nil, nil // Not implemented yet
+
+	doc, ok := s.documents.Get(params.TextDocument.URI)
+	if !ok {
+		return nil, errors.Errorf("document not found: %s", params.TextDocument.URI)
+	}
+
+	diagnostics, err := s.identifyDiagnosticsForFile(ctx, params.TextDocument.URI, doc.Content)
+	if err != nil {
+		return nil, errors.Errorf("identifying diagnostics: %w", err)
+	}
+
+	return &protocol.DocumentDiagnosticReport{
+		Value: protocol.RelatedFullDocumentDiagnosticReport{
+
+			FullDocumentDiagnosticReport: protocol.FullDocumentDiagnosticReport{
+				Items: diagnostics,
+			},
+		},
+	}, nil
 }
 
 func (s *Server) DiagnosticWorkspace(ctx context.Context, params *protocol.WorkspaceDiagnosticParams) (*protocol.WorkspaceDiagnosticReport, error) {
@@ -271,7 +289,7 @@ func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 		doc.Content = params.ContentChanges[0].Text
 
 		s.documents.Store(params.TextDocument.URI, doc)
-		return s.validateDocument(ctx, params.TextDocument.URI, doc.Content)
+		return s.publishDiagnostics(ctx, params.TextDocument.URI, doc.Content)
 	}
 
 	return nil
@@ -317,7 +335,7 @@ func (s *Server) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocume
 	}
 
 	s.documents.Store(params.TextDocument.URI, doc)
-	return s.validateDocument(ctx, params.TextDocument.URI, params.TextDocument.Text)
+	return s.publishDiagnostics(ctx, params.TextDocument.URI, params.TextDocument.Text)
 }
 
 func (s *Server) DidRenameFiles(ctx context.Context, params *protocol.RenameFilesParams) error {
@@ -539,7 +557,7 @@ func (s *Server) ResolveWorkspaceSymbol(ctx context.Context, params *protocol.Wo
 	return nil, nil // Not implemented yet
 }
 
-func (s *Server) validateDocument(ctx context.Context, urid protocol.DocumentURI, content string) error {
+func (s *Server) identifyDiagnosticsForFile(ctx context.Context, urid protocol.DocumentURI, content string) ([]protocol.Diagnostic, error) {
 	logger := zerolog.Ctx(ctx)
 	uri := normalizeURI(string(urid))
 	logger.Debug().Str("uri", uri).Msg("validating document")
@@ -551,35 +569,23 @@ func (s *Server) validateDocument(ctx context.Context, urid protocol.DocumentURI
 
 	registry, err := ast.AnalyzePackage(ctx, uri, overlay)
 	if err != nil {
-		return errors.Errorf("analyzing package: %w", err)
+		return nil, errors.Errorf("analyzing package: %w", err)
 	}
 
 	nodes, err := parser.Parse(ctx, uri, []byte(content))
 	if err != nil {
-		return errors.Errorf("parsing template for validation: %w", err)
+		return nil, errors.Errorf("parsing template for validation: %w", err)
 	}
 
 	diagnostics, err := diagnostic.GetDiagnosticsFromParsed(ctx, nodes, registry)
 	if err != nil {
-		return errors.Errorf("getting diagnostics: %w", err)
+		return nil, errors.Errorf("getting diagnostics: %w", err)
 	}
 
-	// Publish diagnostics
-	if err := s.publishDiagnostics(ctx, urid, content, diagnostics); err != nil {
-		return errors.Errorf("publishing diagnostics: %w", err)
-	}
-
-	return nil
-}
-
-func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentURI, content string, diagnostics []*diagnostic.Diagnostic) error {
-	params := &protocol.PublishDiagnosticsParams{
-		URI:         uri,
-		Diagnostics: make([]protocol.Diagnostic, len(diagnostics)),
-	}
+	var result []protocol.Diagnostic = make([]protocol.Diagnostic, len(diagnostics))
 
 	for i, d := range diagnostics {
-		params.Diagnostics[i] = protocol.Diagnostic{
+		result[i] = protocol.Diagnostic{
 			Range: protocol.Range{
 				Start: protocol.Position{
 					Line:      uint32(d.Location.GetRange(content).Start.Line),
@@ -593,6 +599,21 @@ func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentUR
 			Severity: protocol.DiagnosticSeverity(d.Severity),
 			Message:  d.Message,
 		}
+	}
+
+	return result, nil
+}
+
+func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentURI, content string) error {
+
+	diagnostics, err := s.identifyDiagnosticsForFile(ctx, uri, content)
+	if err != nil {
+		return errors.Errorf("identifying diagnostics: %w", err)
+	}
+
+	params := &protocol.PublishDiagnosticsParams{
+		URI:         uri,
+		Diagnostics: diagnostics,
 	}
 
 	return s.instance.CallbackClient().PublishDiagnostics(ctx, params)

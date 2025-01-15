@@ -17,12 +17,12 @@ type IntegrationTestRunner interface {
 
 	// Navigation & Symbol Operations
 	Hover(t *testing.T, ctx context.Context, params *protocol.HoverParams) (*protocol.Hover, error)
-	GetDefinition(t *testing.T, ctx context.Context, params *protocol.DefinitionParams) ([]protocol.Location, error)
-	GetReferences(t *testing.T, ctx context.Context, params *protocol.ReferenceParams) ([]protocol.Location, error)
-	GetDocumentSymbols(t *testing.T, ctx context.Context, params *protocol.DocumentSymbolParams) ([]protocol.DocumentSymbol, error)
+	GetDefinition(t *testing.T, ctx context.Context, params *protocol.DefinitionParams) ([]*protocol.Location, error)
+	GetReferences(t *testing.T, ctx context.Context, params *protocol.ReferenceParams) ([]*protocol.Location, error)
+	GetDocumentSymbols(t *testing.T, ctx context.Context, params *protocol.DocumentSymbolParams) ([]*protocol.DocumentSymbol, error)
 
 	// Code Intelligence Operations
-	GetCodeActions(t *testing.T, ctx context.Context, params *protocol.CodeActionParams) ([]protocol.CodeAction, error)
+	GetCodeActions(t *testing.T, ctx context.Context, params *protocol.CodeActionParams) ([]*protocol.CodeAction, error)
 	GetCompletion(t *testing.T, ctx context.Context, params *protocol.CompletionParams) (*protocol.CompletionList, error)
 	GetSignatureHelp(t *testing.T, ctx context.Context, params *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error)
 

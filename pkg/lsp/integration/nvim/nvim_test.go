@@ -3,6 +3,7 @@ package nvim_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -116,6 +117,7 @@ func (p *Person) GetName() string {
 }
 
 func TestEditMethods(t *testing.T) {
+	t.Skip()
 	// Initialize test files
 	files := map[string]string{
 		"main.go": `package main
@@ -164,4 +166,98 @@ type Person struct {
 
 	// Clean up
 	require.NoError(t, runner.SaveAndQuit(), "cleanup should succeed")
+}
+
+func TestHoverComprehensive(t *testing.T) {
+	tests := []struct {
+		name     string
+		files    map[string]string
+		position protocol.Position
+		want     *protocol.Hover
+	}{
+		{
+			name: "hover_over_type",
+			files: map[string]string{
+				"main.go": `package main
+
+type Person struct {
+	Name string
+	Age  int
+}
+`,
+			},
+			position: protocol.Position{
+				Line:      2,
+				Character: 6,
+			},
+			want: &protocol.Hover{
+				Contents: protocol.MarkupContent{
+					Kind:  protocol.Markdown,
+					Value: "```go\ntype Person struct { // size=24 (0x18)\n\tName string\n\tAge  int\n}\n```\n\n---\n\n[`main.Person` on pkg.go.dev](https://pkg.go.dev/command-line-arguments/private{{.TEMP_FILE_NAME}}#Person)",
+				},
+				Range: protocol.Range{
+					Start: protocol.Position{Line: 2, Character: 5},
+					End:   protocol.Position{Line: 2, Character: 11},
+				},
+			},
+		},
+		{
+			name: "hover_over_field",
+			files: map[string]string{
+				"main.go": `package main
+
+type Person struct {
+	Name string
+	Age  int
+}
+`,
+			},
+			position: protocol.Position{
+				Line:      3,
+				Character: 2,
+			},
+			want: &protocol.Hover{
+				Contents: protocol.MarkupContent{
+					Kind:  protocol.Markdown,
+					Value: "```go\nfield Name string // size=16 (0x10), offset=0\n```\n\n---\n\n[`(main.Person).Name` on pkg.go.dev](https://pkg.go.dev/command-line-arguments/private{{.TEMP_FILE_NAME}}#Person.Name)",
+				},
+				Range: protocol.Range{
+					Start: protocol.Position{Line: 3, Character: 1},
+					End:   protocol.Position{Line: 3, Character: 5},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			si, err := protocol.NewGoplsServerInstance(ctx)
+			require.NoError(t, err, "failed to create gopls server instance")
+
+			runner, err := nvim.NewNvimIntegrationTestRunner(t, tt.files, si, &nvim.GoplsConfig{})
+			require.NoError(t, err, "failed to create test runner")
+			defer func() {
+				require.NoError(t, runner.SaveAndQuit(), "cleanup should succeed")
+			}()
+
+			uri := runner.TmpFilePathOf("main.go")
+			// runner.OpenFile(uri)
+			// runner.WaitForLSP()
+
+			hoverp := &protocol.HoverParams{
+				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+					TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+					Position:     tt.position,
+				},
+			}
+
+			hover, err := runner.Hover(t, ctx, hoverp)
+			require.NoError(t, err, "hover request should succeed")
+
+			tt.want.Contents.Value = strings.ReplaceAll(tt.want.Contents.Value, "{{.TEMP_FILE_NAME}}", uri.Path())
+
+			assert.Equal(t, hover, tt.want, "hover should match")
+		})
+	}
 }

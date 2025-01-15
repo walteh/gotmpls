@@ -180,7 +180,8 @@ func GenerateFieldInfoFromPosition(ctx context.Context, typeInfo *TypeHintDefini
 		zerolog.Ctx(ctx).Debug().Str("part", part).Msgf("generating field '%s' in type '%s' using position '%s'", part, currentType.MyFieldInfo.Name, pos.ID())
 		field, ok := currentType.Fields[part]
 		if !ok {
-			return nil, errors.Errorf("field %s not found in type %s", part, currentType.MyFieldInfo.Name)
+			// "field not found" is relied on downstream in hover.go
+			return nil, errors.Errorf("field not found [ %s ] in type [ %s ]", part, currentType.MyFieldInfo.Name)
 		}
 
 		currentField = field

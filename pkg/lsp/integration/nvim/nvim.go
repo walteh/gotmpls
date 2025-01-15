@@ -338,8 +338,6 @@ print("end default setup")
 print("LSP setup complete")
 EOF`, lspConfigDir, config.DefaultConfig(socketPath), config.DefaultSetup())
 
-	fmt.Printf("vimConfig: %s", vimConfig)
-
 	configPath := filepath.Join(tmpDir, "config.vim")
 	if err := os.WriteFile(configPath, []byte(vimConfig), 0644); err != nil {
 		return "", errors.Errorf("failed to write config: %w", err)
@@ -444,7 +442,8 @@ func (s *NvimIntegrationTestRunner) setupLSPInterceptors(t *testing.T) error {
 			if not _G.intercepted_messages[method] then
 				_G.intercepted_messages[method] = {}
 			end
-			table.insert(_G.intercepted_messages[method], vim.json.encode(result))
+				table.insert(_G.intercepted_messages[method], vim.json.encode(result))
+
 		end
 
 		-- Intercept specific message types
@@ -461,8 +460,11 @@ func (s *NvimIntegrationTestRunner) setupLSPInterceptors(t *testing.T) error {
 				vim.lsp.handlers[method] = function(err, result, ctx, config)
 					-- Store the intercepted message
 					if result then
-						print("intercepted message", method, result)
 						intercept_message(method, result)
+					elseif err then
+						intercept_message(method, {error = err, jsonrpc = "2.0", id = "[idk, not able to parse it]"})
+					else
+						intercept_message(method, {special_empty_message = true})
 					end
 					-- Call original handler
 					if _G.original_handlers[method] then
@@ -492,41 +494,56 @@ func (s *NvimIntegrationTestRunner) getInterceptedMessages(method string) ([]str
 	return messages, nil
 }
 
-func getUnmarshaledInterceptedMessages[T any](s *NvimIntegrationTestRunner, method string) ([]T, error) {
-	var res []T
+func getUnmarshaledInterceptedMessages[T any](s *NvimIntegrationTestRunner, method string) ([]*T, error) {
+	var res []*T
 	messages, err := s.getInterceptedMessages(method)
 	if err != nil {
 		return nil, errors.Errorf("failed to get intercepted messages: %w", err)
 	}
 	for _, msg := range messages {
+		// check if the message is an error
+		var md map[string]interface{}
+		if err := json.Unmarshal([]byte(msg), &md); err != nil {
+			return nil, errors.Errorf("failed to unmarshal message: %w", err)
+		}
+		s.t.Logf("MESSAGE parsed to type %T: [before: %s] [after: %+v]", md, msg, md)
+		if _, ok := md["error"]; ok {
+			return nil, errors.Errorf("error message received: %s", msg)
+		}
+
+		if _, ok := md["special_empty_message"]; ok {
+			res = append(res, nil)
+			continue
+		}
+
 		var m T
 		if err := json.Unmarshal([]byte(msg), &m); err != nil {
 			return nil, errors.Errorf("failed to unmarshal message: %w", err)
 		}
 		s.t.Logf("MESSAGE parsed to type %T: [before: %s] [after: %+v]", m, msg, m)
 
-		res = append(res, m)
+		res = append(res, &m)
 	}
 	return res, nil
 }
 
-func getUnmarshaledIntercepedMessage[T any](s *NvimIntegrationTestRunner, method string) (*T, error) {
-	messages, err := getUnmarshaledInterceptedMessages[T](s, method)
-	if err != nil {
-		return nil, errors.Errorf("failed to get intercepted messages: %w", err)
-	}
-	return &messages[len(messages)-1], nil
-}
+// func getUnmarshaledIntercepedMessage[T any](s *NvimIntegrationTestRunner, method string) (*T, error) {
+// 	messages, err := getUnmarshaledInterceptedMessages[T](s, method)
+// 	if err != nil {
+// 		return nil, errors.Errorf("failed to get intercepted messages: %w", err)
+// 	}
+// 	return &messages[len(messages)-1], nil
+// }
 
 func getUnmarshaledIntercepedMessageWithTimeout[T any](s *NvimIntegrationTestRunner, method string, timeout time.Duration) (*T, error) {
 	messages, err := getUnmarshaledIntercepedMessagesWithTimeout[T](s, method, timeout)
 	if err != nil {
 		return new(T), errors.Errorf("failed to get intercepted messages: %w", err)
 	}
-	return &messages[len(messages)-1], nil
+	return messages[len(messages)-1], nil
 }
 
-func getUnmarshaledIntercepedMessagesWithTimeout[T any](s *NvimIntegrationTestRunner, method string, timeout time.Duration) ([]T, error) {
+func getUnmarshaledIntercepedMessagesWithTimeout[T any](s *NvimIntegrationTestRunner, method string, timeout time.Duration) ([]*T, error) {
 	start := time.Now()
 	for time.Since(start) < timeout {
 		messages, err := getUnmarshaledInterceptedMessages[T](s, method)
@@ -573,8 +590,8 @@ func withFileResult[T any](s *NvimIntegrationTestRunner, uri protocol.DocumentUR
 	return res, err
 }
 
-func withFileResultsMethodTimeout[T any](s *NvimIntegrationTestRunner, uri protocol.DocumentURI, method string, timeout time.Duration, operation func(buffer nvim.Buffer) error) ([]T, error) {
-	return withFileResult(s, uri, func(buffer nvim.Buffer) ([]T, error) {
+func withFileResultsMethodTimeout[T any](s *NvimIntegrationTestRunner, uri protocol.DocumentURI, method string, timeout time.Duration, operation func(buffer nvim.Buffer) error) ([]*T, error) {
+	return withFileResult(s, uri, func(buffer nvim.Buffer) ([]*T, error) {
 		if err := operation(buffer); err != nil {
 			return nil, err
 		}
@@ -642,7 +659,7 @@ func (s *NvimIntegrationTestRunner) withFile(uri protocol.DocumentURI, operation
 }
 
 func (s *NvimIntegrationTestRunner) Hover(t *testing.T, ctx context.Context, request *protocol.HoverParams) (*protocol.Hover, error) {
-	return withFileResultMethodTimeout[protocol.Hover](s, request.TextDocument.URI, "textDocument/hover", time.Second, func(buffer nvim.Buffer) error {
+	return withFileResultMethodTimeout[protocol.Hover](s, request.TextDocument.URI, "textDocument/hover", time.Second*5, func(buffer nvim.Buffer) error {
 		t.Logf("🎯 Moving cursor to position: %v", request.Position)
 		// Move cursor to the specified position
 		win, err := s.nvimInstance.CurrentWindow()
@@ -837,8 +854,8 @@ func (s *NvimIntegrationTestRunner) GetFormattedDocument(t *testing.T, ctx conte
 }
 
 // GetDefinition returns the definition locations for a symbol
-func (s *NvimIntegrationTestRunner) GetDefinition(t *testing.T, ctx context.Context, params *protocol.DefinitionParams) ([]protocol.Location, error) {
-	return withFileResult(s, params.TextDocument.URI, func(buffer nvim.Buffer) ([]protocol.Location, error) {
+func (s *NvimIntegrationTestRunner) GetDefinition(t *testing.T, ctx context.Context, params *protocol.DefinitionParams) ([]*protocol.Location, error) {
+	return withFileResult(s, params.TextDocument.URI, func(buffer nvim.Buffer) ([]*protocol.Location, error) {
 		// Move cursor to the specified position
 		win, err := s.nvimInstance.CurrentWindow()
 		if err != nil {
@@ -906,8 +923,8 @@ func (s *NvimIntegrationTestRunner) ApplyEdit(t *testing.T, uri protocol.Documen
 }
 
 // GetReferences returns all references to a symbol
-func (s *NvimIntegrationTestRunner) GetReferences(t *testing.T, ctx context.Context, params *protocol.ReferenceParams) ([]protocol.Location, error) {
-	return withFileResult(s, params.TextDocument.URI, func(buffer nvim.Buffer) ([]protocol.Location, error) {
+func (s *NvimIntegrationTestRunner) GetReferences(t *testing.T, ctx context.Context, params *protocol.ReferenceParams) ([]*protocol.Location, error) {
+	return withFileResult(s, params.TextDocument.URI, func(buffer nvim.Buffer) ([]*protocol.Location, error) {
 		// Move cursor to the specified position
 		win, err := s.nvimInstance.CurrentWindow()
 		if err != nil {
@@ -930,8 +947,8 @@ func (s *NvimIntegrationTestRunner) GetReferences(t *testing.T, ctx context.Cont
 }
 
 // GetDocumentSymbols returns all symbols in a document
-func (s *NvimIntegrationTestRunner) GetDocumentSymbols(t *testing.T, ctx context.Context, params *protocol.DocumentSymbolParams) ([]protocol.DocumentSymbol, error) {
-	return withFileResult(s, params.TextDocument.URI, func(buffer nvim.Buffer) ([]protocol.DocumentSymbol, error) {
+func (s *NvimIntegrationTestRunner) GetDocumentSymbols(t *testing.T, ctx context.Context, params *protocol.DocumentSymbolParams) ([]*protocol.DocumentSymbol, error) {
+	return withFileResult(s, params.TextDocument.URI, func(buffer nvim.Buffer) ([]*protocol.DocumentSymbol, error) {
 		// Trigger document symbols request
 		err := s.nvimInstance.Command("lua vim.lsp.buf.document_symbol()")
 		if err != nil {
@@ -1013,8 +1030,8 @@ func (s *NvimIntegrationTestRunner) ApplyRename(t *testing.T, ctx context.Contex
 }
 
 // GetCodeActions returns available code actions for a given range
-func (s *NvimIntegrationTestRunner) GetCodeActions(t *testing.T, ctx context.Context, params *protocol.CodeActionParams) ([]protocol.CodeAction, error) {
-	return withFileResult(s, params.TextDocument.URI, func(buffer nvim.Buffer) ([]protocol.CodeAction, error) {
+func (s *NvimIntegrationTestRunner) GetCodeActions(t *testing.T, ctx context.Context, params *protocol.CodeActionParams) ([]*protocol.CodeAction, error) {
+	return withFileResult(s, params.TextDocument.URI, func(buffer nvim.Buffer) ([]*protocol.CodeAction, error) {
 
 		// Move cursor to the start of the range
 		win, err := s.nvimInstance.CurrentWindow()

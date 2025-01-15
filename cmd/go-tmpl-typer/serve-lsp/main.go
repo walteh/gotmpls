@@ -51,9 +51,11 @@ func (me *Handler) Run(ctx context.Context) error {
 		RPCLog: &RPCLogger{},
 	}
 
+	instance := server.BuildServerInstance(ctx, opts)
+
 	// Start the server using stdin/stdout
-	if err := server.Run(ctx, os.Stdin, os.Stdout, opts); err != nil {
-		return errors.Errorf("failed to start language server: %w", err)
+	if err := instance.StartAndWait(os.Stdin, os.Stdout); err != nil {
+		return errors.Errorf("error running language server: %w", err)
 	}
 
 	return nil

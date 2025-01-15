@@ -37,7 +37,7 @@ func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {
 			template: "{{/*gotype: github.com/example/types.Person*/}}Hello {{.NonExistent}}!",
 			want: []*diagnostic.Diagnostic{
 				{
-					Message:  "field NonExistent not found in type Person",
+					Message:  "field not found [ NonExistent ] in type [ Person ]",
 					Location: position.NewBasicPosition(".NonExistent", 54),
 					Severity: diagnostic.SeverityError,
 				},

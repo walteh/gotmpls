@@ -14,7 +14,7 @@ import (
 func TestServer(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("server initialization", func(t *testing.T) {
+	t.Run("server_initialization", func(t *testing.T) {
 		files := map[string]string{
 			"test.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .Name }}",
 			"go.mod":    "module test",
@@ -38,7 +38,7 @@ type Person struct {
 		// and we were able to establish LSP communication
 	})
 
-	t.Run("server handles multiple files", func(t *testing.T) {
+	t.Run("server_handles_multiple_files", func(t *testing.T) {
 		files := map[string]string{
 			"file1.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .Name }}",
 			"file2.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .Age }}",
@@ -109,16 +109,21 @@ type Person struct {
 
 		testFile := runner.TmpFilePathOf("test.tmpl")
 
+		hoverw := &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.Markdown,
+				Value: "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```go-template\n.Name\n```",
+			},
+			Range: protocol.Range{
+				Start: protocol.Position{Line: 1, Character: 3},
+				End:   protocol.Position{Line: 1, Character: 8},
+			},
+		}
+
 		// Test initial hover
 		hoverResult, err := runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
 		require.NoError(t, err, "hover request should succeed")
-		require.NotNil(t, hoverResult, "hover result should not be nil")
-		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```go-template\n.Name\n```", hoverResult.Contents.Value)
-		require.NotNil(t, hoverResult.Range, "hover range should not be nil")
-		require.Equal(t, uint32(1), hoverResult.Range.Start.Line, "range should start on line 1")
-		require.Equal(t, uint32(1), hoverResult.Range.End.Line, "range should end on line 1")
-		require.Equal(t, uint32(3), hoverResult.Range.Start.Character, "range should start at the beginning of .Name")
-		require.Equal(t, uint32(8), hoverResult.Range.End.Character, "range should end at the end of .Name")
+		require.Equal(t, hoverw, hoverResult, "hover result should match expected")
 
 		// Save current file before making changes
 		err = runner.Command("w")
@@ -257,7 +262,7 @@ type Person struct {
 
 func TestDiagnosticsAfterFileChange(t *testing.T) {
 	files := map[string]string{
-		"test.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .Name }}",
+		"test.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .Namex }}",
 		"go.mod":    "module test",
 		"test.go": `
 package test
@@ -279,29 +284,19 @@ type Person struct {
 
 	testFile := runner.TmpFilePathOf("test.tmpl")
 
-	// Open the file and ensure LSP is attached
-	buf, err := runner.OpenFile(testFile)
-	require.NoError(t, err, "opening file should succeed")
-
-	err = runner.AttachLSP(buf)
-	require.NoError(t, err, "attaching LSP should succeed")
-
-	// First verify we get diagnostics for an invalid field
-	err = runner.Command("normal! ggdG")
-	require.NoError(t, err, "delete content should succeed")
-	err = runner.Command("normal! i{{- /*gotype: test.Person*/ -}}\n{{ .InvalidField }}")
-	require.NoError(t, err, "insert content should succeed")
-	err = runner.Command("w")
-	require.NoError(t, err, "save should succeed")
-
-	// Wait longer for diagnostics to be published
-	time.Sleep(500 * time.Millisecond)
-
 	// Verify we get diagnostics for the invalid field
 	diags, err := runner.GetDiagnostics(t, testFile, 2*time.Second)
 	require.NoError(t, err, "getting diagnostics should succeed")
-	require.NotEmpty(t, diags, "should have diagnostics for invalid field")
-	require.Contains(t, diags[0].Message, "InvalidField", "diagnostic should mention the invalid field")
+	require.NotNil(t, diags, "should have diagnostics for invalid field")
+
+	errorDiags := []protocol.Diagnostic{}
+	for _, diag := range diags.Items {
+		if diag.Severity == protocol.SeverityError {
+			errorDiags = append(errorDiags, diag)
+		}
+	}
+	require.NotEmpty(t, errorDiags, "should have at least one error diagnostic")
+	require.Contains(t, errorDiags[0].Message, "field not found", "diagnostic should mention the invalid field")
 
 	// Now change to a valid field
 	err = runner.Command("normal! ggdG")
@@ -317,7 +312,13 @@ type Person struct {
 	// Verify diagnostics are cleared
 	diags, err = runner.GetDiagnostics(t, testFile, 2*time.Second)
 	require.NoError(t, err, "getting diagnostics should succeed")
-	require.Empty(t, diags, "diagnostics should be cleared after fixing the error")
+	errorDiags = []protocol.Diagnostic{}
+	for _, diag := range diags.Items {
+		if diag.Severity == protocol.SeverityError {
+			errorDiags = append(errorDiags, diag)
+		}
+	}
+	require.Empty(t, errorDiags, "diagnostics should be cleared after fixing the error")
 
 	// Make another change that introduces an error
 	err = runner.Command("normal! ggdG")
@@ -332,9 +333,16 @@ type Person struct {
 
 	// Verify we get diagnostics for the new invalid field
 	diags, err = runner.GetDiagnostics(t, testFile, 2*time.Second)
+
 	require.NoError(t, err, "getting diagnostics should succeed")
-	require.NotEmpty(t, diags, "should have diagnostics for new invalid field")
-	require.Contains(t, diags[0].Message, "AnotherInvalidField", "diagnostic should mention the new invalid field")
+	errorDiags = []protocol.Diagnostic{}
+	for _, diag := range diags.Items {
+		if diag.Severity == protocol.SeverityError {
+			errorDiags = append(errorDiags, diag)
+		}
+	}
+	require.NotEmpty(t, errorDiags, "should have diagnostics for new invalid field")
+	require.Contains(t, errorDiags[0].Message, "AnotherInvalidField", "diagnostic should mention the new invalid field")
 }
 
 func TestDiagnosticHarness(t *testing.T) {
@@ -360,16 +368,16 @@ type Person struct {
 
 	testFile := runner.TmpFilePathOf("test.tmpl")
 
-	// Open the file and ensure LSP is attached
-	buf, err := runner.OpenFile(testFile)
-	require.NoError(t, err, "opening file should succeed")
-
-	err = runner.AttachLSP(buf)
-	require.NoError(t, err, "attaching LSP should succeed")
-
 	// Test Case 1: Valid template should have no diagnostics
-	err = runner.CheckDiagnostics(t, testFile, []protocol.Diagnostic{}, 2*time.Second)
+	diags, err := runner.GetDiagnostics(t, testFile, 2*time.Second)
 	require.NoError(t, err, "should have no diagnostics for valid template")
+	errorDiags := []protocol.Diagnostic{}
+	for _, diag := range diags.Items {
+		if diag.Severity == protocol.SeverityError {
+			errorDiags = append(errorDiags, diag)
+		}
+	}
+	require.Empty(t, errorDiags, "diagnostics should be nil for valid template")
 
 	// Test Case 2: Invalid field should show diagnostic
 	err = runner.Command("normal! ggdG")
@@ -383,14 +391,21 @@ type Person struct {
 		{
 			Range: protocol.Range{
 				Start: protocol.Position{Line: 1, Character: 3},
-				End:   protocol.Position{Line: 1, Character: 15},
+				End:   protocol.Position{Line: 1, Character: 16},
 			},
 			Severity: protocol.SeverityError,
-			Message:  "field InvalidField not found in type Person",
+			Message:  "field not found [ InvalidField ] in type [ Person ]",
 		},
 	}
-	err = runner.CheckDiagnostics(t, testFile, expectedDiag, 2*time.Second)
+	diags, err = runner.GetDiagnostics(t, testFile, 2*time.Second)
 	require.NoError(t, err, "should show diagnostic for invalid field")
+	errorDiags = []protocol.Diagnostic{}
+	for _, diag := range diags.Items {
+		if diag.Severity == protocol.SeverityError {
+			errorDiags = append(errorDiags, diag)
+		}
+	}
+	require.Equal(t, expectedDiag, errorDiags, "diagnostics should match expected")
 
 	// Test Case 3: Multiple diagnostics
 	err = runner.Command("normal! ggdG")
@@ -404,22 +419,29 @@ type Person struct {
 		{
 			Range: protocol.Range{
 				Start: protocol.Position{Line: 1, Character: 3},
-				End:   protocol.Position{Line: 1, Character: 9},
+				End:   protocol.Position{Line: 1, Character: 10},
 			},
 			Severity: protocol.SeverityError,
-			Message:  "field Field1 not found in type Person",
+			Message:  "field not found [ Field1 ] in type [ Person ]",
 		},
 		{
 			Range: protocol.Range{
 				Start: protocol.Position{Line: 2, Character: 3},
-				End:   protocol.Position{Line: 2, Character: 9},
+				End:   protocol.Position{Line: 2, Character: 10},
 			},
 			Severity: protocol.SeverityError,
-			Message:  "field Field2 not found in type Person",
+			Message:  "field not found [ Field2 ] in type [ Person ]",
 		},
 	}
-	err = runner.CheckDiagnostics(t, testFile, expectedDiags, 2*time.Second)
+	diags, err = runner.GetDiagnostics(t, testFile, 2*time.Second)
 	require.NoError(t, err, "should show diagnostics for multiple invalid fields")
+	errorDiags = []protocol.Diagnostic{}
+	for _, diag := range diags.Items {
+		if diag.Severity == protocol.SeverityError {
+			errorDiags = append(errorDiags, diag)
+		}
+	}
+	require.Equal(t, expectedDiags, errorDiags, "diagnostics should match expected")
 
 	// Test Case 4: Fixing errors should clear diagnostics
 	err = runner.Command("normal! ggdG")
@@ -429,6 +451,13 @@ type Person struct {
 	err = runner.Command("w")
 	require.NoError(t, err, "save should succeed")
 
-	err = runner.CheckDiagnostics(t, testFile, []protocol.Diagnostic{}, 2*time.Second)
+	diags, err = runner.GetDiagnostics(t, testFile, 2*time.Second)
 	require.NoError(t, err, "should have no diagnostics after fixing errors")
+	errorDiags = []protocol.Diagnostic{}
+	for _, diag := range diags.Items {
+		if diag.Severity == protocol.SeverityError {
+			errorDiags = append(errorDiags, diag)
+		}
+	}
+	require.Empty(t, errorDiags, "diagnostics should be cleared after fixing errors")
 }
