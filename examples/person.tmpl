@@ -5,14 +5,14 @@
 
 {{template "header"}}
 
-Name: {{.Names}}
+Name: {{.Namesx}}
 Age: {{.Age}}
 Address:
-  Street: {{.Address.Streetx}}
+  Street: {{.Address.Street}}
   City: {{.Address.City}}
 
 {{if .HasJob}}
-Job: {{.GetJobs | upper}}
+Job: {{.GetJobs | upperc}}
 JobZ: {{printf "%s" .GetJob | upper}}
 JobZ: {{printf "hi" | upper | printf "%s" | upper}}
 

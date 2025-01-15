@@ -141,8 +141,8 @@ export function activate(context: vscode.ExtensionContext) {
 				if (params.source) str += `${params.source} `;
 
 				// Add direction and method if available
-				if (params.direction) str += `${params.direction} `;
-				if (params.method) str += `${params.method} `;
+				// if (params.direction) str += `${params.direction} `;
+				// if (params.method) str += `${params.method} `;
 
 				// Add message
 				str += `- ${params.message}`;
@@ -150,7 +150,7 @@ export function activate(context: vscode.ExtensionContext) {
 				// Add extra fields if any
 				if (params.extra) {
 					const extras = Object.entries(params.extra)
-						.filter(([key]) => !['level', 'direction', 'method'].includes(key)) // These are handled separately
+						// .filter(([key]) => !['level', 'direction', 'method'].includes(key)) // These are handled separately
 						.map(([key, value]) => `${key}=${value}`)
 						.join(' ');
 					if (extras) str += ` | ${extras}`;
@@ -220,3 +220,5 @@ export function deactivate(): Thenable<void> | undefined {
 	}
 	return client.stop();
 } 
+
+// figurie ity out

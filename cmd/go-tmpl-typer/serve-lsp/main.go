@@ -32,14 +32,23 @@ func NewServeLSPCommand() *cobra.Command {
 	return cmd
 }
 
+type RPCLogger struct {
+}
+
+func (me *RPCLogger) LogRequest(ctx context.Context, req *jrpc2.Request) {
+	zerolog.Ctx(ctx).Info().Str("rpc_params", req.ParamString()).Str("rpc_id", req.ID()).Str("rpc_method", req.Method()).Msg("client request")
+}
+
+func (me *RPCLogger) LogResponse(ctx context.Context, res *jrpc2.Response) {
+	zerolog.Ctx(ctx).Info().Str("rpc_params", res.ResultString()).Str("rpc_id", res.ID()).Msg("server response")
+}
+
 func (me *Handler) Run(ctx context.Context) error {
 	// Create a new LSP server with all the components it needs
 	server := lsp.NewServer(ctx)
 
 	opts := &jrpc2.ServerOptions{
-		Logger: func(str string) {
-			zerolog.Ctx(ctx).Info().Msg(str)
-		},
+		RPCLog: &RPCLogger{},
 	}
 
 	// Start the server using stdin/stdout

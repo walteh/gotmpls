@@ -35,8 +35,8 @@ type ExtendedLogMessageParams struct {
 	Time         string                 `json:"time,omitempty"`
 	Source       string                 `json:"source,omitempty"`
 	IsDependency bool                   `json:"is_dependency,omitempty"`
-	Direction    string                 `json:"direction,omitempty"` // "incoming" or "outgoing"
-	Method       string                 `json:"method,omitempty"`    // JSONRPC method
+	// Direction    string                 `json:"direction,omitempty"` // "incoming" or "outgoing"
+	// Method       string                 `json:"method,omitempty"`    // JSONRPC method
 }
 
 func ApplyClientToZerolog(ctx context.Context, conn Client) context.Context {
@@ -57,7 +57,7 @@ func ApplyClientToZerolog(ctx context.Context, conn Client) context.Context {
 }
 
 func ApplyRequestToZerolog(ctx context.Context, req *jrpc2.Request) context.Context {
-	ctx = zerolog.Ctx(ctx).With().Str("method", req.Method()).Logger().WithContext(ctx)
+	ctx = zerolog.Ctx(ctx).With().Str("rpc_method", req.Method()).Str("rpc_id", req.ID()).Logger().WithContext(ctx)
 	return ctx
 }
 
@@ -85,30 +85,23 @@ func (w *logWriter) Write(p []byte) (n int, err error) {
 	id := extractField(logEntry, "id", "")
 	time := extractField(logEntry, "time", "")
 	source := extractField(logEntry, "caller", "")
-	direction := extractField(logEntry, "direction", "")
-	method := extractField(logEntry, "method", "")
+	// direction := extractField(logEntry, "direction", "")
+	// method := extractField(logEntry, "method", "")
 
 	notification := &ExtendedLogMessageParams{
 		Type:    level,
 		Message: msg,
 		// Raw:       string(p),
-		Extra:     logEntry,
-		Time:      time,
-		Source:    source,
-		Direction: direction,
-		Method:    method,
+		Extra:        logEntry,
+		Time:         time,
+		Source:       source,
+		IsDependency: id != myLoggerId,
+		// Direction: direction,
+		// Method:    method,
 	}
 
 	anyNotification := any(notification)
 
-	if id != myLoggerId {
-		notification.IsDependency = true
-	}
-
-	// strmsg, err := json.Marshal(notification)
-	// if err != nil {
-	// 	return len(p), err
-	// }
 	err = w.conn.Event(w.ctx, &anyNotification)
 	return len(p), err
 }

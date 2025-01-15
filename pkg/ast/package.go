@@ -43,7 +43,7 @@ type PackageWithTemplateFiles struct {
 
 // var supportedTemplateExtensions = []string{"tmpl", "go"}
 
-func LoadPackageTypesFromFs(ctx context.Context, dir string) ([]*PackageWithTemplateFiles, error) {
+func LoadPackageTypesFromFs(ctx context.Context, dir string, overlay map[string][]byte) ([]*PackageWithTemplateFiles, error) {
 
 	// // Check if go.mod exists
 	// modPath := filepath.Join(dir, "go.mod")
@@ -69,9 +69,10 @@ func LoadPackageTypesFromFs(ctx context.Context, dir string) ([]*PackageWithTemp
 	// zerolog.Ctx(ctx).Debug().Msgf("go.mod content:\n%s\n", string(modContent))
 
 	cfg := &packages.Config{
-		Mode: loadMode,
-		Dir:  dir,
-		Env:  append(os.Environ(), "GO111MODULE=on"),
+		Mode:    loadMode,
+		Dir:     dir,
+		Env:     append(os.Environ(), "GO111MODULE=on"),
+		Overlay: overlay,
 	}
 
 	// Load all packages in the module, including examples
@@ -180,12 +181,12 @@ func (me *PackageWithTemplateFiles) LoadTypeByPath(ctx context.Context, path str
 // }
 
 // AnalyzePackage implements PackageAnalyzer
-func AnalyzePackage(ctx context.Context, dir string) (*Registry, error) {
+func AnalyzePackage(ctx context.Context, dir string, overlay map[string][]byte) (*Registry, error) {
 	if strings.HasSuffix(dir, ".tmpl") || strings.HasSuffix(dir, ".go") {
 		dir = filepath.Dir(dir)
 	}
 
-	pkgWithTemplateFilesList, err := LoadPackageTypesFromFs(ctx, dir)
+	pkgWithTemplateFilesList, err := LoadPackageTypesFromFs(ctx, dir, overlay)
 	if err != nil {
 		return nil, errors.Errorf("failed to load package: %w", err)
 	}

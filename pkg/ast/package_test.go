@@ -65,7 +65,7 @@ func (p *Person) HasJob() bool {
 	require.NoError(t, err)
 
 	// Analyze the package
-	registry, err := ast.AnalyzePackage(ctx, tmpDir)
+	registry, err := ast.AnalyzePackage(ctx, tmpDir, make(map[string][]byte))
 	require.NoError(t, err)
 	require.NotNil(t, registry)
 
@@ -116,14 +116,14 @@ type Person struct {
 `), 0644)
 	require.NoError(t, err)
 
-	_, err = ast.AnalyzePackage(ctx, tmpDir)
+	_, err = ast.AnalyzePackage(ctx, tmpDir, make(map[string][]byte))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no main module found for directory")
 }
 
 func TestPackageAnalyzer_InvalidPath(t *testing.T) {
 	ctx := context.Background()
-	_, err := ast.AnalyzePackage(ctx, "/path/that/does/not/exist")
+	_, err := ast.AnalyzePackage(ctx, "/path/that/does/not/exist", make(map[string][]byte))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no such file or directory")
 }
@@ -155,7 +155,7 @@ type InvalidType struct {
 `), 0644)
 	require.NoError(t, err)
 
-	registry, err := ast.AnalyzePackage(ctx, tmpDir)
+	registry, err := ast.AnalyzePackage(ctx, tmpDir, make(map[string][]byte))
 	require.NoError(t, err)
 	require.NotNil(t, registry)
 

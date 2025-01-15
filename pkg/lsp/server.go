@@ -41,8 +41,8 @@ func NewDocumentManager() *DocumentManager {
 	}
 }
 
-func (m *DocumentManager) Get(uri string) (*Document, bool) {
-	normalizedURI := normalizeURI(uri)
+func (m *DocumentManager) Get(uri protocol.DocumentURI) (*Document, bool) {
+	normalizedURI := normalizeURI(string(uri))
 	content, ok := m.store.Load(normalizedURI)
 	if !ok {
 		// Try with the original URI as fallback
@@ -71,8 +71,8 @@ func (m *DocumentManager) Get(uri string) (*Document, bool) {
 	return doc, ok
 }
 
-func (m *DocumentManager) Store(uri string, doc *Document) {
-	normalizedURI := normalizeURI(uri)
+func (m *DocumentManager) Store(uri protocol.DocumentURI, doc *Document) {
+	normalizedURI := normalizeURI(string(uri))
 	m.store.Store(normalizedURI, doc)
 }
 
@@ -263,7 +263,7 @@ func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 
 	// For now, we'll just use the full content sync
 	if len(params.ContentChanges) > 0 {
-		doc, ok := s.documents.Get(string(params.TextDocument.URI))
+		doc, ok := s.documents.Get(params.TextDocument.URI)
 		if !ok {
 			return errors.Errorf("document not found: %s", params.TextDocument.URI)
 		}
@@ -272,8 +272,8 @@ func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 		doc.Version = params.TextDocument.Version
 		doc.Content = params.ContentChanges[0].Text
 
-		s.documents.Store(string(params.TextDocument.URI), doc)
-		return s.validateDocument(ctx, string(params.TextDocument.URI), doc.Content)
+		s.documents.Store(params.TextDocument.URI, doc)
+		return s.validateDocument(ctx, params.TextDocument.URI, doc.Content)
 	}
 
 	return nil
@@ -318,8 +318,8 @@ func (s *Server) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocume
 		Content:    params.TextDocument.Text,
 	}
 
-	s.documents.Store(string(params.TextDocument.URI), doc)
-	return s.validateDocument(ctx, string(params.TextDocument.URI), params.TextDocument.Text)
+	s.documents.Store(params.TextDocument.URI, doc)
+	return s.validateDocument(ctx, params.TextDocument.URI, params.TextDocument.Text)
 }
 
 func (s *Server) DidRenameFiles(ctx context.Context, params *protocol.RenameFilesParams) error {
@@ -363,7 +363,16 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 
 	uripath := params.TextDocument.URI.Path()
 
-	reg, err := ast.AnalyzePackage(ctx, uripath)
+	// Create overlay map with current document content
+	doc, ok := s.documents.Get(params.TextDocument.URI)
+	if !ok {
+		return nil, errors.Errorf("document not found: %s", params.TextDocument.URI)
+	}
+	overlay := map[string][]byte{
+		uripath: []byte(doc.Content),
+	}
+
+	reg, err := ast.AnalyzePackage(ctx, uripath, overlay)
 	if err != nil {
 		return nil, errors.Errorf("analyzing package for hover: %w", err)
 	}
@@ -532,13 +541,17 @@ func (s *Server) ResolveWorkspaceSymbol(ctx context.Context, params *protocol.Wo
 	return nil, nil // Not implemented yet
 }
 
-func (s *Server) validateDocument(ctx context.Context, uri string, content string) error {
+func (s *Server) validateDocument(ctx context.Context, urid protocol.DocumentURI, content string) error {
 	logger := zerolog.Ctx(ctx)
+	uri := normalizeURI(string(urid))
 	logger.Debug().Str("uri", uri).Msg("validating document")
 
-	uri = normalizeURI(uri)
+	// Create overlay map with current document content
+	overlay := map[string][]byte{
+		uri: []byte(content),
+	}
 
-	registry, err := ast.AnalyzePackage(ctx, uri)
+	registry, err := ast.AnalyzePackage(ctx, uri, overlay)
 	if err != nil {
 		return errors.Errorf("analyzing package: %w", err)
 	}
@@ -554,16 +567,16 @@ func (s *Server) validateDocument(ctx context.Context, uri string, content strin
 	}
 
 	// Publish diagnostics
-	if err := s.publishDiagnostics(ctx, uri, content, diagnostics); err != nil {
+	if err := s.publishDiagnostics(ctx, urid, content, diagnostics); err != nil {
 		return errors.Errorf("publishing diagnostics: %w", err)
 	}
 
 	return nil
 }
 
-func (s *Server) publishDiagnostics(ctx context.Context, uri string, content string, diagnostics []*diagnostic.Diagnostic) error {
+func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentURI, content string, diagnostics []*diagnostic.Diagnostic) error {
 	params := &protocol.PublishDiagnosticsParams{
-		URI:         protocol.DocumentURI(uri),
+		URI:         uri,
 		Diagnostics: make([]protocol.Diagnostic, len(diagnostics)),
 	}
 
