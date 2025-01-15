@@ -762,25 +762,25 @@ func (s *NvimIntegrationTestRunner) SaveFile(buffer nvim.Buffer) error {
 		return errors.Errorf("failed to get buffer name: %w", err)
 	}
 
-	s.t.Logf("Sending didChange notification for %s with text: %s", bufPath, text)
+	// s.t.Logf("Sending didChange notification for %s with text: %s", bufPath, text)
 
-	// Notify LSP server about the change
-	notifyCmd := fmt.Sprintf(`luaeval('vim.lsp.buf_notify(0, "textDocument/didChange", {
-		textDocument = {
-			uri = "file://%s",
-			version = 2
-		},
-		contentChanges = {
-			{
-				text = [[%s]]
-			}
-		}
-	})')`, bufPath, text)
+	// // Notify LSP server about the change
+	// notifyCmd := fmt.Sprintf(`luaeval('vim.lsp.buf_notify(0, "textDocument/didChange", {
+	// 	textDocument = {
+	// 		uri = "file://%s",
+	// 		version = 2
+	// 	},
+	// 	contentChanges = {
+	// 		{
+	// 			text = [[%s]]
+	// 		}
+	// 	}
+	// })')`, bufPath, text)
 
-	err = s.nvimInstance.Eval(notifyCmd, nil)
-	if err != nil {
-		return errors.Errorf("failed to notify LSP: %w", err)
-	}
+	// err = s.nvimInstance.Eval(notifyCmd, nil)
+	// if err != nil {
+	// 	return errors.Errorf("failed to notify LSP: %w", err)
+	// }
 
 	// Also send a didSave notification
 	saveCmd := fmt.Sprintf(`luaeval('vim.lsp.buf_notify(0, "textDocument/didSave", {
@@ -895,30 +895,31 @@ func (s *NvimIntegrationTestRunner) ApplyEdit(t *testing.T, uri protocol.Documen
 		}
 
 		// If not saving, just notify LSP about the change
-		lines, err := s.nvimInstance.BufferLines(buffer, 0, -1, true)
-		if err != nil {
-			return errors.Errorf("getting buffer lines: %w", err)
-		}
-		text := strings.Join(bytesSliceToStringSlice(lines), "\n")
+		// lines, err := s.nvimInstance.BufferLines(buffer, 0, -1, true)
+		// if err != nil {
+		// 	return errors.Errorf("getting buffer lines: %w", err)
+		// }
+		// text := strings.Join(bytesSliceToStringSlice(lines), "\n")
 
-		bufPath, err := s.nvimInstance.BufferName(buffer)
-		if err != nil {
-			return errors.Errorf("getting buffer name: %w", err)
-		}
+		// bufPath, err := s.nvimInstance.BufferName(buffer)
+		// if err != nil {
+		// 	return errors.Errorf("getting buffer name: %w", err)
+		// }
 
-		notifyCmd := fmt.Sprintf(`luaeval('vim.lsp.buf_notify(0, "textDocument/didChange", {
-			textDocument = {
-				uri = "file://%s",
-				version = 2
-			},
-			contentChanges = {
-				{
-					text = [[%s]]
-				}
-			}
-		})')`, bufPath, text)
+		// notifyCmd := fmt.Sprintf(`luaeval('vim.lsp.buf_notify(0, "textDocument/didChange", {
+		// 	textDocument = {
+		// 		uri = "file://%s",
+		// 		version = 2
+		// 	},
+		// 	contentChanges = {
+		// 		{
+		// 			text = [[%s]]
+		// 		}
+		// 	}
+		// })')`, bufPath, text)
 
-		return s.nvimInstance.Eval(notifyCmd, nil)
+		// return s.nvimInstance.Eval(notifyCmd, nil)
+		return nil
 	})
 }
 

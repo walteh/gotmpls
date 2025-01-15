@@ -8,11 +8,11 @@
 Name: {{.Name}}
 Age: {{.Age}}
 Address:
-  Street: {{.Address.Street}}
+  Street: {{.Address.Streetsssss}}
   City: {{.Address.City}}
 
 {{if .HasJob}}
-Job: {{.GetJobs | upperc}}
+Job: {{.GetJob | upper}}
 JobZ: {{printf "%s" .GetJob | upper}}
 JobZ: {{printf "hi" | upper | printf "%s" | upper}}
 

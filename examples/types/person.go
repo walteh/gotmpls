@@ -2,8 +2,8 @@ package types
 
 // Address represents a physical address
 type Address struct {
-	Street string
-	City   string
+	Streetsz string
+	City     string
 }
 
 // Person represents a person with their details

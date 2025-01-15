@@ -286,13 +286,29 @@ func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 
 		// Update document
 		doc.Version = params.TextDocument.Version
-		doc.Content = params.ContentChanges[0].Text
+		for _, change := range params.ContentChanges {
+			if change.Range == nil {
+				doc.Content = change.Text
+			} else {
+				if change.Text != "" {
+					// zerolog.Ctx(ctx).Trace().Str("uri", string(params.TextDocument.URI)).Str("content", doc.Content).Any("change", change).Msg("document changed")
+					doc.Content = replaceContentFromRange(doc.Content, change.Range, change.Text)
+				}
+			}
+		}
 
 		s.documents.Store(params.TextDocument.URI, doc)
+
 		return s.publishDiagnostics(ctx, params.TextDocument.URI, doc.Content)
 	}
 
 	return nil
+}
+
+func replaceContentFromRange(content string, rangez *protocol.Range, text string) string {
+	startPos := position.NewRawPositionFromLineAndColumn(int(rangez.Start.Line), int(rangez.Start.Character), "", content)
+	endPos := position.NewRawPositionFromLineAndColumn(int(rangez.End.Line), int(rangez.End.Character), "", content)
+	return content[:startPos.Offset] + text + content[endPos.Offset:]
 }
 
 func (s *Server) DidChangeConfiguration(ctx context.Context, params *protocol.DidChangeConfigurationParams) error {
@@ -343,7 +359,23 @@ func (s *Server) DidRenameFiles(ctx context.Context, params *protocol.RenameFile
 }
 
 func (s *Server) DidSave(ctx context.Context, params *protocol.DidSaveTextDocumentParams) error {
-	return nil // Not implemented yet
+	logger := zerolog.Ctx(ctx)
+	logger.Debug().Str("uri", string(params.TextDocument.URI)).Msg("document saved")
+
+	doc, ok := s.documents.Get(params.TextDocument.URI)
+	if !ok {
+		return errors.Errorf("document not found: %s", params.TextDocument.URI)
+	}
+
+	if params.Text != nil {
+		doc.Content = *params.Text
+		s.documents.Store(params.TextDocument.URI, doc)
+	}
+
+	zerolog.Ctx(ctx).Trace().Str("uri", string(params.TextDocument.URI)).Str("content", doc.Content).Msg("document saved")
+
+	return s.publishDiagnostics(ctx, params.TextDocument.URI, doc.Content)
+
 }
 
 func (s *Server) DocumentColor(ctx context.Context, params *protocol.DocumentColorParams) ([]protocol.ColorInformation, error) {
@@ -564,7 +596,7 @@ func (s *Server) identifyDiagnosticsForFile(ctx context.Context, urid protocol.D
 
 	// Create overlay map with current document content
 	overlay := map[string][]byte{
-		uri: []byte(content),
+		urid.Path(): []byte(content),
 	}
 
 	registry, err := ast.AnalyzePackage(ctx, uri, overlay)
