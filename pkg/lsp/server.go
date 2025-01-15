@@ -190,6 +190,9 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.ParamInitializ
 			HoverProvider: &protocol.Or_ServerCapabilities_hoverProvider{
 				Value: true,
 			},
+			TextDocumentSync: &protocol.Or_ServerCapabilities_textDocumentSync{
+				Value: protocol.Incremental,
+			},
 		},
 	}, nil
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 
+	"github.com/creachadair/jrpc2"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/walteh/go-tmpl-typer/pkg/lsp"
 	"gitlab.com/tozd/go/errors"
@@ -34,8 +36,14 @@ func (me *Handler) Run(ctx context.Context) error {
 	// Create a new LSP server with all the components it needs
 	server := lsp.NewServer(ctx)
 
+	opts := &jrpc2.ServerOptions{
+		Logger: func(str string) {
+			zerolog.Ctx(ctx).Info().Msg(str)
+		},
+	}
+
 	// Start the server using stdin/stdout
-	if err := server.Run(ctx, os.Stdin, os.Stdout, nil); err != nil {
+	if err := server.Run(ctx, os.Stdin, os.Stdout, opts); err != nil {
 		return errors.Errorf("failed to start language server: %w", err)
 	}
 

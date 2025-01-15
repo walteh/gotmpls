@@ -99,7 +99,11 @@ func LoadPackageTypesFromFs(ctx context.Context, dir string) ([]*PackageWithTemp
 		}
 	}
 
-	zerolog.Ctx(ctx).Debug().Msgf("loaded %d packages\n", len(pkgs))
+	pkgNames := []string{}
+	for _, pkg := range pkgs {
+		pkgNames = append(pkgNames, pkg.Name)
+	}
+	zerolog.Ctx(ctx).Debug().Msgf("loaded %d packages: %v", len(pkgs), pkgNames)
 	for _, pkg := range pkgs {
 		zerolog.Ctx(ctx).Debug().Msgf("package: %s (path: %s)\n", pkg.Name, pkg.PkgPath)
 		if len(pkg.Errors) > 0 {

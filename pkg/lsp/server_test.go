@@ -219,4 +219,29 @@ type Person struct {
 			})
 		}
 	})
+
+	t.Run("server_handles_submodule", func(t *testing.T) {
+		files := map[string]string{
+			"subdir/test.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .Name }}",
+			"subdir/go.mod":    "module test",
+			"subdir/test.go": `
+package test
+import _ "embed"
+
+//go:embed test.tmpl
+var TestTemplate string
+type Person struct {
+	Name string
+}`,
+		}
+
+		runner, err := nvim.NewNvimIntegrationTestRunner(t, files)
+		require.NoError(t, err, "setup should succeed")
+
+		testFile := runner.TmpFilePathOf("subdir/test.tmpl")
+		hoverResult, err := runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
+		require.NoError(t, err, "hover request should succeed")
+		require.NotNil(t, hoverResult, "hover result should not be nil")
+		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```go-template\n.Name\n```", hoverResult.Contents.Value)
+	})
 }

@@ -1,7 +1,11 @@
-use lots of emojis and draw text based diagrams to help explain things, i am a visual learner
-
 always assume the existing code is correct unless you have a good reason to believe otherwise or you have been explicitly told otherwise
 never modify significant portions of code without asking
+
+documentation:
+use lots of emojis and draw ASCII art diagrams to help explain things, i am a visual learner
+document things visually like crazy - not just for humans, but so that agents are able to pick up where you left off and continue working while understanding your reasoning
+always prefer visual documentation over text documentation, when text is required, make it as simple and as short as possible and use emojis to help explain things
+in markdown files you can use mermaid diagrams to help explain things, but in our conversations please use ASCII art
 
 golang imports:
 always assume that broken imports are because the reference need to be adjusted, not because the thing being referenced doesn't exist
@@ -15,7 +19,6 @@ unit tests should be written in a way that is easy to understand and easy to wri
 assume one hat at a times (testing, writing code, refactoring) and make sure to check lints and tests before moving between hats
 be extremely careful when modifying \_test.go files and regular go files in the same composer run
 always add messages to tests, like: require.NoError(t, err, "hover request should succeed")
-
 
 golang mocks:
 always use interfaces and then add them to .mockery.yaml which will generate the mocks in ./gen/mockery by calling "task generate" in the root of the project

@@ -13,9 +13,9 @@ import {
 let client: LanguageClient;
 
 export function activate(context: vscode.ExtensionContext) {
-	const outputChannel = vscode.window.createOutputChannel('Go Template Type Checker');
+	const outputChannel = vscode.window.createOutputChannel('go-tmpl-lsp');
 	outputChannel.show();
-	outputChannel.appendLine('Go Template Type Checker is now active');
+	outputChannel.appendLine('go-tmpl-lsp is now active');
 
 	const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 	if (!workspaceFolder) {
@@ -23,18 +23,18 @@ export function activate(context: vscode.ExtensionContext) {
 		return;
 	}
 
-	outputChannel.appendLine(`Workspace folder: ${workspaceFolder.uri.fsPath}`);
+	outputChannel.appendLine(`workspace folder: ${workspaceFolder.uri.fsPath}`);
 
 	// Find the executable
 	findExecutable('go-tmpl-typer', workspaceFolder.uri.fsPath)
 		.then(executable => {
-			outputChannel.appendLine(`Found executable: ${executable}`);
+			outputChannel.appendLine(`found executable: ${executable}`);
 
 			// Server options
 			const serverOptions: ServerOptions = {
 				run: {
 					command: executable,
-					args: ['serve-lsp'],
+					args: ['serve-lsp', '--debug'],
 					options: {
 						cwd: workspaceFolder.uri.fsPath,
 						env: {
@@ -62,7 +62,7 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 			};
 
-			outputChannel.appendLine(`Starting language server with command: ${executable} serve-lsp`);
+			outputChannel.appendLine(`starting go-tmpl-lsp with command: ${executable} serve-lsp`);
 
 			// Create a wrapper for stderr to capture debug output
 			const serverProcess = spawn(executable, ['serve-lsp'], {
@@ -99,8 +99,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 			// Create and start the client
 			client = new LanguageClient(
-				'goTemplateTypeChecker',
-				'Go Template Type Checker',
+				'go-tmpl-lsp',
+				'go-tmpl-lsp',
 				serverOptions,
 				clientOptions
 			);
@@ -110,37 +110,54 @@ export function activate(context: vscode.ExtensionContext) {
 				outputChannel.appendLine(`Client state changed from ${event.oldState} to ${event.newState}`);
 			});
 
-			client.onNotification('window/logMessage', (params: any) => {
+			client.onNotification('telemetry/event', (params: any) => {
+				// // Skip debug logs unless in debug mode
+				// if (params.type >= 4) return;
+
 				var str = ""
 				switch (params.type) {
 					case 1: // Error
-						str = `🟥 error      - ${params.time} ${params.source} - ${params.message}`;
+						str = `🟥 error      `;
 						break;
 					case 2: // Warning
-						str = `🟧 warning    - ${params.time} ${params.source} - ${params.message}`;
+						str = `🟧 warning    `;
 						break;
 					case 3: // Info
-						str = `🟦 info       - ${params.time} ${params.source} - ${params.message}`;
+						str = `🟦 info       `;
 						break;
 					case 4: // Debug
-						str = `🟪 debug      - ${params.time} ${params.source} - ${params.message}`;
+						str = `🟪 debug      `;
 						break;
 					case 5: // Trace
-						str = `⬜ trace      - ${params.time} ${params.source} - ${params.message}`;
+						str = `⬜ trace      `;
 						break;
 					case 6: // Dependency
-						str = `⬜ dependency - ${params.time} ${params.source} - ${params.message}`;
+						str = `⬜ dependency `;
 						break;
 				}
+
+				// Add time and source if available
+				if (params.time) str += `${params.time} `;
+				if (params.source) str += `${params.source} `;
+
+				// Add direction and method if available
+				if (params.direction) str += `${params.direction} `;
+				if (params.method) str += `${params.method} `;
+
+				// Add message
+				str += `- ${params.message}`;
+
+				// Add extra fields if any
 				if (params.extra) {
-					for (const [key, value] of Object.entries(params.extra)) {
-						str += ` ${key}=${value}`;
-					}
+					const extras = Object.entries(params.extra)
+						.filter(([key]) => !['level', 'direction', 'method'].includes(key)) // These are handled separately
+						.map(([key, value]) => `${key}=${value}`)
+						.join(' ');
+					if (extras) str += ` | ${extras}`;
 				}
+
 				outputChannel.appendLine(str);
 			});
-
-			// Start the client
 			client.start().catch(err => {
 				outputChannel.appendLine(`Error starting language server: ${err.message}`);
 				outputChannel.appendLine(err.stack || '');
