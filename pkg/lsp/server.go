@@ -16,6 +16,8 @@ import (
 	"github.com/walteh/go-tmpl-typer/pkg/lsp/protocol"
 	"github.com/walteh/go-tmpl-typer/pkg/parser"
 	"github.com/walteh/go-tmpl-typer/pkg/position"
+	"github.com/walteh/go-tmpl-typer/pkg/semantics"
+	"github.com/walteh/go-tmpl-typer/pkg/semantics/template"
 	"gitlab.com/tozd/go/errors"
 	"gopkg.in/fsnotify.v1"
 )
@@ -115,14 +117,17 @@ type Server struct {
 
 	// LSP client for notifications
 	instance *protocol.ServerInstance
+
+	semanticProvider semantics.Provider
 }
 
 func NewServer(ctx context.Context) *Server {
 	return &Server{
-		id:          xid.New().String(),
-		documents:   NewDocumentManager(),
-		cancelFuncs: &sync.Map{},
-		debug:       false, // Disabled debug mode
+		id:               xid.New().String(),
+		documents:        NewDocumentManager(),
+		cancelFuncs:      &sync.Map{},
+		debug:            false, // Disabled debug mode
+		semanticProvider: template.NewTemplateTokenParser(),
 	}
 }
 
@@ -190,6 +195,27 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.ParamInitializ
 			},
 			TextDocumentSync: &protocol.Or_ServerCapabilities_textDocumentSync{
 				Value: protocol.Incremental,
+			},
+			SemanticTokensProvider: &protocol.SemanticTokensOptions{
+				Legend: protocol.SemanticTokensLegend{
+					TokenTypes: []string{
+						// string(protocol.Delim),
+						string(protocol.FunctionType),
+						string(protocol.VariableType),
+						string(protocol.TypeType),
+						string(protocol.StringType),
+						string(protocol.CommentType),
+						string(protocol.KeywordType),
+						string(protocol.OperatorType),
+					},
+					TokenModifiers: []string{
+						string(protocol.ModDeclaration),
+						string(protocol.ModDefinition),
+						string(protocol.ModReadonly),
+					},
+				},
+				Full:  &protocol.Or_SemanticTokensOptions_full{Value: true},
+				Range: &protocol.Or_SemanticTokensOptions_range{Value: true},
 			},
 		},
 	}, nil
@@ -526,7 +552,16 @@ func (s *Server) SelectionRange(ctx context.Context, params *protocol.SelectionR
 }
 
 func (s *Server) SemanticTokensFull(ctx context.Context, params *protocol.SemanticTokensParams) (*protocol.SemanticTokens, error) {
-	return nil, nil // Not implemented yet
+	if s.semanticProvider == nil {
+		return nil, nil
+	}
+
+	doc, ok := s.documents.Get(params.TextDocument.URI)
+	if !ok {
+		return nil, errors.Errorf("document not found: %s", params.TextDocument.URI)
+	}
+
+	return s.semanticProvider.GetTokensForFile(ctx, string(params.TextDocument.URI), doc.Content)
 }
 
 func (s *Server) SemanticTokensFullDelta(ctx context.Context, params *protocol.SemanticTokensDeltaParams) (any, error) {
@@ -534,7 +569,16 @@ func (s *Server) SemanticTokensFullDelta(ctx context.Context, params *protocol.S
 }
 
 func (s *Server) SemanticTokensRange(ctx context.Context, params *protocol.SemanticTokensRangeParams) (*protocol.SemanticTokens, error) {
-	return nil, nil // Not implemented yet
+	if s.semanticProvider == nil {
+		return nil, nil
+	}
+
+	doc, ok := s.documents.Get(params.TextDocument.URI)
+	if !ok {
+		return nil, errors.Errorf("document not found: %s", params.TextDocument.URI)
+	}
+
+	return s.semanticProvider.GetTokensForRange(ctx, string(params.TextDocument.URI), doc.Content, params.Range)
 }
 
 func (s *Server) SignatureHelp(ctx context.Context, params *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error) {
