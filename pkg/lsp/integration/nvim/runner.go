@@ -484,7 +484,7 @@ func (s *NvimIntegrationTestRunner) OpenFileWithLock(t *testing.T, path protocol
 		return 0, nil, errors.Errorf("failed to attach LSP: %w", err)
 	}
 
-	s.t.Logf("Successfully opened file %s with buffer %v", pathStr, buffer)
+	// s.t.Logf("Successfully opened file %s with buffer %v", pathStr, buffer)
 	return buffer, cleanup, nil
 }
 

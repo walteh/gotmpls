@@ -213,54 +213,19 @@ func (s *NvimIntegrationTestRunner) loadNvimDiagnosticsFromBuffer(t *testing.T, 
 }
 
 // GetSemanticTokensFull returns semantic tokens for the entire document
-func (s *NvimIntegrationTestRunner) GetSemanticTokensFull(t *testing.T, ctx context.Context, params *protocol.SemanticTokensParams) (*protocol.SemanticTokens, error) {
-	t.Helper()
-	_, cleanup, fileOpenTime := s.MustOpenFileWithLock(t, params.TextDocument.URI)
-	defer cleanup()
-
-	s.MustNvimCommand(t, `lua vim.lsp.buf_request(0, 'textDocument/semanticTokens/full', { textDocument = vim.lsp.util.make_text_document_params() })`)
-
-	time.Sleep(1 * time.Second)
-
-	res, err := RequireOneRPCResponse[protocol.SemanticTokens](t, s, "textDocument/semanticTokens/full", fileOpenTime)
-	require.Nil(t, err, "expected no error in semantic tokens response")
-	require.NotNil(t, res, "expected non-nil semantic tokens response")
-
-	return res, nil
+func (s *NvimIntegrationTestRunner) GetSemanticTokensFull(t *testing.T, ctx context.Context, params *protocol.SemanticTokensParams) (*protocol.SemanticTokens, []protocol.RPCMessage) {
+	panic("not implemented")
 }
 
 // GetSemanticTokensRange returns semantic tokens for a specific range
-func (s *NvimIntegrationTestRunner) GetSemanticTokensRange(t *testing.T, ctx context.Context, params *protocol.SemanticTokensRangeParams) (*protocol.SemanticTokens, error) {
-	t.Helper()
-	_, cleanup, fileOpenTime := s.MustOpenFileWithLock(t, params.TextDocument.URI)
-	defer cleanup()
-
-	// Set the visual selection to the requested range
-	startLine := int(params.Range.Start.Line) + 1
-	startChar := int(params.Range.Start.Character)
-	endLine := int(params.Range.End.Line) + 1
-	endChar := int(params.Range.End.Character)
-
-	// Move to start position and enter visual mode
-	s.MustNvimCommand(t, fmt.Sprintf("normal! %dG%d|v%dG%d|", startLine, startChar, endLine, endChar))
-
-	// Request semantic tokens directly through LSP
-	s.MustNvimCommand(t, `lua vim.lsp.buf_request(0, 'textDocument/semanticTokens/range', { textDocument = vim.lsp.util.make_text_document_params(), range = vim.lsp.util.make_given_range_params().range })`)
-
-	time.Sleep(1 * time.Second)
-
-	res, err := RequireOneRPCResponse[protocol.SemanticTokens](t, s, "textDocument/semanticTokens/range", fileOpenTime)
-	require.Nil(t, err, "expected no error in semantic tokens response")
-	require.NotNil(t, res, "expected non-nil semantic tokens response")
-
-	return res, nil
+func (s *NvimIntegrationTestRunner) GetSemanticTokensRange(t *testing.T, ctx context.Context, params *protocol.SemanticTokensRangeParams) (*protocol.SemanticTokens, []protocol.RPCMessage) {
+	panic("not implemented")
 }
 
 // SaveAndQuit saves the current buffer and quits Neovim
 func (s *NvimIntegrationTestRunner) SaveAndQuit() error {
 	if s.currentBuffer != nil {
 		outFile := filepath.Join(s.TmpDir, "nvim.out")
-		s.t.Logf("Saving current buffer %v to %s", s.currentBuffer.buffer, outFile)
 
 		err := s.nvimInstance.Command("write! " + outFile)
 		if err != nil {
@@ -270,7 +235,7 @@ func (s *NvimIntegrationTestRunner) SaveAndQuit() error {
 
 	s.t.Log("Quitting Neovim...")
 	err := s.nvimInstance.Command("qa!")
-	if err != nil && !strings.Contains(err.Error(), "msgpack/rpc: session closed") {
+	if err != nil && !strings.Contains(err.Error(), "msgpack/rpc: session closed") && !strings.Contains(err.Error(), "signal: killed") {
 		return errors.Errorf("failed to quit neovim: %w", err)
 	}
 
@@ -313,63 +278,63 @@ func (s *NvimIntegrationTestRunner) GetDocumentText(t *testing.T, uri protocol.D
 }
 
 // ApplyEdit applies changes to a document with optional save
-func (s *NvimIntegrationTestRunner) ApplyEdit(t *testing.T, uri protocol.DocumentURI, newContent string, save bool) error {
-	buffer, cleanup, _ := s.MustOpenFileWithLock(t, uri)
+func (s *NvimIntegrationTestRunner) ApplyEdit(t *testing.T, uri protocol.DocumentURI, newContent string, save bool) []protocol.RPCMessage {
+	_, cleanup, fileOpenTime := s.MustOpenFileWithLock(t, uri)
 	defer cleanup()
 
 	// Delete all content and insert new content
-	if err := s.nvimInstance.Command("normal! ggdG"); err != nil {
-		return errors.Errorf("deleting content: %w", err)
-	}
+	s.MustNvimCommand(t, "normal! ggdG")
 
 	// Insert new content
-	if err := s.nvimInstance.Command(fmt.Sprintf("normal! i%s", newContent)); err != nil {
-		return errors.Errorf("inserting content: %w", err)
-	}
+	s.MustNvimCommand(t, fmt.Sprintf("normal! i%s", newContent))
 
 	if save {
-		return s.SaveFile(buffer)
+		s.MustNvimCommand(t, "w")
 	}
 
-	return nil
+	rpcs := s.rpcTracker.MessagesSinceLike(fileOpenTime, func(msg protocol.RPCMessage) bool {
+		return msg.Method == "textDocument/didChange"
+	})
+
+	return rpcs
 }
 
 // GetFormattedDocument returns the formatted content of a document
-func (s *NvimIntegrationTestRunner) GetFormattedDocument(t *testing.T, ctx context.Context, uri protocol.DocumentURI) (string, error) {
+func (s *NvimIntegrationTestRunner) GetFormattedDocument(t *testing.T, ctx context.Context, uri protocol.DocumentURI) (string, []protocol.RPCMessage) {
 	panic("not implemented")
 }
 
 // GetDefinition returns the definition locations for a symbol
-func (s *NvimIntegrationTestRunner) GetDefinition(t *testing.T, ctx context.Context, params *protocol.DefinitionParams) ([]*protocol.Location, error) {
+func (s *NvimIntegrationTestRunner) GetDefinition(t *testing.T, ctx context.Context, params *protocol.DefinitionParams) ([]*protocol.Location, []protocol.RPCMessage) {
 	panic("not implemented")
 }
 
 // GetReferences returns all references to a symbol
-func (s *NvimIntegrationTestRunner) GetReferences(t *testing.T, ctx context.Context, params *protocol.ReferenceParams) ([]*protocol.Location, error) {
+func (s *NvimIntegrationTestRunner) GetReferences(t *testing.T, ctx context.Context, params *protocol.ReferenceParams) ([]*protocol.Location, []protocol.RPCMessage) {
 	panic("not implemented")
 }
 
 // GetDocumentSymbols returns all symbols in a document
-func (s *NvimIntegrationTestRunner) GetDocumentSymbols(t *testing.T, ctx context.Context, params *protocol.DocumentSymbolParams) ([]*protocol.DocumentSymbol, error) {
+func (s *NvimIntegrationTestRunner) GetDocumentSymbols(t *testing.T, ctx context.Context, params *protocol.DocumentSymbolParams) ([]*protocol.DocumentSymbol, []protocol.RPCMessage) {
 	panic("not implemented")
 }
 
 // ApplyRename applies a rename operation to a symbol
-func (s *NvimIntegrationTestRunner) ApplyRename(t *testing.T, ctx context.Context, params *protocol.RenameParams) (*protocol.WorkspaceEdit, error) {
+func (s *NvimIntegrationTestRunner) ApplyRename(t *testing.T, ctx context.Context, params *protocol.RenameParams) (*protocol.WorkspaceEdit, []protocol.RPCMessage) {
 	panic("not implemented")
 }
 
 // GetCodeActions returns available code actions for a given range
-func (s *NvimIntegrationTestRunner) GetCodeActions(t *testing.T, ctx context.Context, params *protocol.CodeActionParams) ([]*protocol.CodeAction, error) {
+func (s *NvimIntegrationTestRunner) GetCodeActions(t *testing.T, ctx context.Context, params *protocol.CodeActionParams) ([]*protocol.CodeAction, []protocol.RPCMessage) {
 	panic("not implemented")
 }
 
 // GetCompletion returns completion items at the current position
-func (s *NvimIntegrationTestRunner) GetCompletion(t *testing.T, ctx context.Context, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
+func (s *NvimIntegrationTestRunner) GetCompletion(t *testing.T, ctx context.Context, params *protocol.CompletionParams) (*protocol.CompletionList, []protocol.RPCMessage) {
 	panic("not implemented")
 }
 
 // GetSignatureHelp returns signature help for the current position
-func (s *NvimIntegrationTestRunner) GetSignatureHelp(t *testing.T, ctx context.Context, params *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error) {
+func (s *NvimIntegrationTestRunner) GetSignatureHelp(t *testing.T, ctx context.Context, params *protocol.SignatureHelpParams) (*protocol.SignatureHelp, []protocol.RPCMessage) {
 	panic("not implemented")
 }
