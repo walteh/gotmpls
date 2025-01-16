@@ -1,4 +1,4 @@
-module github.com/walteh/go-tmpl-typer
+module github.com/walteh/gotmpls
 
 go 1.23.1
 

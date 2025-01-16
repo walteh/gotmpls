@@ -38,7 +38,7 @@ func (c *GoTemplateConfig) DefaultConfig(socketPath string) string {
 	return `if not configs.go_template then
 configs.go_template = {
         default_config = {
-            cmd = { 'go', 'run', 'github.com/walteh/go-tmpl-typer/cmd/stdio-proxy', '` + socketPath + `' },
+            cmd = { 'go', 'run', 'github.com/walteh/gotmpls/cmd/stdio-proxy', '` + socketPath + `' },
             filetypes = { 'go-template', 'gotmpl' },
             root_dir = function(fname)
                 local path = vim.fn.getcwd()
@@ -77,7 +77,7 @@ func (c *GoplsConfig) DefaultConfig(socketPath string) string {
 		print("Setting up gopls server config")
 	configs.gopls = {
 		default_config = {
-			cmd = { 'go', 'run', 'github.com/walteh/go-tmpl-typer/cmd/stdio-proxy', '` + socketPath + `' },
+			cmd = { 'go', 'run', 'github.com/walteh/gotmpls/cmd/stdio-proxy', '` + socketPath + `' },
 			filetypes = { 'go', 'gomod', 'gowork', 'gotmpl' },
             root_dir = function(fname)
                 local path = vim.fn.getcwd()

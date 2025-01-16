@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/walteh/go-tmpl-typer/pkg/lsp/integration/nvim"
-	"github.com/walteh/go-tmpl-typer/pkg/lsp/protocol"
+	"github.com/walteh/gotmpls/pkg/lsp/integration/nvim"
+	"github.com/walteh/gotmpls/pkg/lsp/protocol"
 )
 
 func TestHoverBasic(t *testing.T) {

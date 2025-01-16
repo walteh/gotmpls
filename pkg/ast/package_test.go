@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/walteh/go-tmpl-typer/pkg/ast"
+	"github.com/walteh/gotmpls/pkg/ast"
 )
 
 func setupTestModule(t *testing.T) (string, context.Context) {

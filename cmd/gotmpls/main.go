@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	serve_lsp "github.com/walteh/go-tmpl-typer/cmd/go-tmpl-typer/serve-lsp"
+	serve_lsp "github.com/walteh/gotmpls/cmd/gotmpls/serve-lsp"
 	"gitlab.com/tozd/go/errors"
 )
 
@@ -19,7 +19,7 @@ func main() {
 
 func run() error {
 	rootCmd := &cobra.Command{
-		Use:   "go-tmpl-typer",
+		Use:   "gotmpls",
 		Short: "A tool for type checking go templates",
 	}
 

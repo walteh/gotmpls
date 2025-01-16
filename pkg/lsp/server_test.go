@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/walteh/go-tmpl-typer/pkg/lsp"
-	"github.com/walteh/go-tmpl-typer/pkg/lsp/integration/nvim"
-	"github.com/walteh/go-tmpl-typer/pkg/lsp/protocol"
+	"github.com/walteh/gotmpls/pkg/lsp"
+	"github.com/walteh/gotmpls/pkg/lsp/integration/nvim"
+	"github.com/walteh/gotmpls/pkg/lsp/protocol"
 )
 
 func TestServer(t *testing.T) {

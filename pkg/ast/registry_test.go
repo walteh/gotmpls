@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/walteh/go-tmpl-typer/pkg/ast"
+	"github.com/walteh/gotmpls/pkg/ast"
 )
 
 func createMockRegistry(t *testing.T) *ast.Registry {

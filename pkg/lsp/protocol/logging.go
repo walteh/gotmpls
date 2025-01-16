@@ -9,7 +9,7 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
-	"github.com/walteh/go-tmpl-typer/pkg/debug"
+	"github.com/walteh/gotmpls/pkg/debug"
 )
 
 type MultiRPCLogger struct {

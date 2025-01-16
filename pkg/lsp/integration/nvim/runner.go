@@ -20,9 +20,9 @@ import (
 	"github.com/neovim/go-client/nvim"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
-	nvimlspconfig "github.com/walteh/go-tmpl-typer/gen/git-repo-tarballs/nvim-lspconfig"
-	"github.com/walteh/go-tmpl-typer/pkg/archive"
-	"github.com/walteh/go-tmpl-typer/pkg/lsp/protocol"
+	nvimlspconfig "github.com/walteh/gotmpls/gen/git-repo-tarballs/nvim-lspconfig"
+	"github.com/walteh/gotmpls/pkg/archive"
+	"github.com/walteh/gotmpls/pkg/lsp/protocol"
 	"gitlab.com/tozd/go/errors"
 )
 
@@ -178,7 +178,7 @@ func NewNvimIntegrationTestRunner(t *testing.T, files map[string]string, si *pro
 
 	// Start Neovim with the context
 	t.Log("Creating neovim instance...")
-	cmd := os.Getenv("GO_TMPL_TYPER_NEOVIM_BIN")
+	cmd := os.Getenv("GOTMPLS_NEOVIM_BIN")
 	if cmd == "" {
 		var err error
 		cmd, err = exec.LookPath("nvim")

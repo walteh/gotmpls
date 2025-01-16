@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/walteh/go-tmpl-typer/pkg/parser"
-	"github.com/walteh/go-tmpl-typer/pkg/position"
+	"github.com/walteh/gotmpls/pkg/parser"
+	"github.com/walteh/gotmpls/pkg/position"
 )
 
 func TestTemplateParser_Parse(t *testing.T) {

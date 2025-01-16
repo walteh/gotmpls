@@ -13,7 +13,7 @@ import (
 	"text/template/parse"
 
 	"github.com/rs/zerolog"
-	"github.com/walteh/go-tmpl-typer/pkg/position"
+	"github.com/walteh/gotmpls/pkg/position"
 	"gitlab.com/tozd/go/errors"
 )
 

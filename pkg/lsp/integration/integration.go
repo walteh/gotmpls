@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/walteh/go-tmpl-typer/pkg/lsp/protocol"
+	"github.com/walteh/gotmpls/pkg/lsp/protocol"
 )
 
 // IntegrationTestRunner defines the interface for LSP integration testing

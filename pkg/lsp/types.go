@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
-	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
-	"github.com/walteh/go-tmpl-typer/pkg/position"
+	"github.com/walteh/gotmpls/pkg/diagnostic"
+	"github.com/walteh/gotmpls/pkg/position"
 	"gitlab.com/tozd/go/errors"
 )
 
@@ -115,16 +115,16 @@ func (ds DiagnosticSeverity) String() string {
 	}
 }
 
-func DiagnosticFromGoTmplTyperDiagnostic(d *diagnostic.Diagnostic, content string) Diagnostic {
+func DiagnosticFromGotmplsDiagnostic(d *diagnostic.Diagnostic, content string) Diagnostic {
 	r := d.Location.GetRange(content)
 	return Diagnostic{
-		Range:    RangeFromGoTmplTyperRange(r),
+		Range:    RangeFromGotmplsRange(r),
 		Severity: int(d.Severity),
 		Message:  d.Message,
 	}
 }
 
-func RangeFromGoTmplTyperRange(r position.Range) Range {
+func RangeFromGotmplsRange(r position.Range) Range {
 	return Range{
 		Start: Position{
 			Line:      r.Start.Line,

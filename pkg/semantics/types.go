@@ -3,8 +3,8 @@ package semantics
 import (
 	"context"
 
-	"github.com/walteh/go-tmpl-typer/pkg/lsp/protocol"
-	"github.com/walteh/go-tmpl-typer/pkg/position"
+	"github.com/walteh/gotmpls/pkg/lsp/protocol"
+	"github.com/walteh/gotmpls/pkg/position"
 )
 
 // TokenType represents the type of a semantic token

@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/walteh/go-tmpl-typer/pkg/ast"
-	"github.com/walteh/go-tmpl-typer/pkg/diagnostic"
-	"github.com/walteh/go-tmpl-typer/pkg/position"
+	"github.com/walteh/gotmpls/pkg/ast"
+	"github.com/walteh/gotmpls/pkg/diagnostic"
+	"github.com/walteh/gotmpls/pkg/position"
 )
 
 func TestDiagnosticProvider_GetDiagnostics(t *testing.T) {

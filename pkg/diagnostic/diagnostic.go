@@ -3,9 +3,9 @@ package diagnostic
 import (
 	"context"
 
-	"github.com/walteh/go-tmpl-typer/pkg/ast"
-	"github.com/walteh/go-tmpl-typer/pkg/parser"
-	"github.com/walteh/go-tmpl-typer/pkg/position"
+	"github.com/walteh/gotmpls/pkg/ast"
+	"github.com/walteh/gotmpls/pkg/parser"
+	"github.com/walteh/gotmpls/pkg/position"
 	"gitlab.com/tozd/go/errors"
 )
 

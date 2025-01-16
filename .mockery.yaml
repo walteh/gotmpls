@@ -7,6 +7,6 @@ outpkg: mockery
 filename: '{{.InterfaceName}}.{{.PackageName}}.mockery.go'
 mockname: Mock{{.InterfaceName}}_{{.PackageName}}
 packages:
-    github.com/walteh/go-tmpl-typer/pkg/finder:
+    github.com/walteh/gotmpls/pkg/finder:
         interfaces:
             TemplateFinder: {}

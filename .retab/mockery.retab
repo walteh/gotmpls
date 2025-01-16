@@ -8,18 +8,18 @@ filename: "{{.InterfaceName}}.{{.PackageName}}.mockery.go"
 mockname: "Mock{{.InterfaceName}}_{{.PackageName}}"
 
 packages:
-  github.com/walteh/go-tmpl-typer/pkg/parser:
+  github.com/walteh/gotmpls/pkg/parser:
     interfaces:
       TemplateParser: {}
-  github.com/walteh/go-tmpl-typer/pkg/ast:
+  github.com/walteh/gotmpls/pkg/ast:
     interfaces:
       PackageAnalyzer: {}
-  github.com/walteh/go-tmpl-typer/pkg/diagnostic:
+  github.com/walteh/gotmpls/pkg/diagnostic:
     interfaces:
       Generator: {}
-  github.com/walteh/go-tmpl-typer/pkg/finder:
+  github.com/walteh/gotmpls/pkg/finder:
     interfaces:
       TemplateFinder: {}
-  github.com/walteh/go-tmpl-typer/pkg/bridge:
+  github.com/walteh/gotmpls/pkg/bridge:
     interfaces:
       Validator: {} 

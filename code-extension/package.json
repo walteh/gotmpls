@@ -1,5 +1,5 @@
 {
-	"name": "go-tmpl-types-vscode",
+	"name": "gotmpls",
 	"displayName": "Go Template Type Checker",
 	"description": "Type checking and diagnostics for Go text/template files",
 	"version": "0.0.1",
@@ -13,34 +13,29 @@
 		"Linters"
 	],
 	"activationEvents": [
-		"onLanguage:go-template"
+		"onLanguage:gotmpl"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
 		"languages": [
 			{
-				"id": "go-template",
+				"id": "gotmpl",
 				"extensions": [
 					".tmpl",
-					".tpl",
 					".gotmpl",
 					".gohtml"
-				],
-				"aliases": [
-					"Go Template",
-					"go-template"
 				]
 			}
 		],
 		"configuration": {
-			"title": "Go Template Type Checker",
+			"title": "gotmpls",
 			"properties": {
-				"goTemplateTypes.executable": {
+				"gotmpls.executable": {
 					"type": "string",
-					"default": "go-tmpl-typer",
-					"description": "Path to the go-tmpl-typer executable. Can be absolute or relative to workspace root."
+					"default": "gotmpls",
+					"description": "Path to the gotmpls executable. Can be absolute or relative to workspace root."
 				},
-				"goTemplateTypes.trace.server": {
+				"gotmpls.trace.server": {
 					"type": "string",
 					"enum": [
 						"off",
@@ -50,17 +45,17 @@
 					"default": "off",
 					"description": "Traces the communication between VS Code and the language server."
 				},
-				"goTemplateTypes.diagnostics.enable": {
+				"gotmpls.diagnostics.enable": {
 					"type": "boolean",
 					"default": true,
 					"description": "Enable/disable diagnostics."
 				},
-				"goTemplateTypes.hover.enable": {
+				"gotmpls.hover.enable": {
 					"type": "boolean",
 					"default": true,
 					"description": "Enable/disable hover information."
 				},
-				"goTemplateTypes.completion.enable": {
+				"gotmpls.completion.enable": {
 					"type": "boolean",
 					"default": true,
 					"description": "Enable/disable completion suggestions."

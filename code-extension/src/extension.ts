@@ -13,9 +13,9 @@ import {
 let client: LanguageClient;
 
 export function activate(context: vscode.ExtensionContext) {
-	const outputChannel = vscode.window.createOutputChannel('go-tmpl-lsp');
+	const outputChannel = vscode.window.createOutputChannel('gotmpls');
 	outputChannel.show();
-	outputChannel.appendLine('go-tmpl-lsp is now active');
+	outputChannel.appendLine('gotmpls is now active');
 
 	const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 	if (!workspaceFolder) {
@@ -26,7 +26,7 @@ export function activate(context: vscode.ExtensionContext) {
 	outputChannel.appendLine(`workspace folder: ${workspaceFolder.uri.fsPath}`);
 
 	// Find the executable
-	findExecutable('go-tmpl-typer', workspaceFolder.uri.fsPath)
+	findExecutable('gotmpls', workspaceFolder.uri.fsPath)
 		.then(executable => {
 			outputChannel.appendLine(`found executable: ${executable}`);
 
@@ -62,7 +62,7 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 			};
 
-			outputChannel.appendLine(`starting go-tmpl-lsp with command: ${executable} serve-lsp`);
+			outputChannel.appendLine(`starting gotmpls with command: ${executable} serve-lsp`);
 
 			// Create a wrapper for stderr to capture debug output
 			const serverProcess = spawn(executable, ['serve-lsp'], {
@@ -81,10 +81,10 @@ export function activate(context: vscode.ExtensionContext) {
 
 			// Client options
 			const clientOptions: LanguageClientOptions = {
-				documentSelector: [{ scheme: 'file', language: 'go-template' }],
+				documentSelector: [{ scheme: 'file', language: 'gotmpl' }],
 				synchronize: {
 					fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{tmpl,go}'),
-					configurationSection: 'goTemplateTypes'
+					configurationSection: 'gotmpls'
 				},
 				workspaceFolder: workspaceFolder,
 				outputChannel: outputChannel,
@@ -92,15 +92,15 @@ export function activate(context: vscode.ExtensionContext) {
 				revealOutputChannelOn: RevealOutputChannelOn.Never,
 				initializationOptions: {
 					trace: {
-						server: vscode.workspace.getConfiguration('goTemplateTypes').get('trace.server')
+						server: vscode.workspace.getConfiguration('gotmpls').get('trace.server')
 					}
 				}
 			};
 
 			// Create and start the client
 			client = new LanguageClient(
-				'go-tmpl-lsp',
-				'go-tmpl-lsp',
+				'gotmpls',
+				'gotmpls',
 				serverOptions,
 				clientOptions
 			);
@@ -180,7 +180,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 async function findExecutable(name: string, workspaceFolder: string | undefined): Promise<string> {
-	const config = vscode.workspace.getConfiguration('goTemplateTypes');
+	const config = vscode.workspace.getConfiguration('gotmpls');
 	let executable = config.get<string>('executable') || name;
 
 	// If it's an absolute path, verify it exists
@@ -211,7 +211,7 @@ async function findExecutable(name: string, workspaceFolder: string | undefined)
 		}
 	}
 
-	throw new Error(`Executable '${name}' not found in PATH. Please install it with 'go install github.com/walteh/go-tmpl-typer/cmd/go-tmpl-typer@latest'`);
+	throw new Error(`Executable '${name}' not found in PATH. Please install it with 'go install github.com/walteh/gotmpls/cmd/gotmpls@latest'`);
 }
 
 export function deactivate(): Thenable<void> | undefined {

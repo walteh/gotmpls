@@ -4,7 +4,7 @@ import (
 	"go/types"
 	"reflect"
 
-	"github.com/walteh/go-tmpl-typer/pkg/astreflect"
+	"github.com/walteh/gotmpls/pkg/astreflect"
 )
 
 // TemplateMethodInfo represents information about a template method

@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	vscodelanguageservernode "github.com/walteh/go-tmpl-typer/gen/git-repo-tarballs/vscode-languageserver-node"
-	"github.com/walteh/go-tmpl-typer/pkg/archive"
+	vscodelanguageservernode "github.com/walteh/gotmpls/gen/git-repo-tarballs/vscode-languageserver-node"
+	"github.com/walteh/gotmpls/pkg/archive"
 )
 
 //go:generate go run . -o ../

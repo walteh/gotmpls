@@ -7,7 +7,7 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	"github.com/walteh/go-tmpl-typer/pkg/lsp"
+	"github.com/walteh/gotmpls/pkg/lsp"
 	"gitlab.com/tozd/go/errors"
 )
 

@@ -12,8 +12,8 @@ import (
 
 	"github.com/neovim/go-client/nvim"
 	"github.com/stretchr/testify/require"
-	"github.com/walteh/go-tmpl-typer/pkg/lsp/integration"
-	"github.com/walteh/go-tmpl-typer/pkg/lsp/protocol"
+	"github.com/walteh/gotmpls/pkg/lsp/integration"
+	"github.com/walteh/gotmpls/pkg/lsp/protocol"
 	"gitlab.com/tozd/go/errors"
 )
 
