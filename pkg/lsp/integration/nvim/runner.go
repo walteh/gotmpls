@@ -16,8 +16,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/creachadair/jrpc2"
 	"github.com/neovim/go-client/nvim"
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/require"
 	nvimlspconfig "github.com/walteh/go-tmpl-typer/gen/git-repo-tarballs/nvim-lspconfig"
 	"github.com/walteh/go-tmpl-typer/pkg/archive"
 	"github.com/walteh/go-tmpl-typer/pkg/lsp/integration"
@@ -305,4 +307,230 @@ EOF`, lspConfigDir, config.DefaultConfig(socketPath), config.DefaultSetup())
 	}
 
 	return configPath, nil
+}
+
+// // withFile ensures atomic and consistent file handling for LSP operations
+// func (s *NvimIntegrationTestRunner) withFile(uri protocol.DocumentURI, operation func(buffer nvim.Buffer) error) error {
+// 	s.mu.Lock()
+// 	defer s.mu.Unlock()
+
+// 	// Get buffer for URI
+// 	buffers, err := s.nvimInstance.Buffers()
+// 	if err != nil {
+// 		return errors.Errorf("failed to get buffers: %w", err)
+// 	}
+
+// 	var buffer nvim.Buffer
+// 	for _, b := range buffers {
+// 		name, err := s.nvimInstance.BufferName(b)
+// 		if err != nil {
+// 			continue
+// 		}
+// 		if strings.HasSuffix(name, string(uri)) {
+// 			buffer = b
+// 			break
+// 		}
+// 	}
+
+// 	// If buffer not found, try to open the file
+// 	if buffer == 0 {
+// 		buffer, cleanup, err = s.OpenFileWithLock(s.t, uri)
+// 		if err != nil {
+// 			return errors.Errorf("failed to open file: %w", err)
+// 		}
+
+// 		// Attach LSP
+// 		if err := s.attachLSP(buffer); err != nil {
+// 			return errors.Errorf("failed to attach LSP: %w", err)
+// 		}
+// 	}
+
+// 	// Execute the function with the buffer
+// 	return operation(buffer)
+// }
+
+// Helper method to wait for LSP to initialize
+func (s *NvimIntegrationTestRunner) WaitForLSP(t *testing.T) error {
+	t.Helper()
+	prelogCount := 0
+	waitForLSP := func() bool {
+		prelogCount++
+		var hasClients bool
+		err := s.nvimInstance.Eval(`luaeval('vim.lsp.get_active_clients() ~= nil and #vim.lsp.get_active_clients() > 0')`, &hasClients)
+		if err != nil {
+			s.t.Logf("Error checking LSP clients: %v", err)
+			return false
+		}
+
+		if prelogCount > 10 {
+			s.t.Logf("LSP clients count: %v", hasClients)
+		}
+
+		if hasClients {
+			// Log client info for debugging
+			var clientInfo string
+			err = s.nvimInstance.Eval(`luaeval('vim.inspect(vim.lsp.get_active_clients())')`, &clientInfo)
+			if err == nil {
+				// s.t.Logf("LSP client info: %v", clientInfo)
+			}
+		}
+
+		return hasClients
+	}
+
+	var success bool
+	for i := 0; i < 50; i++ {
+		if success = waitForLSP(); success {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if !success {
+		return errors.Errorf("LSP client failed to attach")
+	}
+	return nil
+}
+
+func (s *NvimIntegrationTestRunner) attachLSP(t *testing.T, buf nvim.Buffer) error {
+	t.Helper()
+
+	if err := s.WaitForLSP(t); err != nil {
+		return errors.Errorf("failed to wait for LSP: %w", err)
+	}
+
+	luaCmd := fmt.Sprintf(`
+local client = vim.lsp.get_active_clients()[1]
+vim.lsp.buf_attach_client(%d, client.id)
+`, buf)
+
+	s.MustExecLua(t, luaCmd)
+
+	// Wait for LSP server to process the file
+	time.Sleep(100 * time.Millisecond)
+	return nil
+}
+
+func (s *NvimIntegrationTestRunner) MustOpenFileWithLock(t *testing.T, path protocol.DocumentURI) (nvim.Buffer, func(), time.Time) {
+	t.Helper()
+	buf, cleanup, err := s.OpenFileWithLock(t, path)
+	require.NoError(t, err, "failed to open file: %v", err)
+	return buf, cleanup, time.Now()
+}
+
+func (s *NvimIntegrationTestRunner) OpenFileWithLock(t *testing.T, path protocol.DocumentURI) (nvim.Buffer, func(), error) {
+	t.Helper()
+	s.mu.Lock()
+	cleanup := func() {
+		s.mu.Unlock()
+	}
+	// If there's a file already open, close it first
+	if s.currentBuffer != nil {
+		s.t.Logf("Closing previously open file: %s", s.currentBuffer.uri)
+		if err := s.nvimInstance.Command("bd!"); err != nil {
+			cleanup()
+			return 0, nil, errors.Errorf("failed to close previous buffer: %w", err)
+		}
+		s.currentBuffer = nil
+	}
+
+	pathStr := strings.TrimPrefix(string(path.Path()), "file://")
+	// s.t.Logf("Opening file: %s", pathStr)
+
+	// Force close any other buffers that might be open
+	if err := s.nvimInstance.Command("%bd!"); err != nil {
+		cleanup()
+		return 0, nil, errors.Errorf("failed to close all buffers: %w", err)
+	}
+
+	if err := s.nvimInstance.Command("edit " + pathStr); err != nil {
+		cleanup()
+		return 0, nil, errors.Errorf("failed to open file: %w", err)
+	}
+
+	buffer, err := s.nvimInstance.CurrentBuffer()
+	if err != nil {
+		cleanup()
+		return 0, nil, errors.Errorf("failed to get current buffer: %w", err)
+	}
+
+	// Set filetype to Go for .go files
+	if strings.HasSuffix(pathStr, ".go") {
+		if err = s.nvimInstance.SetBufferOption(buffer, "filetype", "go"); err != nil {
+			cleanup()
+			return 0, nil, errors.Errorf("failed to set filetype: %w", err)
+		}
+	}
+
+	// Track the current buffer
+	s.currentBuffer = &struct {
+		uri    protocol.DocumentURI
+		buffer nvim.Buffer
+	}{
+		uri:    path,
+		buffer: buffer,
+	}
+
+	// Verify we're in the right buffer
+	currentBuf, err := s.nvimInstance.CurrentBuffer()
+	if err != nil {
+		cleanup()
+		return 0, nil, errors.Errorf("failed to verify current buffer: %w", err)
+	}
+	if currentBuf != buffer {
+		cleanup()
+		return 0, nil, errors.Errorf("buffer mismatch after opening file: expected %v, got %v", buffer, currentBuf)
+	}
+
+	// attach LSP
+	if err := s.attachLSP(t, buffer); err != nil {
+		cleanup()
+		return 0, nil, errors.Errorf("failed to attach LSP: %w", err)
+	}
+
+	s.t.Logf("Successfully opened file %s with buffer %v", pathStr, buffer)
+	return buffer, cleanup, nil
+}
+
+func (s *NvimIntegrationTestRunner) Command(cmd string) error {
+	return s.nvimInstance.Command(cmd)
+}
+
+func (s *NvimIntegrationTestRunner) TmpFilePathOf(path string) protocol.DocumentURI {
+	return protocol.URIFromPath(filepath.Join(s.TmpDir, path))
+}
+
+func RequireOneRPCResponse[T any](t *testing.T, s *NvimIntegrationTestRunner, method string, fileOpenTime time.Time) (*T, *jrpc2.Error) {
+	t.Helper()
+	msgs := s.rpcTracker.MessagesSinceLike(fileOpenTime, func(msg protocol.RPCMessage) bool {
+		return msg.Method == method && msg.Response != nil
+	})
+	require.Len(t, msgs, 1, "expected 1 semantic tokens message, got %d", len(msgs))
+	if msgs[0].Response.Error() != nil {
+		return nil, msgs[0].Response.Error()
+	}
+	var result T
+	require.NoError(t, msgs[0].Response.UnmarshalResult(&result), "failed to unmarshal semantic tokens response")
+	return &result, nil
+}
+
+func (s *NvimIntegrationTestRunner) MustNvimCommand(t *testing.T, cmd string) {
+	t.Helper()
+	err := s.nvimInstance.Command(cmd)
+	require.NoError(t, err, "failed to run command: %s", cmd)
+}
+
+func (s *NvimIntegrationTestRunner) MustExecLua(t *testing.T, cmd string, args ...any) any {
+	t.Helper()
+	var result any
+	err := s.nvimInstance.ExecLua(cmd, &result, args...)
+	require.NoError(t, err, "failed to run command: %s", cmd)
+	return result
+}
+
+func (s *NvimIntegrationTestRunner) MustCall(t *testing.T, name string, args ...any) any {
+	t.Helper()
+	var result any
+	err := s.nvimInstance.Call(name, &result, args...)
+	require.NoError(t, err, "failed to call command: %s", name)
+	return result
 }
