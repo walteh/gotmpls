@@ -4,7 +4,7 @@ testonly: false
 exported: true
 dir: gen/mockery
 outpkg: mockery
-filename: '{{.InterfaceName}}.{{.PackageName}}.mockery.go'
+filename: "{{.InterfaceName}}.{{.PackageName}}.mockery.go"
 mockname: Mock{{.InterfaceName}}_{{.PackageName}}
 packages:
     github.com/walteh/gotmpls/pkg/finder:

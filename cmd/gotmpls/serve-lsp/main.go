@@ -60,33 +60,3 @@ func (me *Handler) Run(ctx context.Context) error {
 
 	return nil
 }
-
-// func main() {
-// 	debug := false
-// 	flag.BoolVar(&debug, "debug", false, "enable debug logging")
-// 	flag.Parse()
-
-// 	logger := zerolog.New(os.Stderr).With().
-// 		Str("component", "lsp-server").
-// 		Bool("debug", debug).
-// 		Timestamp().
-// 		Logger()
-// 	ctx := logger.WithContext(context.Background())
-
-// 	if debug {
-// 		zerolog.Ctx(ctx).Info().Msg("starting language server with debug logging enabled")
-// 	}
-
-// 	server := lsp.NewServer(
-// 		parser.NewDefaultTemplateParser(),
-// 		types.NewDefaultValidator(),
-// 		ast.NewDefaultPackageAnalyzer(),
-// 		diagnostic.NewDefaultGenerator(),
-// 		debug,
-// 	)
-
-// 	if err := server.Start(ctx, os.Stdin, os.Stdout); err != nil {
-// 		zerolog.Ctx(ctx).Error().Err(err).Msg("server error")
-// 		os.Exit(1)
-// 	}
-// }

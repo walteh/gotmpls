@@ -3,149 +3,169 @@
 
 # source: ".retab/task.retab"
 
-version: '3'
+version: "3"
 
 vars:
-  GO_MODULES:
-    sh: cat go.work | grep -oEh  '\t+(\./*[^[:space:]]*)' | tr -d '\t'
+    GO_MODULES:
+        sh: cat go.work | grep -oEh  '\t+(\./*[^[:space:]]*)' | tr -d '\t'
 
 includes:
-  tool:
-    optional: true
-    taskfile: "./gen/taskfiles/Taskfile.tools.yml"
-  script:
-    optional: true
-    taskfile: "./gen/taskfiles/Taskfile.scripts.yml"
+    tool:
+        optional: true
+        taskfile: "./gen/taskfiles/Taskfile.tools.yml"
+    script:
+        optional: true
+        taskfile: "./gen/taskfiles/Taskfile.scripts.yml"
 
 tasks:
-  generate-taskfiles:
-    run: once
-    env: { OUTPUT_DIR: "./out", SCRIPTS_DIR: "./scripts", TASKFILE_OUTPUT_DIR: "./gen/taskfiles" }
-    cmds:
-    - ./scripts/setup-tools-for-local.sh --generate-taskfiles --skip-build
-    sources:
-    - ./tools/**/*
-    - ./scripts/**/*
-    generates:
-    - "./gen/taskfiles/**/*"
+    generate-taskfiles:
+        run: once
+        env:
+            {
+                OUTPUT_DIR: "./out",
+                SCRIPTS_DIR: "./scripts",
+                TASKFILE_OUTPUT_DIR: "./gen/taskfiles",
+            }
+        cmds:
+            - ./scripts/setup-tools-for-local.sh --generate-taskfiles --skip-build
+        sources:
+            - ./tools/**/*
+            - ./scripts/**/*
+        generates:
+            - "./gen/taskfiles/**/*"
 
-  local-setup-tools:
-    run: once
-    deps: [ generate-taskfiles ]
-    env: { SCRIPTS_DIR: "./scripts", TASKFILE_OUTPUT_DIR: "./gen/taskfiles", TOOLS_OUTPUT_DIR: "./out/tools" }
-    cmds:
-    - ./scripts/setup-tools-for-local.sh
-    sources:
-    - ./tools/**/*
-    - ./scripts/setup-tools-for-local.sh
-    - ./scripts/build-tool.sh
-    - go.work.sum
-    generates:
-    - ./out/tools/**/*
+    local-setup-tools:
+        run: once
+        deps: [generate-taskfiles]
+        env:
+            {
+                SCRIPTS_DIR: "./scripts",
+                TASKFILE_OUTPUT_DIR: "./gen/taskfiles",
+                TOOLS_OUTPUT_DIR: "./out/tools",
+            }
+        cmds:
+            - ./scripts/setup-tools-for-local.sh
+        sources:
+            - ./tools/**/*
+            - ./scripts/setup-tools-for-local.sh
+            - ./scripts/build-tool.sh
+            - go.work.sum
+        generates:
+            - ./out/tools/**/*
 
-  download-repo-as-tarball:
-    desc: Download a specific repository and store it
-    vars:
-      REPO: '{{.REPO}}'
-      ORG: '{{.ORG}}'
-      REF: '{{.REF}}'
-      PKG: '{{.REPO | lower | replace "-" ""}}'
-      PATH: 'gen/git-repo-tarballs'
-    cmds:
-    - ./scripts/download-repo-tarball.sh --repo {{.REPO}} --org {{.ORG}} --ref {{.REF}} {{if .PKG}}--pkg {{.PKG}}{{end}} --path {{.PATH}}
-    status:
-    - test -d {{.PATH}}/{{.REPO}}/{{.REPO}}.tar.gz
+    download-repo-as-tarball:
+        desc: Download a specific repository and store it
+        vars:
+            REPO: "{{.REPO}}"
+            ORG: "{{.ORG}}"
+            REF: "{{.REF}}"
+            PKG: '{{.REPO | lower | replace "-" ""}}'
+            PATH: "gen/git-repo-tarballs"
+        cmds:
+            - ./scripts/download-repo-tarball.sh --repo {{.REPO}} --org {{.ORG}} --ref {{.REF}} {{if .PKG}}--pkg {{.PKG}}{{end}} --path {{.PATH}}
+        status:
+            - test -d {{.PATH}}/{{.REPO}}/{{.REPO}}.tar.gz
 
-  download-all-repos-as-tarballs:
-    desc: Download all configured repositories
-    cmds:
-    - task: download-repo-as-tarball
-      vars:
-        REPO: nvim-lspconfig
-        ORG: neovim
-        REF: tags/v1.3.0
-    - task: download-repo-as-tarball
-      vars:
-        REPO: vscode-languageserver-node
-        ORG: microsoft
-        REF: tags/release/jsonrpc/9.0.0-next.6
+    download-all-repos-as-tarballs:
+        desc: Download all configured repositories
+        cmds:
+            - task: download-repo-as-tarball
+              vars:
+                  REPO: nvim-lspconfig
+                  ORG: neovim
+                  REF: tags/v1.3.0
+            - task: download-repo-as-tarball
+              vars:
+                  REPO: vscode-languageserver-node
+                  ORG: microsoft
+                  REF: tags/release/jsonrpc/9.0.0-next.6
 
-  generate:
-    cmds:
-    - mockery
-    - find ./gen/mockery -type f -not -mmin -1 -delete
-    generates:
-    - ./gen/mockery/*.go
-    sources:
-    - ./**/*.go
+    generate:
+        cmds:
+            - mockery
+            - find ./gen/mockery -type f -not -mmin -1 -delete
+        generates:
+            - ./gen/mockery/*.go
+        sources:
+            - ./**/*.go
 
-  test:
-    cmd: go test ./...
+    test:
+        cmd: go test ./...
 
-  install-executables:
-    cmds:
-    - go install ./cmd/gotmpls
+    install-executables:
+        cmds:
+            - go install ./cmd/gotmpls
 
-  package-extension:
-    dir: code-extension
-    cmds:
-    - rm -rf node_modules
-    - rm -rf out
-    - bun install
-    - bun run package
-    - mv ./retab-*.vsix ~/Downloads
-    - open https://marketplace.visualstudio.com/manage/publishers/walteh
+    package-extension:
+        dir: code-extension
+        cmds:
+            - rm -rf node_modules
+            - rm -rf out
+            - bun install
+            - bun run package
+            - mv ./retab-*.vsix ~/Downloads
+            - open https://marketplace.visualstudio.com/manage/publishers/walteh
 
-  rebuild-extension:
-    deps:
-    - install-executables
-    dir: code-extension
-    cmds:
-    - rm -rf node_modules
-    - rm -rf out
-    - bun install
-    - bun run build
+    rebuild-extension:
+        deps:
+            - install-executables
+        dir: code-extension
+        cmds:
+            - rm -rf node_modules
+            - rm -rf out
+            - bun install
+            - bun run build
 
-  sync-go-files:
-    desc: Sync Go files from a GitHub repository
-    vars:
-      SRC: '{{.SRC}}'
-      DEST: '{{.DEST}}'
-    cmds:
-    - |
-      ./scripts/sync-go-files.sh {{.SRC}} {{.DEST}} {{if .STRINGS_TO_REPLACE}}{{range $index, $str := .STRINGS_TO_REPLACE}} --string-to-replace "{{$str}}"{{end}}{{end}}
-    status:
-    - test -d {{.DEST}}
+    sync-go-files:
+        desc: Sync Go files from a GitHub repository
+        vars:
+            SRC: "{{.SRC}}"
+            DEST: "{{.DEST}}"
+        cmds:
+            - |
+                ./scripts/sync-go-files.sh {{.SRC}} {{.DEST}} {{if .STRINGS_TO_REPLACE}}{{range $index, $str := .STRINGS_TO_REPLACE}} --string-to-replace "{{$str}}"{{end}}{{end}}
+        status:
+            - test -d {{.DEST}}
 
-  sync-lsp-generator:
-    desc: Sync LSP generator files from golang/tools
-    cmds:
-    - task: sync-go-files
-      vars:
-        SRC: github.com/golang/tools/blob/master/gopls/internal/protocol/generate
-        DEST: ./pkg/lsp/protocol/generator
-        STRINGS_TO_REPLACE:
-        - 'func processinline():func processinline_old()'
-        - golang.org/x/tools/internal/jsonrpc2:github.com/creachadair/jrpc2
-        - reply jsonrpc2.Replier, r jsonrpc2.Request:conn \*jrpc2.Server, r \*jrpc2.Request
-        - func genCase(:func genCase_old(
-        - func genFunc(:func genFunc_old(
-        - UnmarshalJSON(r.Params(), \&params):UnmarshalJSON(r, \&params)
-        - reply(ctx, :reply_fwd(ctx, conn, r,
-        - sendParseError(ctx, reply,:sendParseError(ctx, conn, r,
-        - recoverHandlerPanic(r.Method()):recoverHandlerPanic(r.Method)
-    - go generate ./pkg/lsp/protocol/generator
+    sync-lsp-generator:
+        desc: Sync LSP generator files from golang/tools
+        cmds:
+            - task: sync-go-files
+              vars:
+                  SRC: github.com/golang/tools/blob/master/gopls/internal/protocol/generate
+                  DEST: ./pkg/lsp/protocol/generator
+                  STRINGS_TO_REPLACE:
+                      - "func processinline():func processinline_old()"
+                      - golang.org/x/tools/internal/jsonrpc2:github.com/creachadair/jrpc2
+                      - reply jsonrpc2.Replier, r jsonrpc2.Request:conn \*jrpc2.Server, r \*jrpc2.Request
+                      - func genCase(:func genCase_old(
+                      - func genFunc(:func genFunc_old(
+                      - UnmarshalJSON(r.Params(), \&params):UnmarshalJSON(r, \&params)
+                      - reply(ctx, :reply_fwd(ctx, conn, r,
+                      - sendParseError(ctx, reply,:sendParseError(ctx, conn, r,
+                      - recoverHandlerPanic(r.Method()):recoverHandlerPanic(r.Method)
+            - go generate ./pkg/lsp/protocol/generator
 
-  go-mod-tidy:
-    env: { GOPROXY: https://proxy.golang.org, GOSUMDB: sum.golang.org, GOPRIVATE: github.com/walteh }
-    cmds:
-    - for: { var: GO_MODULES }
-      cmd: |
-        cd {{.ITEM}} && go mod tidy
+    go-mod-tidy:
+        env:
+            {
+                GOPROXY: https://proxy.golang.org,
+                GOSUMDB: sum.golang.org,
+                GOPRIVATE: github.com/walteh,
+            }
+        cmds:
+            - for: { var: GO_MODULES }
+              cmd: |
+                  cd {{.ITEM}} && go mod tidy
 
-  go-mod-upgrade:
-    run: once
-    deps: [ local-setup-tools ]
-    env: { GOPROXY: https://proxy.golang.org, GOSUMDB: sum.golang.org, GOPRIVATE: github.com/walteh }
-    cmds:
-    - ./scripts/run-tool.sh go-mod-upgrade --force
+    go-mod-upgrade:
+        run: once
+        deps: [local-setup-tools]
+        env:
+            {
+                GOPROXY: https://proxy.golang.org,
+                GOSUMDB: sum.golang.org,
+                GOPRIVATE: github.com/walteh,
+            }
+        cmds:
+            - ./scripts/run-tool.sh go-mod-upgrade --force

@@ -1,42 +1,90 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/rs/zerolog/log"
+	"gitlab.com/tozd/go/errors"
 )
 
-func main() {
+// copyData handles copying data between src and dst with proper error handling
+func copyData(ctx context.Context, dst io.Writer, src io.Reader, name string) error {
+	_, err := io.Copy(dst, src)
+	if err != nil && err != io.EOF {
+		return errors.Errorf("copying %s: %w", name, err)
+	}
+	return nil
+}
+
+func run(ctx context.Context) error {
 	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: %s <socket-path>\n", os.Args[0])
-		os.Exit(1)
+		return errors.New("invalid number of arguments")
 	}
 
 	socketPath := os.Args[1]
 
+	// Setup connection
 	conn, err := net.Dial("unix", socketPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to connect to socket %s: %v\n", socketPath, err)
-		os.Exit(1)
+		return errors.Errorf("connecting to socket %s: %w", socketPath, err)
 	}
 	defer conn.Close()
 
-	// Create channels to signal when copying is done
-	done := make(chan struct{}, 2)
+	// Create error channel for goroutines
+	errChan := make(chan error, 2)
 
 	// Copy from stdin to socket
 	go func() {
-		io.Copy(conn, os.Stdin)
-		done <- struct{}{}
+		if err := copyData(ctx, conn, os.Stdin, "stdin to socket"); err != nil {
+			errChan <- err
+			return
+		}
+		errChan <- nil
 	}()
 
 	// Copy from socket to stdout
 	go func() {
-		io.Copy(os.Stdout, conn)
-		done <- struct{}{}
+		if err := copyData(ctx, os.Stdout, conn, "socket to stdout"); err != nil {
+			errChan <- err
+			return
+		}
+		errChan <- nil
 	}()
 
-	// Wait for either copy operation to finish
-	<-done
+	// Wait for first error or completion
+	if err := <-errChan; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func main() {
+	// Setup logging
+	ctx := context.Background()
+
+	// Setup signal handling
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		sig := <-sigChan
+		log.Ctx(ctx).Info().Str("signal", sig.String()).Msg("received signal, shutting down")
+		cancel()
+	}()
+
+	if err := run(ctx); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to run stdio proxy")
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }

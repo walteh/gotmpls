@@ -12,6 +12,7 @@ import (
 
 func TestServer(t *testing.T) {
 	ctx := context.Background()
+	t.Parallel()
 
 	t.Run("server_initialization", func(t *testing.T) {
 		t.Parallel()
@@ -271,6 +272,7 @@ type Person struct {
 }
 
 func TestDiagnosticsAfterFileChange(t *testing.T) {
+	t.Parallel()
 
 	files := map[string]string{
 		"test.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .Namex }}",
@@ -335,6 +337,7 @@ type Person struct {
 	Name string
 }`,
 	}
+	t.Parallel()
 
 	ctx := context.Background()
 	si := lsp.NewServer(ctx).BuildServerInstance(ctx, nil)
