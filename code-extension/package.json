@@ -1,7 +1,7 @@
 {
 	"name": "gotmpls",
-	"displayName": "Go Template Type Checker",
-	"description": "Type checking and diagnostics for Go text/template files",
+	"displayName": "gotmpls",
+	"description": "a language server for template files",
 	"version": "0.0.1",
 	"publisher": "walteh",
 	"icon": "icon.png",
@@ -43,7 +43,7 @@
 						"verbose"
 					],
 					"default": "off",
-					"description": "Traces the communication between VS Code and the language server."
+					"description": "traces the communication between VS Code and the language server."
 				},
 				"gotmpls.diagnostics.enable": {
 					"type": "boolean",
@@ -68,8 +68,7 @@
 		"build": "bun build ./src/extension.ts --outdir ./out --target node --external vscode --format cjs",
 		"watch": "bun build ./src/extension.ts --outdir ./out --target node --watch --external vscode --format cjs",
 		"package": "bunx vsce package",
-		"publish": "bunx vsce publish",
-		"dev": "cursor --debug run-extension"
+		"publish": "bunx vsce publish"
 	},
 	"devDependencies": {
 		"@types/node": "^16.18.34",
