@@ -3,7 +3,6 @@ package integration
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/walteh/go-tmpl-typer/pkg/lsp/protocol"
 )
@@ -11,7 +10,7 @@ import (
 // IntegrationTestRunner defines the interface for LSP integration testing
 type IntegrationTestRunner interface {
 	// Document State Operations
-	GetDiagnostics(t *testing.T, uri protocol.DocumentURI, timeout time.Duration) (*protocol.FullDocumentDiagnosticReport, error)
+	GetDiagnostics(t *testing.T, uri protocol.DocumentURI, severity protocol.DiagnosticSeverity) ([]protocol.Diagnostic, []protocol.RPCMessage)
 	GetDocumentText(t *testing.T, uri protocol.DocumentURI) (string, error)
 	GetFormattedDocument(t *testing.T, ctx context.Context, uri protocol.DocumentURI) (string, error)
 

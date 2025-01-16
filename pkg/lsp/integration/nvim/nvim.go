@@ -2,6 +2,7 @@ package nvim
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -75,7 +76,9 @@ func lastN[T any](vals []T, n int) []T {
 // Helper method to wait for LSP to initialize
 func (s *NvimIntegrationTestRunner) WaitForLSP(t *testing.T) error {
 	t.Helper()
+	prelogCount := 0
 	waitForLSP := func() bool {
+		prelogCount++
 		var hasClients bool
 		err := s.nvimInstance.Eval(`luaeval('vim.lsp.get_active_clients() ~= nil and #vim.lsp.get_active_clients() > 0')`, &hasClients)
 		if err != nil {
@@ -83,7 +86,9 @@ func (s *NvimIntegrationTestRunner) WaitForLSP(t *testing.T) error {
 			return false
 		}
 
-		s.t.Logf("LSP clients count: %v", hasClients)
+		if prelogCount > 10 {
+			s.t.Logf("LSP clients count: %v", hasClients)
+		}
 
 		if hasClients {
 			// Log client info for debugging
@@ -112,15 +117,17 @@ func (s *NvimIntegrationTestRunner) WaitForLSP(t *testing.T) error {
 
 func (s *NvimIntegrationTestRunner) attachLSP(t *testing.T, buf nvim.Buffer) error {
 	t.Helper()
-	s.t.Log("Waiting for LSP to initialize...")
+
 	if err := s.WaitForLSP(t); err != nil {
 		return errors.Errorf("failed to wait for LSP: %w", err)
 	}
 
-	// Attach LSP client using Lua - this will automatically send didOpen
-	if err := s.nvimInstance.Eval(`luaeval('vim.lsp.buf_attach_client(0, 1)')`, nil); err != nil {
-		return errors.Errorf("failed to attach LSP client: %w", err)
-	}
+	luaCmd := fmt.Sprintf(`
+local client = vim.lsp.get_active_clients()[1]
+vim.lsp.buf_attach_client(%d, client.id)
+`, buf)
+
+	s.MustExecLua(t, luaCmd)
 
 	// Wait for LSP server to process the file
 	time.Sleep(100 * time.Millisecond)
@@ -244,6 +251,14 @@ func (s *NvimIntegrationTestRunner) MustExecLua(t *testing.T, cmd string, args .
 	return result
 }
 
+func (s *NvimIntegrationTestRunner) MustCall(t *testing.T, name string, args ...any) any {
+	t.Helper()
+	var result any
+	err := s.nvimInstance.Call(name, &result, args...)
+	require.NoError(t, err, "failed to call command: %s", name)
+	return result
+}
+
 // Hover gets hover information at the current cursor position
 func (s *NvimIntegrationTestRunner) Hover(t *testing.T, ctx context.Context, request *protocol.HoverParams) (*protocol.Hover, error) {
 	t.Helper()
@@ -273,36 +288,106 @@ func (s *NvimIntegrationTestRunner) Hover(t *testing.T, ctx context.Context, req
 
 }
 
-// GetDiagnostics returns the current diagnostics for a given file URI
-func (s *NvimIntegrationTestRunner) GetDiagnostics(t *testing.T, uri protocol.DocumentURI, timeout time.Duration) (*protocol.FullDocumentDiagnosticReport, error) {
+func (s *NvimIntegrationTestRunner) GetDiagnostics(t *testing.T, uri protocol.DocumentURI, severity protocol.DiagnosticSeverity) ([]protocol.Diagnostic, []protocol.RPCMessage) {
 	t.Helper()
-	_, cleanup, fileOpenTime := s.MustOpenFileWithLock(t, uri)
+
+	buf, cleanup, fileOpenTime := s.MustOpenFileWithLock(t, uri)
 	defer cleanup()
 
-	t.Log("🔄 Getting diagnostics (timeout:", timeout, ")")
+	s.triggerDiagnosticRefresh(t, buf)
 
-	// Get diagnostics directly from gopls
-	luaCmd := `
-			local bufnr = vim.api.nvim_get_current_buf()
-			local client = vim.lsp.get_active_clients()[1]
-			if client then
-				-- Request diagnostics from gopls
-				client.request('textDocument/diagnostic', {
-					textDocument = {
-						uri = vim.uri_from_bufnr(bufnr)
-					}
-				})
-			end
-		`
+	msgs := s.rpcTracker.MessagesSinceLike(fileOpenTime, func(msg protocol.RPCMessage) bool {
+		return msg.Method == "textDocument/diagnostic"
+	})
+
+	diags := s.loadNvimDiagnosticsFromBuffer(t, buf, severity)
+
+	protocolDiags := make([]protocol.Diagnostic, 0, len(diags))
+	for _, d := range diags {
+		protocolDiags = append(protocolDiags, d.ToProtocolDiagnostic())
+	}
+
+	return protocolDiags, msgs
+}
+
+type NvimDiagnostic struct {
+	Bufnr     int            `json:"bufnr"`
+	Code      string         `json:"code"`
+	Col       int            `json:"col"`
+	EndCol    int            `json:"end_col"`
+	EndLnum   int            `json:"end_lnum"`
+	Lnum      int            `json:"lnum"`
+	Message   string         `json:"message"`
+	Namespace int            `json:"namespace"`
+	Source    string         `json:"source"`
+	UserData  map[string]any `json:"user_data"`
+}
+
+func (me *NvimDiagnostic) ToProtocolDiagnostic() protocol.Diagnostic {
+	return protocol.Diagnostic{
+		Message:  me.Message,
+		Range:    protocol.Range{Start: protocol.Position{Line: uint32(me.Lnum), Character: uint32(me.Col)}, End: protocol.Position{Line: uint32(me.EndLnum), Character: uint32(me.EndCol)}},
+		Severity: protocol.SeverityError,
+		Source:   me.Source,
+		Code:     me.Code,
+		CodeDescription: &protocol.CodeDescription{
+			Href: me.UserData["lsp"].(map[string]any)["codeDescription"].(map[string]any)["href"].(string),
+		},
+		RelatedInformation: nil,
+		Tags:               nil,
+		Data:               nil,
+	}
+}
+
+func (s *NvimIntegrationTestRunner) triggerDiagnosticRefresh(t *testing.T, buf nvim.Buffer) {
+	t.Helper()
+	luaCmd := fmt.Sprintf(`
+	local client = vim.lsp.get_active_clients()[1]
+	if client then
+		-- Request diagnostics from gopls
+		client.request('textDocument/diagnostic', {
+			textDocument = {
+				uri = vim.uri_from_bufnr(%d)
+			}
+		})
+	end
+`, buf)
 	_ = s.MustExecLua(t, luaCmd)
-
 	time.Sleep(1 * time.Second)
+}
 
-	res, err := RequireOneRPCResponse[protocol.FullDocumentDiagnosticReport](t, s, "textDocument/diagnostic", fileOpenTime)
-	require.Nil(t, err, "expected no error in diagnostic response")
-	require.NotNil(t, res, "expected non-nil diagnostic response")
+func severityToLua(severity protocol.DiagnosticSeverity) string {
+	switch severity {
+	case protocol.SeverityError:
+		return "ERROR"
+	case protocol.SeverityWarning:
+		return "WARN"
+	case protocol.SeverityInformation:
+		return "INFO"
+	case protocol.SeverityHint:
+		return "HINT"
+	default:
+		return "INFO"
+	}
+}
 
-	return res, nil
+func (s *NvimIntegrationTestRunner) loadNvimDiagnosticsFromBuffer(t *testing.T, buf nvim.Buffer, severity protocol.DiagnosticSeverity) []NvimDiagnostic {
+	t.Helper()
+	// out := s.MustCall(t, "vim.diagnostic.get", buf, map[string]string{"severity": "vim.diagnostic.severity.WARN"})
+	l := s.MustExecLua(t, `
+		local severity = vim.diagnostic.severity.`+severityToLua(severity)+`
+		return vim.diagnostic.get(`+fmt.Sprintf("%d", buf)+`, {severity = severity})
+	`)
+
+	require.NotNil(t, l, "expected non-nil diagnostic response")
+
+	by, err := json.Marshal(l)
+	require.NoError(t, err, "failed to marshal diagnostic response")
+
+	var diags []NvimDiagnostic
+	require.NoError(t, json.Unmarshal(by, &diags), "failed to unmarshal diagnostic response")
+
+	return diags
 }
 
 // GetSemanticTokensFull returns semantic tokens for the entire document

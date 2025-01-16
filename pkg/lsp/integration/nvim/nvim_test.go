@@ -89,7 +89,10 @@ func (p *Person) GetName() string {
 	// Test hover functionality
 	uri := runner.TmpFilePathOf("main.go")
 
-	diags, err := runner.GetDiagnostics(t, uri, 5*time.Second)
+	time.Sleep(1 * time.Second)
+
+	diags, rpcs := runner.GetDiagnostics(t, uri, protocol.SeverityError)
+	require.Len(t, rpcs, 2, "should have 2 rpc")
 	require.NoError(t, err, "hover request should succeed")
 	assert.NotNil(t, diags, "hover response should not be nil")
 
@@ -112,7 +115,7 @@ func (p *Person) GetName() string {
 		},
 	}
 
-	assert.Equal(t, diagsw, diags, "diagnostics should match")
+	assert.Equal(t, diagsw.Items, diags, "diagnostics should match")
 	require.NoError(t, runner.SaveAndQuit(), "cleanup should succeed")
 }
 
@@ -155,10 +158,9 @@ type Person struct {
 	assert.Equal(t, newContent, content, "document content should match")
 
 	// Test diagnostics after edit
-	diags, err := runner.GetDiagnostics(t, uri, 5*time.Second)
-	require.NoError(t, err, "getting diagnostics should succeed")
-	assert.Empty(t, diags, "should have no diagnostics for valid file")
-
+	diags, rpcs := runner.GetDiagnostics(t, uri, protocol.SeverityError)
+	assert.Len(t, diags, 0, "should have no diagnostics for valid file")
+	require.Len(t, rpcs, 2, "should have 2 rpcs")
 	// Test formatting
 	formatted, err := runner.GetFormattedDocument(t, context.Background(), uri)
 	require.NoError(t, err, "formatting document should succeed")
