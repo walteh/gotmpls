@@ -45,7 +45,7 @@ func (s *NvimIntegrationTestRunner) Hover(t *testing.T, ctx context.Context, req
 	win, err := s.nvimInstance.CurrentWindow()
 	require.NoError(t, err, "failed to get current window: %w", err)
 
-	t.Logf("🎯 Moving cursor to position [ %v ] in window [ %v ]", request.Position, win)
+	// t.Logf("🎯 Moving cursor to position [ %v ] in window [ %v ]", request.Position, win)
 
 	// Move cursor to the desired position
 	err = s.nvimInstance.SetWindowCursor(win, [2]int{int(request.Position.Line) + 1, int(request.Position.Character)})
@@ -60,22 +60,22 @@ func (s *NvimIntegrationTestRunner) Hover(t *testing.T, ctx context.Context, req
 	// window that is supposed to be open. so this works for now.
 	resp := s.MustExecLua(t, fmt.Sprintf(`-- Save the previous hover handler
 local prev_handler = vim.lsp.handlers["textDocument/hover"]
-
+local last_hover_content = nil
 -- Set the custom hover handler
 vim.lsp.handlers["textDocument/hover"] = function(err, result, ctx, config)
   if err then
     print("Hover error:", vim.inspect(err))
-    _G.last_hover_content = nil
+    last_hover_content = nil
     return
   end
   if not (result and result.contents) then
     print("No hover content available")
-    _G.last_hover_content = nil
+    last_hover_content = nil
     return
   end
 
   -- Save the content to a global variable
-  _G.last_hover_content = result
+  last_hover_content = result
   -- Call the original handler
   prev_handler(err, result, ctx, config)
 end
@@ -85,7 +85,7 @@ vim.lsp.buf.hover()
 
 -- Wait for hover response
 local attempts = 20
-while not _G.last_hover_content and attempts > 0 do
+while not last_hover_content and attempts > 0 do
   vim.wait(100)
   attempts = attempts - 1
 end
@@ -94,11 +94,18 @@ end
 vim.lsp.handlers["textDocument/hover"] = prev_handler
 
 -- Return the hover content
-return _G.last_hover_content`, buf))
+return last_hover_content`, buf))
 
-	rpcs := s.rpcTracker.MessagesSinceLike(fileOpenTime, func(msg protocol.RPCMessage) bool {
+	rpcs, exp := s.rpcTracker.WaitForMessages(fileOpenTime, 2, 3*time.Second, func(msg protocol.RPCMessage) bool {
 		return msg.Method == "textDocument/hover"
 	})
+	require.True(t, exp, "time expired waiting for textDocument/hover, %v", rpcs)
+	require.Len(t, rpcs, 2, "expected 2 rpcs")
+
+	t.Logf("🎯 Hover response: %v", resp)
+	if resp == nil {
+		return nil, rpcs
+	}
 
 	by, err := json.Marshal(resp)
 	require.NoError(t, err, "failed to marshal hover response")
@@ -118,9 +125,14 @@ func (s *NvimIntegrationTestRunner) GetDiagnostics(t *testing.T, uri protocol.Do
 
 	s.triggerDiagnosticRefresh(t, buf)
 
-	msgs := s.rpcTracker.MessagesSinceLike(fileOpenTime, func(msg protocol.RPCMessage) bool {
+	msgs, exp := s.rpcTracker.WaitForMessages(fileOpenTime, 2, 3*time.Second, func(msg protocol.RPCMessage) bool {
 		return msg.Method == "textDocument/diagnostic"
 	})
+	require.True(t, exp, "time expired waiting for textDocument/diagnostic")
+	require.Len(t, msgs, 2, "expected 2 rpcs")
+
+	// this basically will trigger right when the rpc completes, so wait for a sec
+	time.Sleep(100 * time.Millisecond)
 
 	diags := s.loadNvimDiagnosticsFromBuffer(t, buf, severity)
 
@@ -128,7 +140,6 @@ func (s *NvimIntegrationTestRunner) GetDiagnostics(t *testing.T, uri protocol.Do
 	for _, d := range diags {
 		protocolDiags = append(protocolDiags, d.ToProtocolDiagnostic())
 	}
-
 	return protocolDiags, msgs
 }
 
@@ -189,7 +200,7 @@ func (s *NvimIntegrationTestRunner) triggerDiagnosticRefresh(t *testing.T, buf n
 	end
 `, buf)
 	_ = s.MustExecLua(t, luaCmd)
-	time.Sleep(1 * time.Second)
+
 }
 
 func severityToLua(severity protocol.DiagnosticSeverity) string {
@@ -209,13 +220,31 @@ func severityToLua(severity protocol.DiagnosticSeverity) string {
 
 func (s *NvimIntegrationTestRunner) loadNvimDiagnosticsFromBuffer(t *testing.T, buf nvim.Buffer, severity protocol.DiagnosticSeverity) []NvimDiagnostic {
 	t.Helper()
-	// out := s.MustCall(t, "vim.diagnostic.get", buf, map[string]string{"severity": "vim.diagnostic.severity.WARN"})
 	l := s.MustExecLua(t, `
-		local severity = vim.diagnostic.severity.`+severityToLua(severity)+`
-		return vim.diagnostic.get(`+fmt.Sprintf("%d", buf)+`, {severity = severity})
-	`)
+		-- Debug: Print active clients
+		local clients = vim.lsp.get_active_clients()
+		print(string.format("🔍 Active LSP clients: %d", #clients))
+		for _, client in ipairs(clients) do
+			print(string.format("  • Client [%d]: %s (root: %s)", client.id, client.name, client.root_dir))
+		end
 
-	time.Sleep(1 * time.Second)
+		local severity = vim.diagnostic.severity.`+severityToLua(severity)+`
+		
+		-- Get all diagnostics with namespace info
+		local all_diags = vim.diagnostic.get(`+fmt.Sprintf("%d", buf)+`, {severity = severity})
+		
+		-- Deduplicate diagnostics based on position and message
+		local seen = {}
+		local unique_diags = {}
+		for _, diag in ipairs(all_diags) do
+			local key = string.format("%d:%d:%d:%d:%s", diag.lnum, diag.col, diag.end_lnum, diag.end_col, diag.message)
+			if not seen[key] then
+				seen[key] = true
+				table.insert(unique_diags, diag)
+			end
+		end
+		return unique_diags
+	`)
 
 	require.NotNil(t, l, "expected non-nil diagnostic response")
 
@@ -295,23 +324,29 @@ func (s *NvimIntegrationTestRunner) GetDocumentText(t *testing.T, uri protocol.D
 
 // ApplyEdit applies changes to a document with optional save
 func (s *NvimIntegrationTestRunner) ApplyEdit(t *testing.T, uri protocol.DocumentURI, newContent string, save bool) []protocol.RPCMessage {
-	_, cleanup, fileOpenTime := s.MustOpenFileWithLock(t, uri)
+	buffer, cleanup, fileOpenTime := s.MustOpenFileWithLock(t, uri)
 	defer cleanup()
 
-	// Delete all content and insert new content
-	s.MustNvimCommand(t, "normal! ggdG")
+	// Split content into lines
+	lines := strings.Split(newContent, "\n")
+	byteLines := make([][]byte, len(lines))
+	for i, line := range lines {
+		byteLines[i] = []byte(line)
+	}
 
-	// Insert new content
-	s.MustNvimCommand(t, fmt.Sprintf("normal! i%s", newContent))
+	// Replace entire buffer content
+	err := s.nvimInstance.SetBufferLines(buffer, 0, -1, true, byteLines)
+	require.NoError(t, err, "setting buffer lines should succeed")
 
 	if save {
 		s.MustNvimCommand(t, "w")
 	}
 
-	rpcs := s.rpcTracker.MessagesSinceLike(fileOpenTime, func(msg protocol.RPCMessage) bool {
+	rpcs, exp := s.rpcTracker.WaitForMessages(fileOpenTime, 1, 3*time.Second, func(msg protocol.RPCMessage) bool {
 		return msg.Method == "textDocument/didChange"
 	})
 
+	require.True(t, exp, "time expired waiting for textDocument/didChange")
 	return rpcs
 }
 

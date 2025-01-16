@@ -56,6 +56,10 @@ func (t *RPCTracker) MessagesSinceLike(since time.Time, predicate func(RPCMessag
 	})
 }
 
+func (t *RPCTracker) WaitOnWit(since time.Time, predicate func(RPCMessage) bool) []RPCMessage {
+	return t.MessagesSinceLike(since, predicate)
+}
+
 // RPCTracker tracks incoming and outgoing RPC messages for testing purposes
 type RPCTracker struct {
 	mu sync.RWMutex
@@ -147,16 +151,17 @@ func (t *RPCTracker) Clear() {
 
 // WaitForMessage waits for a message matching the given predicate
 // Returns nil if timeout is reached
-func (t *RPCTracker) WaitForMessage(timeout time.Duration, predicate func(RPCMessage) bool) *RPCMessage {
-	ch, unsub := t.Subscribe(1)
-	defer unsub()
+func (t *RPCTracker) WaitForMessages(since time.Time, count int, timeout time.Duration, predicate func(RPCMessage) bool) ([]RPCMessage, bool) {
 
 	// First check existing messages
-	for _, msg := range t.GetMessages() {
-		if predicate(msg) {
-			return &msg
-		}
+	result := t.MessagesSinceLike(since, predicate)
+
+	if len(result) == count {
+		return result, true
 	}
+
+	ch, unsub := t.Subscribe(count - len(result))
+	defer unsub()
 
 	// Then wait for new messages
 	timer := time.NewTimer(timeout)
@@ -166,10 +171,13 @@ func (t *RPCTracker) WaitForMessage(timeout time.Duration, predicate func(RPCMes
 		select {
 		case msg := <-ch:
 			if predicate(msg) {
-				return &msg
+				result = append(result, msg)
+			}
+			if len(result) == count {
+				return result, true
 			}
 		case <-timer.C:
-			return nil
+			return result, len(result) == count
 		}
 	}
 }

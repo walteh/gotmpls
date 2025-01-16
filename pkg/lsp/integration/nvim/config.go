@@ -1,5 +1,32 @@
 package nvim
 
+const sharedNeovimConfig = `
+-- Enable debug logging
+vim.lsp.set_log_level("debug")
+
+local lspconfig = require 'lspconfig'
+local configs = require 'lspconfig.configs'
+local util = require 'lspconfig.util'
+local async = require 'lspconfig.async'
+
+-- Print loaded configs for debugging
+print("Available LSP configs:", vim.inspect(configs))
+
+-- Configure capabilities
+local capabilities = vim.lsp.protocol.make_client_capabilities()
+capabilities.textDocument.hover = {
+    dynamicRegistration = true,
+    contentFormat = { "plaintext", "markdown" }
+}
+
+-- Use an on_attach function to only map the following keys
+local on_attach = function(client, bufnr)
+    print("LSP client attached:", vim.inspect(client))
+    print("Buffer:", bufnr)
+    print("Client capabilities:", vim.inspect(client.server_capabilities))
+end
+`
+
 type NeovimConfig interface {
 	DefaultConfig(socketPath string) string
 	DefaultSetup() string
@@ -18,7 +45,6 @@ configs.go_template = {
                 print("Setting root dir to:", path)
                 return path
             end,
-           -- on_attach = on_attach,
             init_options = {
                 usePlaceholders = true,
                 completeUnimported = true,
@@ -26,33 +52,20 @@ configs.go_template = {
             },
             settings = { },
             flags = {
-                debounce_text_changes = 0,  -- Disable debouncing
-                allow_incremental_sync = false,  -- Disable incremental sync
-                server_side_fuzzy_completion = false,  -- Disable fuzzy completion
-            }
+                debounce_text_changes = 0,
+                allow_incremental_sync = true,
+            },
+			single_file_support = true,
         },
     }
+    -- Set up immediately after defining
+    lspconfig.go_template.setup {}
+    print("go_template server setup complete")
 end`
 }
 
 func (c *GoTemplateConfig) DefaultSetup() string {
-	return `if lspconfig.go_template then
-    print("Setting up go_template server")
-    lspconfig.go_template.setup {
---        on_attach = function(client, bufnr)
---            print("go_template server attached to buffer", bufnr)
---            print("Client capabilities:", vim.inspect(client.server_capabilities))
---			vim.api.nvim_buf_set_keymap(bufnr, 'n', 'K', '<cmd>lua vim.lsp.buf.hover()<CR>', { noremap = true, silent = false })
---            on_attach(client, bufnr)
---        end,
-        flags = {
-            debounce_text_changes = 0,  -- Disable debouncing
-            allow_incremental_sync = false,  -- Disable incremental sync
-            server_side_fuzzy_completion = false,  -- Disable fuzzy completion
-        }
-    }
-    print("go_template server setup complete")
-else
+	return `if not lspconfig.go_template then
     print("ERROR: go_template config not found!")
 end`
 }
@@ -66,35 +79,26 @@ func (c *GoplsConfig) DefaultConfig(socketPath string) string {
 		default_config = {
 			cmd = { 'go', 'run', 'github.com/walteh/go-tmpl-typer/cmd/stdio-proxy', '` + socketPath + `' },
 			filetypes = { 'go', 'gomod', 'gowork', 'gotmpl' },
--- 			on_attach = on_attach,
             root_dir = function(fname)
                 local path = vim.fn.getcwd()
                 print("Setting root dir to:", path)
                 return path
             end,
 			single_file_support = true,
+			flags = {
+				debounce_text_changes = 0,
+				allow_incremental_sync = true,
+			},
 		}
 	}
-	print("gopls server config complete")
-else
-	print("WARNING: gopls config found!", configs.gopls)
+	-- Set up immediately after defining
+	lspconfig.gopls.setup {}
+	print("gopls server setup complete")
 end`
 }
 
 func (c *GoplsConfig) DefaultSetup() string {
-	return `
-	if lspconfig.gopls then
-		print("Setting up gopls server")
-		lspconfig.gopls.setup {
---			on_attach = function(client, bufnr)
---				print("gopls server attached to buffer", bufnr)
---				print("Client capabilities:", vim.inspect(client.server_capabilities))
---				vim.api.nvim_buf_set_keymap(bufnr, 'n', 'K', '<cmd>lua vim.lsp.buf.hover()<CR>', { noremap = true, silent = false })
---				on_attach(client, bufnr)
---			end,
-		}
-		print("gopls server setup complete")
-	else
+	return `if not lspconfig.gopls then
 		print("ERROR: gopls config not found!")
 	end`
 }

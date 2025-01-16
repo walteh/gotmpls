@@ -254,25 +254,7 @@ autocmd! BufEnter *.tmpl setlocal filetype=go-template
 runtime! plugin/lspconfig.lua
 
 lua <<EOF
-
--- Enable debug logging
-vim.lsp.set_log_level("debug")
-
-local lspconfig = require 'lspconfig'
-local configs = require 'lspconfig.configs'
-local util = require 'lspconfig.util'
-local async = require 'lspconfig.async'
--- Print loaded configs for debugging
-print("Available LSP configs:", vim.inspect(configs))
-
--- Configure capabilities
-local capabilities = vim.lsp.protocol.make_client_capabilities()
-capabilities.textDocument.hover = {
-    dynamicRegistration = true,
-    contentFormat = { "plaintext", "markdown" }
-}
--- Disable semantic tokens
--- capabilities.textDocument.semanticTokens = nil
+%[4]s
 
 -- Use an on_attach function to only map the following keys
 -- local on_attach = function(client, bufnr)
@@ -296,7 +278,7 @@ print("start default setup")
 print("end default setup")
 
 print("LSP setup complete")
-EOF`, lspConfigDir, config.DefaultConfig(socketPath), config.DefaultSetup())
+EOF`, lspConfigDir, config.DefaultConfig(socketPath), config.DefaultSetup(), sharedNeovimConfig)
 
 	configPath := filepath.Join(tmpDir, "config.vim")
 	if err := os.WriteFile(configPath, []byte(vimConfig), 0644); err != nil {

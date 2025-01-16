@@ -3,7 +3,6 @@ package lsp_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/walteh/go-tmpl-typer/pkg/lsp"
@@ -15,6 +14,8 @@ func TestServer(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("server_initialization", func(t *testing.T) {
+		t.Parallel()
+
 		files := map[string]string{
 			"test.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .Name }}",
 			"go.mod":    "module test",
@@ -58,6 +59,7 @@ type Person struct {
 	Age  int
 }`,
 		}
+		t.Parallel()
 		si := lsp.NewServer(ctx).BuildServerInstance(ctx, nil)
 
 		runner, err := nvim.NewNvimIntegrationTestRunner(t, files, si, &nvim.GoTemplateConfig{})
@@ -89,6 +91,8 @@ type Person struct {
 	})
 
 	t.Run("server_handles_file_changes", func(t *testing.T) {
+		t.Parallel()
+
 		files := map[string]string{
 			"test.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .Name }}",
 			"go.mod":    "module test",
@@ -146,6 +150,8 @@ type Person struct {
 	})
 
 	t.Run("hover_should_show_method_signature", func(t *testing.T) {
+		t.Parallel()
+
 		files := map[string]string{
 			"test.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .GetName }}",
 			"go.mod":    "module test",
@@ -176,6 +182,8 @@ type Person struct {
 	})
 
 	t.Run("server_verifies_hover_ranges", func(t *testing.T) {
+		t.Parallel()
+
 		files := map[string]string{
 			"test.tmpl": `{{- /*gotype: test.Person*/ -}}
 Address:
@@ -234,6 +242,8 @@ type Person struct {
 	})
 
 	t.Run("server_handles_submodule", func(t *testing.T) {
+		t.Parallel()
+
 		files := map[string]string{
 			"subdir/test.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .Name }}",
 			"subdir/go.mod":    "module test",
@@ -261,6 +271,7 @@ type Person struct {
 }
 
 func TestDiagnosticsAfterFileChange(t *testing.T) {
+
 	files := map[string]string{
 		"test.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .Namex }}",
 		"go.mod":    "module test",
@@ -290,16 +301,8 @@ type Person struct {
 	require.NotEmpty(t, diags, "should have diagnostics for invalid field")
 	require.Contains(t, diags[0].Message, "field not found", "diagnostic should mention the invalid field")
 
-	// Now change to a valid field
-	err = runner.Command("normal! ggdG")
-	require.NoError(t, err, "delete content should succeed")
-	err = runner.Command("normal! i{{- /*gotype: test.Person*/ -}}\n{{ .Name }}")
-	require.NoError(t, err, "insert content should succeed")
-	err = runner.Command("w")
-	require.NoError(t, err, "save should succeed")
-
-	// Wait longer for diagnostics to be published
-	time.Sleep(500 * time.Millisecond)
+	rpcs = runner.ApplyEdit(t, testFile, "{{- /*gotype: test.Person*/ -}}\n{{ .Name }}", true)
+	require.Len(t, rpcs, 1, "should have 1 rpcs")
 
 	// Verify diagnostics are cleared
 	diags, rpcs = runner.GetDiagnostics(t, testFile, protocol.SeverityError)
@@ -307,15 +310,8 @@ type Person struct {
 	require.Empty(t, diags, "diagnostics should be cleared after fixing the error")
 
 	// Make another change that introduces an error
-	err = runner.Command("normal! ggdG")
-	require.NoError(t, err, "delete content should succeed")
-	err = runner.Command("normal! i{{- /*gotype: test.Person*/ -}}\n{{ .AnotherInvalidField }}")
-	require.NoError(t, err, "insert content should succeed")
-	err = runner.Command("w")
-	require.NoError(t, err, "save should succeed")
-
-	// Wait longer for diagnostics to be published
-	time.Sleep(500 * time.Millisecond)
+	rpcs = runner.ApplyEdit(t, testFile, "{{- /*gotype: test.Person*/ -}}\n{{ .AnotherInvalidField }}", true)
+	require.Len(t, rpcs, 1, "should have 1 rpcs")
 
 	// Verify we get diagnostics for the new invalid field
 	diags, rpcs = runner.GetDiagnostics(t, testFile, protocol.SeverityError)
@@ -325,6 +321,7 @@ type Person struct {
 }
 
 func TestDiagnosticHarness(t *testing.T) {
+
 	files := map[string]string{
 		"test.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .Name }}",
 		"go.mod":    "module test",
@@ -353,7 +350,8 @@ type Person struct {
 	require.Empty(t, diags, "diagnostics should be nil for valid template")
 
 	// Test Case 2: Invalid field should show diagnostic
-	_ = runner.ApplyEdit(t, testFile, "{{- /*gotype: test.Person*/ -}}\n{{ .InvalidField }}", true)
+	rpcs = runner.ApplyEdit(t, testFile, "{{- /*gotype: test.Person*/ -}}\n{{ .InvalidField }}", true)
+	require.Len(t, rpcs, 1, "should have 1 rpcs")
 
 	expectedDiag := []protocol.Diagnostic{
 		{
@@ -367,12 +365,20 @@ type Person struct {
 		},
 	}
 	diags, rpcs = runner.GetDiagnostics(t, testFile, protocol.SeverityError)
-	require.Len(t, rpcs, 0, "should have 0 rpcs")
+	for _, rpc := range rpcs {
+		if rpc.Response != nil {
+			t.Logf("rpc: %+v", rpc.Response.ResultString())
+		}
+	}
+
+	require.Len(t, rpcs, 2, "should hav	e 2 rpcs")
+	require.Len(t, diags, len(expectedDiag), "should have 1 diagnostic")
 	require.ElementsMatch(t, expectedDiag, diags, "diagnostics should match expected")
 
-	_ = runner.ApplyEdit(t, testFile, "{{- /*gotype: test.Person*/ -}}\n{{ .Field1 }}\n{{ .Field2 }}", true)
+	rpcs = runner.ApplyEdit(t, testFile, "{{- /*gotype: test.Person*/ -}}\n{{ .Field1 }}\n{{ .Field2 }}", true)
+	require.Len(t, rpcs, 1, "should have 1 rpcs")
 
-	expectedDiags := []protocol.Diagnostic{
+	expectedDiag = []protocol.Diagnostic{
 		{
 			Range: protocol.Range{
 				Start: protocol.Position{Line: 1, Character: 3},
@@ -395,12 +401,11 @@ type Person struct {
 		},
 	}
 	diags, rpcs = runner.GetDiagnostics(t, testFile, protocol.SeverityError)
-	require.Len(t, rpcs, 0, "should have 0 rpcs")
-	require.ElementsMatch(t, expectedDiags, diags, "diagnostics should match expected")
+	require.Len(t, rpcs, 2, "should have 2 rpcs")
+	require.ElementsMatch(t, expectedDiag, diags, "diagnostics should match expected")
 
-	require.NoError(t, err, "save should succeed")
-
-	_ = runner.ApplyEdit(t, testFile, "{{- /*gotype: test.Person*/ -}}\n{{ .Name }}", true)
+	rpcs = runner.ApplyEdit(t, testFile, "{{- /*gotype: test.Person*/ -}}\n{{ .Name }}", true)
+	require.Len(t, rpcs, 1, "should have 1 rpcs")
 
 	diags, rpcs = runner.GetDiagnostics(t, testFile, protocol.SeverityError)
 	require.Len(t, rpcs, 2, "should have 2 rpcs")
@@ -408,6 +413,8 @@ type Person struct {
 }
 
 func TestSemanticTokens(t *testing.T) {
+	t.Parallel()
+
 	t.Skip()
 	files := map[string]string{
 		"test.tmpl": `{{- /*gotype: test.Person*/ -}}
