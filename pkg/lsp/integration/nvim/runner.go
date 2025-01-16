@@ -65,7 +65,7 @@ func NewNvimIntegrationTestRunner(t *testing.T, files map[string]string, si *pro
 	t.Cleanup(func() {
 		cancel()
 		if setup.nvimInstance != nil {
-			if err := setup.nvimInstance.Close(); err != nil {
+			if err := setup.nvimInstance.Close(); err != nil && err.Error() != "signal: killed" {
 				t.Logf("failed to close neovim: %v", err)
 			}
 		}

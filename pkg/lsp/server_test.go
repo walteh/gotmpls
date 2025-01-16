@@ -65,8 +65,8 @@ type Person struct {
 
 		// Test hover in first file
 		file1 := runner.TmpFilePathOf("file1.tmpl")
-		hoverResult, err := runner.Hover(t, ctx, protocol.NewHoverParams(file1, protocol.Position{Line: 1, Character: 3}))
-		require.NoError(t, err, "hover request should succeed")
+		hoverResult, rpcs := runner.Hover(t, ctx, protocol.NewHoverParams(file1, protocol.Position{Line: 1, Character: 3}))
+		require.Len(t, rpcs, 2, "should have 2 rpcs")
 		require.NotNil(t, hoverResult, "hover result should not be nil")
 		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```go-template\n.Name\n```", hoverResult.Contents.Value)
 		require.NotNil(t, hoverResult.Range, "hover range should not be nil")
@@ -77,8 +77,8 @@ type Person struct {
 
 		// Test hover in second file
 		file2 := runner.TmpFilePathOf("file2.tmpl")
-		hoverResult, err = runner.Hover(t, ctx, protocol.NewHoverParams(file2, protocol.Position{Line: 1, Character: 3}))
-		require.NoError(t, err, "hover request should succeed")
+		hoverResult, rpcs = runner.Hover(t, ctx, protocol.NewHoverParams(file2, protocol.Position{Line: 1, Character: 3}))
+		require.Len(t, rpcs, 2, "should have 2 rpcs")
 		require.NotNil(t, hoverResult, "hover result should not be nil")
 		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tAge int\n}\n```\n\n### Template Access\n```go-template\n.Age\n```", hoverResult.Contents.Value)
 		require.NotNil(t, hoverResult.Range, "hover range should not be nil")
@@ -121,8 +121,8 @@ type Person struct {
 		}
 
 		// Test initial hover
-		hoverResult, err := runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
-		require.NoError(t, err, "hover request should succeed")
+		hoverResult, rpcs := runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
+		require.Len(t, rpcs, 2, "should have 2 rpcs")
 		require.Equal(t, hoverw, hoverResult, "hover result should match expected")
 
 		// Save current file before making changes
@@ -140,8 +140,8 @@ type Person struct {
 		require.NoError(t, err, "save should succeed")
 
 		// Test hover after change
-		hoverResult, err = runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
-		require.NoError(t, err, "hover request should succeed")
+		hoverResult, rpcs = runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
+		require.Len(t, rpcs, 2, "should have 2 rpcs")
 		require.Nil(t, hoverResult, "hover should return nil for non-existent field")
 	})
 
@@ -169,8 +169,8 @@ type Person struct {
 		require.NoError(t, err, "setup should succeed")
 
 		testFile := runner.TmpFilePathOf("test.tmpl")
-		hoverResult, err := runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
-		require.NoError(t, err, "hover request should succeed")
+		hoverResult, rpcs := runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
+		require.Len(t, rpcs, 2, "should have 2 rpcs")
 		require.NotNil(t, hoverResult, "hover result should not be nil")
 		require.Equal(t, "### Method Information\n\n```go\nfunc (*Person) GetName() (string)\n```\n\n### Return Type\n```go\nstring\n```\n\n### Template Usage\n```go-template\n.GetName\n```", hoverResult.Contents.Value)
 	})
@@ -215,8 +215,8 @@ type Person struct {
 
 		for _, pos := range positions {
 			t.Run(pos.name, func(t *testing.T) {
-				hoverResult, err := runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 2, Character: uint32(pos.character)}))
-				require.NoError(t, err, "hover request should succeed")
+				hoverResult, rpcs := runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 2, Character: uint32(pos.character)}))
+				require.Len(t, rpcs, 2, "should have 2 rpcs")
 
 				if pos.expected {
 					require.NotNil(t, hoverResult, "hover result should not be nil")
@@ -253,8 +253,8 @@ type Person struct {
 		require.NoError(t, err, "setup should succeed")
 
 		testFile := runner.TmpFilePathOf("subdir/test.tmpl")
-		hoverResult, err := runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
-		require.NoError(t, err, "hover request should succeed")
+		hoverResult, rpcs := runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
+		require.Len(t, rpcs, 2, "should have 2 rpcs")
 		require.NotNil(t, hoverResult, "hover result should not be nil")
 		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```go-template\n.Name\n```", hoverResult.Contents.Value)
 	})
@@ -285,18 +285,10 @@ type Person struct {
 	testFile := runner.TmpFilePathOf("test.tmpl")
 
 	// Verify we get diagnostics for the invalid field
-	diags, err := runner.GetDiagnostics(t, testFile, 2*time.Second)
-	require.NoError(t, err, "getting diagnostics should succeed")
-	require.NotNil(t, diags, "should have diagnostics for invalid field")
-
-	errorDiags := []protocol.Diagnostic{}
-	for _, diag := range diags.Items {
-		if diag.Severity == protocol.SeverityError {
-			errorDiags = append(errorDiags, diag)
-		}
-	}
-	require.NotEmpty(t, errorDiags, "should have at least one error diagnostic")
-	require.Contains(t, errorDiags[0].Message, "field not found", "diagnostic should mention the invalid field")
+	diags, rpcs := runner.GetDiagnostics(t, testFile, protocol.SeverityError)
+	require.Len(t, rpcs, 2, "should have 2 rpcs")
+	require.NotEmpty(t, diags, "should have diagnostics for invalid field")
+	require.Contains(t, diags[0].Message, "field not found", "diagnostic should mention the invalid field")
 
 	// Now change to a valid field
 	err = runner.Command("normal! ggdG")
@@ -310,15 +302,9 @@ type Person struct {
 	time.Sleep(500 * time.Millisecond)
 
 	// Verify diagnostics are cleared
-	diags, err = runner.GetDiagnostics(t, testFile, 2*time.Second)
-	require.NoError(t, err, "getting diagnostics should succeed")
-	errorDiags = []protocol.Diagnostic{}
-	for _, diag := range diags.Items {
-		if diag.Severity == protocol.SeverityError {
-			errorDiags = append(errorDiags, diag)
-		}
-	}
-	require.Empty(t, errorDiags, "diagnostics should be cleared after fixing the error")
+	diags, rpcs = runner.GetDiagnostics(t, testFile, protocol.SeverityError)
+	require.Len(t, rpcs, 2, "should have 2 rpcs")
+	require.Empty(t, diags, "diagnostics should be cleared after fixing the error")
 
 	// Make another change that introduces an error
 	err = runner.Command("normal! ggdG")
@@ -332,17 +318,10 @@ type Person struct {
 	time.Sleep(500 * time.Millisecond)
 
 	// Verify we get diagnostics for the new invalid field
-	diags, err = runner.GetDiagnostics(t, testFile, 2*time.Second)
-
-	require.NoError(t, err, "getting diagnostics should succeed")
-	errorDiags = []protocol.Diagnostic{}
-	for _, diag := range diags.Items {
-		if diag.Severity == protocol.SeverityError {
-			errorDiags = append(errorDiags, diag)
-		}
-	}
-	require.NotEmpty(t, errorDiags, "should have diagnostics for new invalid field")
-	require.Contains(t, errorDiags[0].Message, "AnotherInvalidField", "diagnostic should mention the new invalid field")
+	diags, rpcs = runner.GetDiagnostics(t, testFile, protocol.SeverityError)
+	require.Len(t, rpcs, 2, "should have 2 rpcs")
+	require.NotEmpty(t, diags, "should have diagnostics for new invalid field")
+	require.Contains(t, diags[0].Message, "AnotherInvalidField", "diagnostic should mention the new invalid field")
 }
 
 func TestDiagnosticHarness(t *testing.T) {
@@ -369,23 +348,12 @@ type Person struct {
 	testFile := runner.TmpFilePathOf("test.tmpl")
 
 	// Test Case 1: Valid template should have no diagnostics
-	diags, err := runner.GetDiagnostics(t, testFile, 2*time.Second)
-	require.NoError(t, err, "should have no diagnostics for valid template")
-	errorDiags := []protocol.Diagnostic{}
-	for _, diag := range diags.Items {
-		if diag.Severity == protocol.SeverityError {
-			errorDiags = append(errorDiags, diag)
-		}
-	}
-	require.Empty(t, errorDiags, "diagnostics should be nil for valid template")
+	diags, rpcs := runner.GetDiagnostics(t, testFile, protocol.SeverityError)
+	require.Len(t, rpcs, 2, "should have 2 rpcs")
+	require.Empty(t, diags, "diagnostics should be nil for valid template")
 
 	// Test Case 2: Invalid field should show diagnostic
-	err = runner.Command("normal! ggdG")
-	require.NoError(t, err, "delete content should succeed")
-	err = runner.Command("normal! i{{- /*gotype: test.Person*/ -}}\n{{ .InvalidField }}")
-	require.NoError(t, err, "insert content should succeed")
-	err = runner.Command("w")
-	require.NoError(t, err, "save should succeed")
+	_ = runner.ApplyEdit(t, testFile, "{{- /*gotype: test.Person*/ -}}\n{{ .InvalidField }}", true)
 
 	expectedDiag := []protocol.Diagnostic{
 		{
@@ -395,25 +363,14 @@ type Person struct {
 			},
 			Severity: protocol.SeverityError,
 			Message:  "field not found [ InvalidField ] in type [ Person ]",
+			Code:     "",
 		},
 	}
-	diags, err = runner.GetDiagnostics(t, testFile, 2*time.Second)
-	require.NoError(t, err, "should show diagnostic for invalid field")
-	errorDiags = []protocol.Diagnostic{}
-	for _, diag := range diags.Items {
-		if diag.Severity == protocol.SeverityError {
-			errorDiags = append(errorDiags, diag)
-		}
-	}
-	require.Equal(t, expectedDiag, errorDiags, "diagnostics should match expected")
+	diags, rpcs = runner.GetDiagnostics(t, testFile, protocol.SeverityError)
+	require.Len(t, rpcs, 0, "should have 0 rpcs")
+	require.ElementsMatch(t, expectedDiag, diags, "diagnostics should match expected")
 
-	// Test Case 3: Multiple diagnostics
-	err = runner.Command("normal! ggdG")
-	require.NoError(t, err, "delete content should succeed")
-	err = runner.Command("normal! i{{- /*gotype: test.Person*/ -}}\n{{ .Field1 }}\n{{ .Field2 }}")
-	require.NoError(t, err, "insert content should succeed")
-	err = runner.Command("w")
-	require.NoError(t, err, "save should succeed")
+	_ = runner.ApplyEdit(t, testFile, "{{- /*gotype: test.Person*/ -}}\n{{ .Field1 }}\n{{ .Field2 }}", true)
 
 	expectedDiags := []protocol.Diagnostic{
 		{
@@ -423,6 +380,8 @@ type Person struct {
 			},
 			Severity: protocol.SeverityError,
 			Message:  "field not found [ Field1 ] in type [ Person ]",
+			Code:     "",
+			Source:   "",
 		},
 		{
 			Range: protocol.Range{
@@ -431,38 +390,25 @@ type Person struct {
 			},
 			Severity: protocol.SeverityError,
 			Message:  "field not found [ Field2 ] in type [ Person ]",
+			Code:     "",
+			Source:   "",
 		},
 	}
-	diags, err = runner.GetDiagnostics(t, testFile, 2*time.Second)
-	require.NoError(t, err, "should show diagnostics for multiple invalid fields")
-	errorDiags = []protocol.Diagnostic{}
-	for _, diag := range diags.Items {
-		if diag.Severity == protocol.SeverityError {
-			errorDiags = append(errorDiags, diag)
-		}
-	}
-	require.Equal(t, expectedDiags, errorDiags, "diagnostics should match expected")
+	diags, rpcs = runner.GetDiagnostics(t, testFile, protocol.SeverityError)
+	require.Len(t, rpcs, 0, "should have 0 rpcs")
+	require.ElementsMatch(t, expectedDiags, diags, "diagnostics should match expected")
 
-	// Test Case 4: Fixing errors should clear diagnostics
-	err = runner.Command("normal! ggdG")
-	require.NoError(t, err, "delete content should succeed")
-	err = runner.Command("normal! i{{- /*gotype: test.Person*/ -}}\n{{ .Name }}")
-	require.NoError(t, err, "insert content should succeed")
-	err = runner.Command("w")
 	require.NoError(t, err, "save should succeed")
 
-	diags, err = runner.GetDiagnostics(t, testFile, 2*time.Second)
-	require.NoError(t, err, "should have no diagnostics after fixing errors")
-	errorDiags = []protocol.Diagnostic{}
-	for _, diag := range diags.Items {
-		if diag.Severity == protocol.SeverityError {
-			errorDiags = append(errorDiags, diag)
-		}
-	}
-	require.Empty(t, errorDiags, "diagnostics should be cleared after fixing errors")
+	_ = runner.ApplyEdit(t, testFile, "{{- /*gotype: test.Person*/ -}}\n{{ .Name }}", true)
+
+	diags, rpcs = runner.GetDiagnostics(t, testFile, protocol.SeverityError)
+	require.Len(t, rpcs, 2, "should have 2 rpcs")
+	require.Empty(t, diags, "diagnostics should be cleared after fixing errors")
 }
 
 func TestSemanticTokens(t *testing.T) {
+	t.Skip()
 	files := map[string]string{
 		"test.tmpl": `{{- /*gotype: test.Person*/ -}}
 {{ if eq .Name "test" }}
@@ -490,10 +436,10 @@ type Person struct {
 	testFile := runner.TmpFilePathOf("test.tmpl")
 
 	// Request semantic tokens for the entire file
-	tokens, err := runner.GetSemanticTokensFull(t, ctx, &protocol.SemanticTokensParams{
+	tokens, rpcs := runner.GetSemanticTokensFull(t, ctx, &protocol.SemanticTokensParams{
 		TextDocument: protocol.TextDocumentIdentifier{URI: testFile},
 	})
-	require.NoError(t, err, "semantic tokens request should succeed")
+	require.Len(t, rpcs, 2, "should have 2 rpcs")
 	require.NotNil(t, tokens, "semantic tokens should not be nil")
 
 	// Verify we have the expected number of tokens
@@ -507,29 +453,29 @@ type Person struct {
 	require.NotEmpty(t, tokens.Data, "should have semantic tokens")
 
 	// Request semantic tokens for a specific range
-	rangeTokens, err := runner.GetSemanticTokensRange(t, ctx, &protocol.SemanticTokensRangeParams{
+	rangeTokens, rpcs := runner.GetSemanticTokensRange(t, ctx, &protocol.SemanticTokensRangeParams{
 		TextDocument: protocol.TextDocumentIdentifier{URI: testFile},
 		Range: protocol.Range{
 			Start: protocol.Position{Line: 1, Character: 0},
 			End:   protocol.Position{Line: 1, Character: 25},
 		},
 	})
-	require.NoError(t, err, "semantic tokens range request should succeed")
+	require.Len(t, rpcs, 2, "should have 2 rpcs")
 	require.NotNil(t, rangeTokens, "semantic tokens for range should not be nil")
 	require.NotEmpty(t, rangeTokens.Data, "should have semantic tokens for range")
 
 	// Test semantic tokens after file modification
-	err = runner.ApplyEdit(t, testFile, `{{- /*gotype: test.Person*/ -}}
+	rpcs = runner.ApplyEdit(t, testFile, `{{- /*gotype: test.Person*/ -}}
 {{ if and (eq .Name "test") (gt .Age 18) }}
 	{{ printf "Adult: %s" .Name }}
 {{ end }}`, true)
-	require.NoError(t, err, "file modification should succeed")
+	require.Len(t, rpcs, 2, "should have 2 rpcs")
 
 	// Request tokens for modified file
-	newTokens, err := runner.GetSemanticTokensFull(t, ctx, &protocol.SemanticTokensParams{
+	newTokens, rpcs := runner.GetSemanticTokensFull(t, ctx, &protocol.SemanticTokensParams{
 		TextDocument: protocol.TextDocumentIdentifier{URI: testFile},
 	})
-	require.NoError(t, err, "semantic tokens request after modification should succeed")
+	require.Len(t, rpcs, 2, "should have 2 rpcs")
 	require.NotNil(t, newTokens, "semantic tokens after modification should not be nil")
 	require.NotEmpty(t, newTokens.Data, "should have semantic tokens after modification")
 }

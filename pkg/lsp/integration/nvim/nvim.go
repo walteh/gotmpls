@@ -146,15 +146,29 @@ type NvimDiagnostic struct {
 }
 
 func (me *NvimDiagnostic) ToProtocolDiagnostic() protocol.Diagnostic {
+	var desc *protocol.CodeDescription = nil
+
+	if dat, ok := me.UserData["lsp"]; ok {
+		if dat, ok := dat.(map[string]any); ok {
+			if href, ok := dat["codeDescription"]; ok {
+				if href, ok := href.(map[string]any); ok {
+					if href, ok := href["href"]; ok {
+						desc = &protocol.CodeDescription{
+							Href: protocol.URI(href.(string)),
+						}
+					}
+				}
+			}
+		}
+	}
+
 	return protocol.Diagnostic{
-		Message:  me.Message,
-		Range:    protocol.Range{Start: protocol.Position{Line: uint32(me.Lnum), Character: uint32(me.Col)}, End: protocol.Position{Line: uint32(me.EndLnum), Character: uint32(me.EndCol)}},
-		Severity: protocol.SeverityError,
-		Source:   me.Source,
-		Code:     me.Code,
-		CodeDescription: &protocol.CodeDescription{
-			Href: me.UserData["lsp"].(map[string]any)["codeDescription"].(map[string]any)["href"].(string),
-		},
+		Message:            me.Message,
+		Range:              protocol.Range{Start: protocol.Position{Line: uint32(me.Lnum), Character: uint32(me.Col)}, End: protocol.Position{Line: uint32(me.EndLnum), Character: uint32(me.EndCol)}},
+		Severity:           protocol.SeverityError,
+		Source:             me.Source,
+		Code:               me.Code,
+		CodeDescription:    desc,
 		RelatedInformation: nil,
 		Tags:               nil,
 		Data:               nil,
@@ -200,6 +214,8 @@ func (s *NvimIntegrationTestRunner) loadNvimDiagnosticsFromBuffer(t *testing.T, 
 		local severity = vim.diagnostic.severity.`+severityToLua(severity)+`
 		return vim.diagnostic.get(`+fmt.Sprintf("%d", buf)+`, {severity = severity})
 	`)
+
+	time.Sleep(1 * time.Second)
 
 	require.NotNil(t, l, "expected non-nil diagnostic response")
 
