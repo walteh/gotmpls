@@ -12,6 +12,33 @@ import (
 	"github.com/walteh/go-tmpl-typer/pkg/debug"
 )
 
+type MultiRPCLogger struct {
+	mu      sync.Mutex
+	loggers []jrpc2.RPCLogger
+}
+
+func (m *MultiRPCLogger) LogRequest(ctx context.Context, req *jrpc2.Request) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, logger := range m.loggers {
+		logger.LogRequest(ctx, req)
+	}
+}
+
+func (m *MultiRPCLogger) LogResponse(ctx context.Context, resp *jrpc2.Response) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, logger := range m.loggers {
+		logger.LogResponse(ctx, resp)
+	}
+}
+
+func (m *MultiRPCLogger) AddLogger(logger jrpc2.RPCLogger) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.loggers = append(m.loggers, logger)
+}
+
 // LogContext is a key type for storing logger in context
 type LogContext struct{}
 

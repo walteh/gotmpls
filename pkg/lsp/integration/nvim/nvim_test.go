@@ -261,3 +261,76 @@ type Person struct {
 		})
 	}
 }
+
+func TestSemanticTokensBasic(t *testing.T) {
+	// Initialize test files with a simple Go file that will have clear semantic tokens
+	files := map[string]string{
+		"main.go": `package main
+
+type Person struct {
+	Name string
+	Age  int
+}
+
+func (p *Person) GetName() string {
+	return p.Name
+}
+`,
+	}
+	ctx := context.Background()
+	si, err := protocol.NewGoplsServerInstance(ctx)
+	require.NoError(t, err, "failed to create gopls server instance")
+
+	// Configure gopls with semantic tokens enabled
+	runner, err := nvim.NewNvimIntegrationTestRunner(t, files, si, &nvim.GoplsConfig{})
+	require.NoError(t, err, "failed to create test runner")
+
+	uri := runner.TmpFilePathOf("main.go")
+
+	// Test full document semantic tokens
+	tokens, err := runner.GetSemanticTokensFull(t, ctx, &protocol.SemanticTokensParams{
+		TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+	})
+	require.NoError(t, err, "semantic tokens request should succeed")
+	require.NotNil(t, tokens, "semantic tokens should not be nil")
+	require.NotEmpty(t, tokens.Data, "should have semantic tokens")
+
+	// Test range semantic tokens (focusing on the GetName method)
+	rangeTokens, err := runner.GetSemanticTokensRange(t, ctx, &protocol.SemanticTokensRangeParams{
+		TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+		Range: protocol.Range{
+			Start: protocol.Position{Line: 7, Character: 0},
+			End:   protocol.Position{Line: 9, Character: 0},
+		},
+	})
+	require.NoError(t, err, "semantic tokens range request should succeed")
+	require.NotNil(t, rangeTokens, "semantic tokens for range should not be nil")
+	require.NotEmpty(t, rangeTokens.Data, "should have semantic tokens for range")
+
+	// Test semantic tokens after modification
+	newContent := `package main
+
+type Person struct {
+	Name    string
+	Age     int
+	Address string
+}
+
+func (p *Person) GetName() string {
+	name := p.Name
+	return name
+}
+`
+	err = runner.ApplyEdit(t, uri, newContent, true)
+	require.NoError(t, err, "file modification should succeed")
+
+	// Get tokens for modified file
+	newTokens, err := runner.GetSemanticTokensFull(t, ctx, &protocol.SemanticTokensParams{
+		TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+	})
+	require.NoError(t, err, "semantic tokens request after modification should succeed")
+	require.NotNil(t, newTokens, "semantic tokens after modification should not be nil")
+	require.NotEmpty(t, newTokens.Data, "should have semantic tokens after modification")
+
+	require.NoError(t, runner.SaveAndQuit(), "cleanup should succeed")
+}

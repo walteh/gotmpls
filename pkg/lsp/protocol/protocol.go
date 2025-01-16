@@ -13,7 +13,6 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
-	"github.com/rs/zerolog"
 	"gitlab.com/tozd/go/errors"
 )
 
@@ -38,23 +37,12 @@ func (c *CallbackServer) Notify(ctx context.Context, method string, params inter
 
 func (c *CallbackServer) Callback(ctx context.Context, method string, params interface{}) (*jrpc2.Response, error) {
 	// zerolog.Ctx(ctx).Debug().
-	// 	Str("method", method).
-	// 	Interface("params", params).
-	// 	Msg("forwarding callback to gopls")
 
 	res, err := c.client.Call(ctx, method, params)
 	if err != nil {
-		// zerolog.Ctx(ctx).Error().
-		// 	Str("method", method).
-		// 	Err(err).
-		// 	Msg("gopls callback error")
+
 		return nil, err
 	}
-
-	// zerolog.Ctx(ctx).Debug().
-	// 	Str("method", method).
-	// 	Str("result", res.ResultString()).
-	// 	Msg("received response from gopls")
 
 	return res, nil
 }
@@ -109,7 +97,7 @@ type ServerInstance struct {
 	ServerOpts    *jrpc2.ServerOptions
 	methods       jrpc2.Assigner
 	backgroundCmd *exec.Cmd
-	// backgroundCmdFlags []string
+	rpcTracker    *RPCTracker // Internal field for tracking RPC messages
 }
 
 func (s *ServerInstance) Server() *jrpc2.Server {
@@ -127,14 +115,33 @@ func (s *ServerInstance) CallbackClient() *CallbackClient {
 }
 
 func (s *ServerInstance) newContext() context.Context {
-	return ApplyClientToZerolog(s.creationCtx, s.callbackClient)
+	ctx := ApplyClientToZerolog(s.creationCtx, s.callbackClient)
+	if s.rpcTracker != nil {
+		ctx = ContextWithRPCTracker(ctx, s.rpcTracker)
+	}
+	return ctx
 }
 
 func (s *ServerInstance) StartAndDetach(reader io.Reader, writer io.WriteCloser) (*jrpc2.Server, error) {
+	multiLogger := &MultiRPCLogger{}
+
+	if s.ServerOpts.RPCLog == nil {
+		s.ServerOpts.RPCLog = multiLogger
+	} else {
+		multiLogger.AddLogger(s.ServerOpts.RPCLog)
+		s.ServerOpts.RPCLog = multiLogger
+	}
+
+	if s.rpcTracker != nil {
+		multiLogger.AddLogger(s.rpcTracker)
+	}
+
 	if s.backgroundCmd != nil {
-		if tl, ok := s.ServerOpts.RPCLog.(*rpcTestLogger); ok {
-			if tl.enableBackgroundCmdToStderr {
-				s.backgroundCmd.Stderr = os.Stderr
+		for _, logger := range multiLogger.loggers {
+			if tl, ok := logger.(*rpcTestLogger); ok {
+				if tl.enableBackgroundCmdToStderr {
+					s.backgroundCmd.Stderr = os.Stderr
+				}
 			}
 		}
 
@@ -168,97 +175,19 @@ func (s *ServerInstance) StartAndWait(reader io.Reader, writer io.WriteCloser) e
 	return server.Wait()
 }
 
-func NewGoplsServerInstance(ctx context.Context) (*ServerInstance, error) {
-
-	ctx = zerolog.New(os.Stderr).With().Str("name", "gopls").Logger().WithContext(ctx)
-
-	cmd := exec.CommandContext(ctx, "gopls", "-v", "-vv", "-rpc.trace")
-	copts := &jrpc2.ClientOptions{
-		// Logger: func(msg string) {
-		// 	zerolog.Ctx(ctx).Info().Msgf("gopls [client]: %s", msg)
-		// },
-	}
-	sopts := &jrpc2.ServerOptions{
-		// Logger: func(msg string) {
-		// 	zerolog.Ctx(ctx).Info().Msgf("gopls [server]: %s", msg)
-		// },
-	}
-
-	inst, err := NewCmdServerInstance(ctx, cmd, copts, sopts)
-	if err != nil {
-		return nil, errors.Errorf("creating server instance: %w", err)
-	}
-
-	return inst, nil
-}
-
-func NewCmdServerInstance(ctx context.Context, cmd *exec.Cmd, copts *jrpc2.ClientOptions, sopts *jrpc2.ServerOptions) (*ServerInstance, error) {
-	out, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, errors.Errorf("getting stdout pipe: %w", err)
-	}
-	in, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, errors.Errorf("getting stdin pipe: %w", err)
-	}
-
-	sopts.AllowPush = true
-
-	type handlerft struct {
-		f func(ctx context.Context, r *jrpc2.Request) (interface{}, error)
-	}
-
-	handlerf := &handlerft{
-		f: func(ctx context.Context, r *jrpc2.Request) (interface{}, error) {
-			return nil, nil
-		},
-	}
-
-	copts.OnCallback = handlerf.f
-
-	client := jrpc2.NewClient(channel.LSP(out, in), copts)
-	cbs := NewCallbackServer(client)
-	instance := NewServerInstance(ctx, cbs, sopts)
-
-	handlerf.f = func(ctx context.Context, r *jrpc2.Request) (interface{}, error) {
-		var params interface{}
-		if err := r.UnmarshalParams(&params); err != nil {
-			return nil, err
-		}
-		return instance.server.Callback(ctx, r.Method(), params)
-	}
-
-	instance.backgroundCmd = cmd
-
-	return instance, nil
-}
-
 func NewServerInstance(ctx context.Context, server Server, opts *jrpc2.ServerOptions) *ServerInstance {
 	methods := buildServerDispatchMap(server)
 	if opts == nil {
 		opts = &jrpc2.ServerOptions{}
 	}
 
-	opts.AllowPush = true
-
 	instance := &ServerInstance{creationCtx: ctx}
 
+	opts.AllowPush = true
 	opts.NewContext = instance.newContext
-
 	instance.ServerOpts = opts
 	instance.methods = methods
 	return instance
-}
-
-func Call(ctx context.Context, client *jrpc2.Client, method string, params interface{}, result interface{}) error {
-	rsp, err := client.Call(ctx, method, params)
-	if err != nil {
-		return err
-	}
-	if result != nil {
-		return rsp.UnmarshalResult(result)
-	}
-	return nil
 }
 
 // Helper functions
@@ -283,7 +212,9 @@ func createHandler[T any, O any](method func(ctx context.Context, params *T) (O,
 		if err := r.UnmarshalParams(&params); err != nil {
 			return nil, newParseError(err)
 		}
+
 		result, err := method(ctx, &params)
+
 		if err != nil {
 			return nil, err
 		}
@@ -298,14 +229,19 @@ func createEmptyResultHandler[T any](method func(ctx context.Context, params *T)
 		if err := r.UnmarshalParams(&params); err != nil {
 			return nil, newParseError(err)
 		}
-		return nil, method(ctx, &params)
+
+		err := method(ctx, &params)
+
+		return nil, err
 	})
 }
 
 func createEmptyParamsHandler[T any](method func(ctx context.Context) (T, error)) handler.Func {
 	return handler.New(func(ctx context.Context, r *jrpc2.Request) (interface{}, error) {
 		ctx = ApplyRequestToZerolog(ctx, r)
+
 		result, err := method(ctx)
+
 		if err != nil {
 			return nil, err
 		}
@@ -316,7 +252,10 @@ func createEmptyParamsHandler[T any](method func(ctx context.Context) (T, error)
 func createEmptyHandler(method func(ctx context.Context) error) handler.Func {
 	return handler.New(func(ctx context.Context, r *jrpc2.Request) (interface{}, error) {
 		ctx = ApplyRequestToZerolog(ctx, r)
-		return nil, method(ctx)
+
+		err := method(ctx)
+
+		return nil, err
 	})
 }
 
@@ -330,26 +269,23 @@ func createCallback[I any, O any](ctx context.Context, client Callbacker, method
 	if err != nil {
 		return err
 	}
+
 	if result != nil {
-		return res.UnmarshalResult(result)
+		err = res.UnmarshalResult(result)
+		return err
 	}
+
 	return nil
 }
 
 func createEmptyResultCallback[I any](ctx context.Context, client Callbacker, method string, params *I) error {
 	_, err := client.Callback(ctx, method, params)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func createEmptyCallback(ctx context.Context, client Callbacker, method string) error {
 	_, err := client.Callback(ctx, method, nil)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func createEmptyParamsCallback[O any](ctx context.Context, client Callbacker, method string, result *O) error {
@@ -357,16 +293,31 @@ func createEmptyParamsCallback[O any](ctx context.Context, client Callbacker, me
 	if err != nil {
 		return err
 	}
+
 	if result != nil {
-		return res.UnmarshalResult(result)
+		err = res.UnmarshalResult(result)
+		return err
 	}
+
 	return nil
 }
 
 func createNotify[I any](ctx context.Context, client Callbacker, method string, params *I) error {
-	return client.Notify(ctx, method, params)
+	err := client.Notify(ctx, method, params)
+	return err
 }
 
 func createEmptyNotify(ctx context.Context, client Callbacker, method string) error {
-	return client.Notify(ctx, method, nil)
+	err := client.Notify(ctx, method, nil)
+	return err
+}
+
+// GetRPCTracker returns the RPCTracker instance for testing purposes
+func (s *ServerInstance) GetRPCTracker() *RPCTracker {
+	return s.rpcTracker
+}
+
+// SetRPCTracker sets the RPCTracker instance for testing purposes
+func (s *ServerInstance) SetRPCTracker(tracker *RPCTracker) {
+	s.rpcTracker = tracker
 }

@@ -461,3 +461,75 @@ type Person struct {
 	}
 	require.Empty(t, errorDiags, "diagnostics should be cleared after fixing errors")
 }
+
+func TestSemanticTokens(t *testing.T) {
+	files := map[string]string{
+		"test.tmpl": `{{- /*gotype: test.Person*/ -}}
+{{ if eq .Name "test" }}
+	{{ printf "Hello, %s" .Name }}
+{{ end }}`,
+		"go.mod": "module test",
+		"test.go": `
+package test
+import _ "embed"
+
+//go:embed test.tmpl
+var TestTemplate string
+type Person struct {
+	Name string
+}`,
+	}
+
+	ctx := context.Background()
+	server := lsp.NewServer(ctx)
+	si := server.BuildServerInstance(ctx, nil)
+
+	runner, err := nvim.NewNvimIntegrationTestRunner(t, files, si, &nvim.GoTemplateConfig{})
+	require.NoError(t, err, "setup should succeed")
+
+	testFile := runner.TmpFilePathOf("test.tmpl")
+
+	// Request semantic tokens for the entire file
+	tokens, err := runner.GetSemanticTokensFull(t, ctx, &protocol.SemanticTokensParams{
+		TextDocument: protocol.TextDocumentIdentifier{URI: testFile},
+	})
+	require.NoError(t, err, "semantic tokens request should succeed")
+	require.NotNil(t, tokens, "semantic tokens should not be nil")
+
+	// Verify we have the expected number of tokens
+	// The template should have tokens for:
+	// - delimiters ({{, }}, {{-, -}})
+	// - keywords (if, end)
+	// - operators (eq)
+	// - variables (.Name)
+	// - functions (printf)
+	// - strings ("test", "Hello, %s")
+	require.NotEmpty(t, tokens.Data, "should have semantic tokens")
+
+	// Request semantic tokens for a specific range
+	rangeTokens, err := runner.GetSemanticTokensRange(t, ctx, &protocol.SemanticTokensRangeParams{
+		TextDocument: protocol.TextDocumentIdentifier{URI: testFile},
+		Range: protocol.Range{
+			Start: protocol.Position{Line: 1, Character: 0},
+			End:   protocol.Position{Line: 1, Character: 25},
+		},
+	})
+	require.NoError(t, err, "semantic tokens range request should succeed")
+	require.NotNil(t, rangeTokens, "semantic tokens for range should not be nil")
+	require.NotEmpty(t, rangeTokens.Data, "should have semantic tokens for range")
+
+	// Test semantic tokens after file modification
+	err = runner.ApplyEdit(t, testFile, `{{- /*gotype: test.Person*/ -}}
+{{ if and (eq .Name "test") (gt .Age 18) }}
+	{{ printf "Adult: %s" .Name }}
+{{ end }}`, true)
+	require.NoError(t, err, "file modification should succeed")
+
+	// Request tokens for modified file
+	newTokens, err := runner.GetSemanticTokensFull(t, ctx, &protocol.SemanticTokensParams{
+		TextDocument: protocol.TextDocumentIdentifier{URI: testFile},
+	})
+	require.NoError(t, err, "semantic tokens request after modification should succeed")
+	require.NotNil(t, newTokens, "semantic tokens after modification should not be nil")
+	require.NotEmpty(t, newTokens.Data, "should have semantic tokens after modification")
+}
