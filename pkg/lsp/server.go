@@ -561,7 +561,9 @@ func (s *Server) SemanticTokensFull(ctx context.Context, params *protocol.Semant
 		return nil, errors.Errorf("document not found: %s", params.TextDocument.URI)
 	}
 
-	return s.semanticProvider.GetTokensForFile(ctx, string(params.TextDocument.URI), doc.Content)
+	uri := normalizeURI(string(params.TextDocument.URI))
+
+	return s.semanticProvider.GetTokensForFile(ctx, uri, doc.Content)
 }
 
 func (s *Server) SemanticTokensFullDelta(ctx context.Context, params *protocol.SemanticTokensDeltaParams) (any, error) {
@@ -578,7 +580,9 @@ func (s *Server) SemanticTokensRange(ctx context.Context, params *protocol.Seman
 		return nil, errors.Errorf("document not found: %s", params.TextDocument.URI)
 	}
 
-	return s.semanticProvider.GetTokensForRange(ctx, string(params.TextDocument.URI), doc.Content, params.Range)
+	uri := normalizeURI(string(params.TextDocument.URI))
+
+	return s.semanticProvider.GetTokensForRange(ctx, uri, doc.Content, params.Range)
 }
 
 func (s *Server) SignatureHelp(ctx context.Context, params *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error) {

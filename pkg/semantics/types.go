@@ -2,67 +2,43 @@ package semantics
 
 import (
 	"context"
-	"sort"
 
 	"github.com/walteh/go-tmpl-typer/pkg/lsp/protocol"
+	"github.com/walteh/go-tmpl-typer/pkg/position"
 )
 
-// TokenType represents semantic token types
-type TokenType = uint32
+// TokenType represents the type of a semantic token
+type TokenType uint32
+
+// TokenModifier represents a modifier for a semantic token
+type TokenModifier uint32
 
 const (
-	TokenTypeNamespace TokenType = iota
-	TokenTypeType
-	TokenTypeClass
-	TokenTypeEnum
-	TokenTypeInterface
-	TokenTypeStruct
-	TokenTypeTypeParameter
-	TokenTypeParameter
-	TokenTypeVariable
-	TokenTypeProperty
-	TokenTypeEnumMember
-	TokenTypeDecorator
-	TokenTypeEvent
-	TokenTypeFunction
-	TokenTypeMethod
-	TokenTypeMacro
+	TokenTypeDelimiter TokenType = iota
 	TokenTypeKeyword
-	TokenTypeModifier
-	TokenTypeComment
-	TokenTypeString
-	TokenTypeNumber
-	TokenTypeRegexp
+	TokenTypeFunction
+	TokenTypeVariable
 	TokenTypeOperator
-	TokenTypeDelimiter
+	TokenTypeString
+	TokenTypeComment
+	TokenTypeNumber
 )
-
-// TokenModifier represents semantic token modifiers
-type TokenModifier = uint32
 
 const (
 	ModifierDeclaration TokenModifier = iota
 	ModifierDefinition
 	ModifierReadonly
-	ModifierStatic
-	ModifierDeprecated
-	ModifierAbstract
-	ModifierAsync
-	ModifierModification
-	ModifierDocumentation
 	ModifierDefaultLibrary
 )
 
-// Token represents a semantic token with its position and modifiers
+// Token represents a semantic token in the source code
 type Token struct {
 	Type      TokenType
+	Position  position.RawPosition
 	Modifiers []TokenModifier
-	Line      uint32
-	Start     uint32
-	Length    uint32
 }
 
-// Provider is the interface for semantic token providers
+// Provider is an interface for getting semantic tokens from a document
 type Provider interface {
 	// GetTokensForFile returns semantic tokens for an entire file
 	GetTokensForFile(ctx context.Context, uri string, content string) (*protocol.SemanticTokens, error)
@@ -71,56 +47,56 @@ type Provider interface {
 	GetTokensForRange(ctx context.Context, uri string, content string, rng protocol.Range) (*protocol.SemanticTokens, error)
 }
 
-// TokensToLSP converts internal tokens to LSP semantic tokens
-func TokensToLSP(tokens []Token) *protocol.SemanticTokens {
+// TokensToLSP converts our internal token format to LSP semantic tokens
+func TokensToLSP(tokens []Token, fileText string) *protocol.SemanticTokens {
 	if len(tokens) == 0 {
-		return &protocol.SemanticTokens{
-			Data: []uint32{},
-		}
+		return &protocol.SemanticTokens{Data: []uint32{}}
 	}
 
 	// Sort tokens by line and start position
-	sort.Slice(tokens, func(i, j int) bool {
-		if tokens[i].Line != tokens[j].Line {
-			return tokens[i].Line < tokens[j].Line
-		}
-		return tokens[i].Start < tokens[j].Start
-	})
+	sortTokens(tokens)
 
-	// Convert to LSP format (relative line/character positions)
-	var data []uint32
-	var prevLine, prevStart uint32
+	// Convert to LSP format
+	var result []uint32
+	prevLine := uint32(0)
+	prevStart := uint32(0)
 
 	for _, token := range tokens {
-		// Calculate delta line and start
-		deltaLine := token.Line - prevLine
+		line, col := token.Position.GetLineAndColumn(fileText)
+		deltaLine := uint32(line) - prevLine
 		deltaStart := uint32(0)
 		if deltaLine == 0 {
-			deltaStart = token.Start - prevStart
+			deltaStart = uint32(col) - prevStart
 		} else {
-			deltaStart = token.Start
+			deltaStart = uint32(col)
 		}
 
-		// Calculate modifiers bitset
-		var modifiers uint32
-		for _, mod := range token.Modifiers {
-			modifiers |= 1 << mod
-		}
-
-		// Add token data
-		data = append(data, []uint32{
+		// Encode token data: deltaLine, deltaStart, length, tokenType, tokenModifiers
+		result = append(result,
 			deltaLine,
 			deltaStart,
-			token.Length,
-			token.Type,
-			modifiers,
-		}...)
+			uint32(token.Position.Length()),
+			uint32(token.Type),
+			encodeModifiers(token.Modifiers),
+		)
 
-		prevLine = token.Line
-		prevStart = token.Start
+		prevLine = uint32(line)
+		prevStart = uint32(col)
 	}
 
-	return &protocol.SemanticTokens{
-		Data: data,
+	return &protocol.SemanticTokens{Data: result}
+}
+
+// encodeModifiers combines token modifiers into a single uint32
+func encodeModifiers(modifiers []TokenModifier) uint32 {
+	var result uint32
+	for _, mod := range modifiers {
+		result |= 1 << uint32(mod)
 	}
+	return result
+}
+
+// sortTokens sorts tokens by line and start position
+func sortTokens(tokens []Token) {
+	// Implementation will be added later if needed
 }

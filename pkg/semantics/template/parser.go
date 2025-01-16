@@ -2,9 +2,9 @@ package template
 
 import (
 	"context"
-	"strings"
 
 	"github.com/walteh/go-tmpl-typer/pkg/lsp/protocol"
+	"github.com/walteh/go-tmpl-typer/pkg/position"
 	"github.com/walteh/go-tmpl-typer/pkg/semantics"
 )
 
@@ -19,7 +19,7 @@ func NewTemplateTokenParser() *TemplateTokenParser {
 // GetTokensForFile returns semantic tokens for an entire file
 func (p *TemplateTokenParser) GetTokensForFile(ctx context.Context, uri string, content string) (*protocol.SemanticTokens, error) {
 	tokens := p.Parse(content)
-	return semantics.TokensToLSP(tokens), nil
+	return semantics.TokensToLSP(tokens, content), nil
 }
 
 // GetTokensForRange returns semantic tokens for a specific range in a file
@@ -31,151 +31,212 @@ func (p *TemplateTokenParser) GetTokensForRange(ctx context.Context, uri string,
 
 // Parse parses the template content and returns semantic tokens
 func (p *TemplateTokenParser) Parse(content string) []semantics.Token {
+	ast, err := Parser.ParseString("", content)
+	if err != nil {
+		return nil
+	}
+
 	var tokens []semantics.Token
-	lines := strings.Split(content, "\n")
+	offset := 0
 
-	for lineNum, line := range lines {
-		pos := 0
-		for {
-			// Find opening delimiter
-			openIdx := strings.Index(line[pos:], "{{")
-			if openIdx == -1 {
-				break
-			}
-			openIdx += pos
-
-			// Add delimiter token
+	for _, node := range ast.Nodes {
+		if node.Action != nil {
+			// Opening delimiter
 			tokens = append(tokens, semantics.Token{
-				Type:   semantics.TokenTypeDelimiter,
-				Line:   uint32(lineNum),
-				Start:  uint32(openIdx),
-				Length: 2,
+				Type:     semantics.TokenTypeDelimiter,
+				Position: position.RawPosition{Offset: offset, Text: node.Action.OpenDelim},
 			})
+			offset += len(node.Action.OpenDelim) + 1 // +1 for space
 
-			// Find closing delimiter
-			closeIdx := strings.Index(line[openIdx:], "}}")
-			if closeIdx == -1 {
-				break
+			// Process pipeline
+			pipelineTokens := p.convertPipelineToTokens(node.Action.Pipeline, offset)
+			tokens = append(tokens, pipelineTokens...)
+
+			// Calculate pipeline length by summing up all command and argument lengths
+			pipelineLen := 0
+			pipeline := node.Action.Pipeline
+			for pipeline != nil {
+				pipelineLen += len(pipeline.Cmd.Identifier)
+				for _, arg := range pipeline.Cmd.Args {
+					if arg.Number != "" {
+						pipelineLen += len(arg.Number) + 1 // +1 for space
+					} else if arg.String != "" {
+						pipelineLen += len(arg.String) + 1
+					} else if arg.Variable != "" {
+						pipelineLen += len(arg.Variable) + 1
+					}
+				}
+				if pipeline.Next != nil {
+					pipelineLen += 3 // Space + | + Space
+				}
+				pipeline = pipeline.Next
 			}
-			closeIdx += openIdx
+			offset += pipelineLen
 
-			// Parse content between delimiters
-			if closeIdx > openIdx+2 {
-				blockTokens := p.parseTemplateBlock(line[openIdx+2:closeIdx], uint32(lineNum), uint32(openIdx+2))
-				tokens = append(tokens, blockTokens...)
-			}
-
-			// Add closing delimiter token
+			// Closing delimiter (add space before)
+			offset += 1 // Space before closing delimiter
 			tokens = append(tokens, semantics.Token{
-				Type:   semantics.TokenTypeDelimiter,
-				Line:   uint32(lineNum),
-				Start:  uint32(closeIdx),
-				Length: 2,
+				Type:     semantics.TokenTypeDelimiter,
+				Position: position.RawPosition{Offset: offset, Text: node.Action.CloseDelim},
 			})
+			offset += len(node.Action.CloseDelim)
+		} else if node.Comment != nil {
+			// Opening delimiter
+			tokens = append(tokens, semantics.Token{
+				Type:     semantics.TokenTypeDelimiter,
+				Position: position.RawPosition{Offset: offset, Text: node.Comment.OpenDelim},
+			})
+			offset += len(node.Comment.OpenDelim) + 1 // +1 for space
 
-			pos = closeIdx + 2
+			// Comment text
+			tokens = append(tokens, semantics.Token{
+				Type:     semantics.TokenTypeComment,
+				Position: position.RawPosition{Offset: offset, Text: node.Comment.Content},
+			})
+			offset += len(node.Comment.Content) + 1 // +1 for space
+
+			// Closing delimiter
+			tokens = append(tokens, semantics.Token{
+				Type:     semantics.TokenTypeDelimiter,
+				Position: position.RawPosition{Offset: offset, Text: node.Comment.CloseDelim},
+			})
+			offset += len(node.Comment.CloseDelim)
 		}
 	}
 
 	return tokens
 }
 
-var templateKeywords = map[string]bool{
-	"if":       true,
-	"else":     true,
-	"range":    true,
-	"with":     true,
-	"end":      true,
-	"define":   true,
-	"block":    true,
-	"template": true,
+func (p *TemplateTokenParser) convertPipelineToTokens(pipeline *Pipeline, offset int) []semantics.Token {
+	var tokens []semantics.Token
+	for pipeline != nil {
+		cmd := pipeline.Cmd
+		cmdStart := offset
+
+		// Check for operators first (including eq, ne, etc)
+		if isOperator(cmd.Identifier) {
+			tokens = append(tokens, semantics.Token{
+				Type:     semantics.TokenTypeOperator,
+				Position: position.RawPosition{Offset: cmdStart, Text: cmd.Identifier},
+			})
+			offset += len(cmd.Identifier) + 1
+		} else if isKeyword(cmd.Identifier) {
+			tokens = append(tokens, semantics.Token{
+				Type:      semantics.TokenTypeKeyword,
+				Position:  position.RawPosition{Offset: cmdStart, Text: cmd.Identifier},
+				Modifiers: []semantics.TokenModifier{semantics.ModifierReadonly},
+			})
+			offset += len(cmd.Identifier) + 1
+		} else if isBuiltinFunc(cmd.Identifier) {
+			tokens = append(tokens, semantics.Token{
+				Type:      semantics.TokenTypeFunction,
+				Position:  position.RawPosition{Offset: cmdStart, Text: cmd.Identifier},
+				Modifiers: []semantics.TokenModifier{semantics.ModifierReadonly, semantics.ModifierDefaultLibrary},
+			})
+			offset += len(cmd.Identifier) + 1
+		} else {
+			// Variable or function call
+			tokens = append(tokens, semantics.Token{
+				Type:     semantics.TokenTypeVariable,
+				Position: position.RawPosition{Offset: cmdStart, Text: cmd.Identifier},
+			})
+			offset += len(cmd.Identifier) + 1
+		}
+
+		// Process arguments
+		for _, arg := range cmd.Args {
+			if arg.Number != "" {
+				tokens = append(tokens, semantics.Token{
+					Type:      semantics.TokenTypeNumber,
+					Position:  position.RawPosition{Offset: offset, Text: arg.Number},
+					Modifiers: []semantics.TokenModifier{semantics.ModifierReadonly},
+				})
+				offset += len(arg.Number) + 1
+			} else if arg.String != "" {
+				tokens = append(tokens, semantics.Token{
+					Type:     semantics.TokenTypeString,
+					Position: position.RawPosition{Offset: offset, Text: arg.String},
+				})
+				offset += len(arg.String) + 1
+			} else if arg.Variable != "" {
+				// Check if the variable is actually an operator or built-in function
+				if isOperator(arg.Variable) {
+					tokens = append(tokens, semantics.Token{
+						Type:     semantics.TokenTypeOperator,
+						Position: position.RawPosition{Offset: offset, Text: arg.Variable},
+					})
+				} else if isBuiltinFunc(arg.Variable) {
+					tokens = append(tokens, semantics.Token{
+						Type:      semantics.TokenTypeFunction,
+						Position:  position.RawPosition{Offset: offset, Text: arg.Variable},
+						Modifiers: []semantics.TokenModifier{semantics.ModifierReadonly, semantics.ModifierDefaultLibrary},
+					})
+				} else {
+					tokens = append(tokens, semantics.Token{
+						Type:     semantics.TokenTypeVariable,
+						Position: position.RawPosition{Offset: offset, Text: arg.Variable},
+					})
+				}
+				offset += len(arg.Variable) + 1
+			}
+		}
+
+		// Process pipe operator if there's a next command
+		if pipeline.Next != nil {
+			tokens = append(tokens, semantics.Token{
+				Type:     semantics.TokenTypeOperator,
+				Position: position.RawPosition{Offset: offset, Text: "|"},
+			})
+			offset += 3 // Space + | + Space
+		}
+
+		pipeline = pipeline.Next
+	}
+	return tokens
 }
 
-var builtinFunctions = map[string]bool{
+var operators = map[string]bool{
+	"|":   true,
+	":=":  true,
+	"eq":  true,
+	"ne":  true,
+	"lt":  true,
+	"le":  true,
+	"gt":  true,
+	"ge":  true,
+	"and": true,
+	"or":  true,
+	"not": true,
+}
+
+func isOperator(s string) bool {
+	return operators[s]
+}
+
+var keywords = map[string]bool{
+	"if":     true,
+	"else":   true,
+	"range":  true,
+	"with":   true,
+	"define": true,
+	"block":  true,
+	"end":    true,
+}
+
+func isKeyword(s string) bool {
+	return keywords[s]
+}
+
+var builtinFuncs = map[string]bool{
 	"len":      true,
-	"print":    true,
 	"printf":   true,
+	"print":    true,
 	"println":  true,
 	"html":     true,
 	"js":       true,
 	"urlquery": true,
 }
 
-func (p *TemplateTokenParser) parseTemplateBlock(content string, lineNum uint32, startPos uint32) []semantics.Token {
-	var tokens []semantics.Token
-
-	// Split content into words
-	words := strings.Fields(content)
-	currentPos := startPos
-
-	for i, word := range words {
-		if i == 0 && templateKeywords[word] {
-			// Keywords are readonly
-			tokens = append(tokens, semantics.Token{
-				Type:      semantics.TokenTypeKeyword,
-				Line:      lineNum,
-				Start:     currentPos,
-				Length:    uint32(len(word)),
-				Modifiers: []semantics.TokenModifier{semantics.ModifierReadonly},
-			})
-		} else if i == 0 && builtinFunctions[word] {
-			// Builtin functions are readonly
-			tokens = append(tokens, semantics.Token{
-				Type:      semantics.TokenTypeFunction,
-				Line:      lineNum,
-				Start:     currentPos,
-				Length:    uint32(len(word)),
-				Modifiers: []semantics.TokenModifier{semantics.ModifierReadonly, semantics.ModifierDefaultLibrary},
-			})
-		} else if strings.HasPrefix(word, "$") {
-			// Variable declarations and references
-			if i > 0 && words[i-1] == ":=" {
-				tokens = append(tokens, semantics.Token{
-					Type:      semantics.TokenTypeVariable,
-					Line:      lineNum,
-					Start:     currentPos,
-					Length:    uint32(len(word)),
-					Modifiers: []semantics.TokenModifier{semantics.ModifierDeclaration},
-				})
-			} else {
-				tokens = append(tokens, semantics.Token{
-					Type:      semantics.TokenTypeVariable,
-					Line:      lineNum,
-					Start:     currentPos,
-					Length:    uint32(len(word)),
-					Modifiers: []semantics.TokenModifier{semantics.ModifierDefinition},
-				})
-			}
-		} else if strings.HasPrefix(word, ".") {
-			// Field access
-			tokens = append(tokens, semantics.Token{
-				Type:   semantics.TokenTypeVariable,
-				Line:   lineNum,
-				Start:  currentPos,
-				Length: uint32(len(word)),
-			})
-		} else if word == ":=" {
-			// Assignment operator is readonly
-			tokens = append(tokens, semantics.Token{
-				Type:      semantics.TokenTypeOperator,
-				Line:      lineNum,
-				Start:     currentPos,
-				Length:    uint32(len(word)),
-				Modifiers: []semantics.TokenModifier{semantics.ModifierReadonly},
-			})
-		} else if strings.HasPrefix(word, `"`) && strings.HasSuffix(word, `"`) {
-			// String literals
-			tokens = append(tokens, semantics.Token{
-				Type:      semantics.TokenTypeString,
-				Line:      lineNum,
-				Start:     currentPos,
-				Length:    uint32(len(word)),
-				Modifiers: []semantics.TokenModifier{semantics.ModifierReadonly},
-			})
-		}
-
-		currentPos += uint32(len(word) + 1) // +1 for space
-	}
-
-	return tokens
+func isBuiltinFunc(s string) bool {
+	return builtinFuncs[s]
 }
