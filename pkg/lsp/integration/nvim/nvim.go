@@ -12,9 +12,12 @@ import (
 
 	"github.com/neovim/go-client/nvim"
 	"github.com/stretchr/testify/require"
+	"github.com/walteh/go-tmpl-typer/pkg/lsp/integration"
 	"github.com/walteh/go-tmpl-typer/pkg/lsp/protocol"
 	"gitlab.com/tozd/go/errors"
 )
+
+var _ integration.IntegrationTestRunner = &NvimIntegrationTestRunner{}
 
 // Helper function to convert [][]byte to []string
 func bytesSliceToStringSlice(b [][]byte) []string {
@@ -33,31 +36,77 @@ func lastN[T any](vals []T, n int) []T {
 }
 
 // Hover gets hover information at the current cursor position
-func (s *NvimIntegrationTestRunner) Hover(t *testing.T, ctx context.Context, request *protocol.HoverParams) (*protocol.Hover, error) {
+func (s *NvimIntegrationTestRunner) Hover(t *testing.T, ctx context.Context, request *protocol.HoverParams) (*protocol.Hover, []protocol.RPCMessage) {
 	t.Helper()
-	_, cleanup, fileOpenTime := s.MustOpenFileWithLock(t, request.TextDocument.URI)
+	buf, cleanup, fileOpenTime := s.MustOpenFileWithLock(t, request.TextDocument.URI)
 	defer cleanup()
 
-	t.Logf("🎯 Moving cursor to position: %v", request.Position)
 	// Move cursor to the specified position
 	win, err := s.nvimInstance.CurrentWindow()
 	require.NoError(t, err, "failed to get current window: %w", err)
 
+	t.Logf("🎯 Moving cursor to position [ %v ] in window [ %v ]", request.Position, win)
+
+	// Move cursor to the desired position
 	err = s.nvimInstance.SetWindowCursor(win, [2]int{int(request.Position.Line) + 1, int(request.Position.Character)})
 	require.NoError(t, err, "failed to set cursor position: %w", err)
 
-	// Trigger hover directly using LSP
-	s.MustNvimCommand(t, "lua vim.lsp.buf.hover()")
+	// Log cursor position
+	pos, err := s.nvimInstance.WindowCursor(win)
+	require.NoError(t, err, "failed to get cursor position: %w", err)
+	t.Logf("Cursor is at position: %v", pos)
 
-	time.Sleep(1 * time.Second)
+	// i am not sure how to get a result frfom ths otherwise, its difficult to get the hover content directly from the
+	// window that is supposed to be open. so this works for now.
+	resp := s.MustExecLua(t, fmt.Sprintf(`-- Save the previous hover handler
+local prev_handler = vim.lsp.handlers["textDocument/hover"]
 
-	res, err := RequireOneRPCResponse[protocol.Hover](t, s, "textDocument/hover", fileOpenTime)
-	require.Nil(t, err, "expected no error in hover response")
-	require.NotNil(t, res, "expected non-nil hover response")
+-- Set the custom hover handler
+vim.lsp.handlers["textDocument/hover"] = function(err, result, ctx, config)
+  if err then
+    print("Hover error:", vim.inspect(err))
+    _G.last_hover_content = nil
+    return
+  end
+  if not (result and result.contents) then
+    print("No hover content available")
+    _G.last_hover_content = nil
+    return
+  end
 
-	s.t.Logf("Hover response: %v", res)
+  -- Save the content to a global variable
+  _G.last_hover_content = result
+  -- Call the original handler
+  prev_handler(err, result, ctx, config)
+end
 
-	return res, nil
+-- Trigger hover
+vim.lsp.buf.hover()
+
+-- Wait for hover response
+local attempts = 20
+while not _G.last_hover_content and attempts > 0 do
+  vim.wait(100)
+  attempts = attempts - 1
+end
+
+-- Reset hover handler %s
+vim.lsp.handlers["textDocument/hover"] = prev_handler
+
+-- Return the hover content
+return _G.last_hover_content`, buf))
+
+	rpcs := s.rpcTracker.MessagesSinceLike(fileOpenTime, func(msg protocol.RPCMessage) bool {
+		return msg.Method == "textDocument/hover"
+	})
+
+	by, err := json.Marshal(resp)
+	require.NoError(t, err, "failed to marshal hover response")
+
+	var hover protocol.Hover
+	require.NoError(t, json.Unmarshal(by, &hover), "failed to unmarshal hover response")
+
+	return &hover, rpcs
 
 }
 

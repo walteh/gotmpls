@@ -44,8 +44,8 @@ func (p *Person) GetName() string {
 		},
 	}
 	// Test hover functionality
-	hover, err := runner.Hover(t, ctx, hoverp)
-	require.NoError(t, err, "hover request should succeed")
+	hover, rpcs := runner.Hover(t, ctx, hoverp)
+	require.Len(t, rpcs, 2, "should have 2 rpcs")
 	assert.NotNil(t, hover, "hover response should not be nil")
 
 	// {"range":{"end":{"line":7,"character":24},"start":{"line":7,"character":17}},"contents":{"kind":"markdown","value":"```go\nfunc (p *Person) GetName() string\n```\n\n---\n\n[`(main.Person).GetName` on pkg.go.dev](https:\/\/pkg.go.dev\/command-line-arguments\/private\/var\/folders\/8j\/scdcg3yx02dc5pdf9g6188dm0000gn\/T\/nvim-test-1205161790\/main.go#Person.GetName)"}}
@@ -254,8 +254,8 @@ type Person struct {
 				},
 			}
 
-			hover, err := runner.Hover(t, ctx, hoverp)
-			require.NoError(t, err, "hover request should succeed")
+			hover, rpcs := runner.Hover(t, ctx, hoverp)
+			require.Len(t, rpcs, 2, "should have 2 rpcs")
 
 			tt.want.Contents.Value = strings.ReplaceAll(tt.want.Contents.Value, "{{.TEMP_FILE_NAME}}", uri.Path())
 

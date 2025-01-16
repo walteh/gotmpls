@@ -18,7 +18,7 @@ configs.go_template = {
                 print("Setting root dir to:", path)
                 return path
             end,
-            on_attach = on_attach,
+           -- on_attach = on_attach,
             init_options = {
                 usePlaceholders = true,
                 completeUnimported = true,
@@ -39,11 +39,12 @@ func (c *GoTemplateConfig) DefaultSetup() string {
 	return `if lspconfig.go_template then
     print("Setting up go_template server")
     lspconfig.go_template.setup {
-        on_attach = function(client, bufnr)
-            print("go_template server attached to buffer", bufnr)
-            print("Client capabilities:", vim.inspect(client.server_capabilities))
-            on_attach(client, bufnr)
-        end,
+--        on_attach = function(client, bufnr)
+--            print("go_template server attached to buffer", bufnr)
+--            print("Client capabilities:", vim.inspect(client.server_capabilities))
+--			vim.api.nvim_buf_set_keymap(bufnr, 'n', 'K', '<cmd>lua vim.lsp.buf.hover()<CR>', { noremap = true, silent = false })
+--            on_attach(client, bufnr)
+--        end,
         flags = {
             debounce_text_changes = 0,  -- Disable debouncing
             allow_incremental_sync = false,  -- Disable incremental sync
@@ -65,7 +66,7 @@ func (c *GoplsConfig) DefaultConfig(socketPath string) string {
 		default_config = {
 			cmd = { 'go', 'run', 'github.com/walteh/go-tmpl-typer/cmd/stdio-proxy', '` + socketPath + `' },
 			filetypes = { 'go', 'gomod', 'gowork', 'gotmpl' },
-			on_attach = on_attach,
+-- 			on_attach = on_attach,
             root_dir = function(fname)
                 local path = vim.fn.getcwd()
                 print("Setting root dir to:", path)
@@ -85,11 +86,12 @@ func (c *GoplsConfig) DefaultSetup() string {
 	if lspconfig.gopls then
 		print("Setting up gopls server")
 		lspconfig.gopls.setup {
-			on_attach = function(client, bufnr)
-				print("gopls server attached to buffer", bufnr)
-				print("Client capabilities:", vim.inspect(client.server_capabilities))
-				on_attach(client, bufnr)
-			end,
+--			on_attach = function(client, bufnr)
+--				print("gopls server attached to buffer", bufnr)
+--				print("Client capabilities:", vim.inspect(client.server_capabilities))
+--				vim.api.nvim_buf_set_keymap(bufnr, 'n', 'K', '<cmd>lua vim.lsp.buf.hover()<CR>', { noremap = true, silent = false })
+--				on_attach(client, bufnr)
+--			end,
 		}
 		print("gopls server setup complete")
 	else

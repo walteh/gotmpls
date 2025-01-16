@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 	nvimlspconfig "github.com/walteh/go-tmpl-typer/gen/git-repo-tarballs/nvim-lspconfig"
 	"github.com/walteh/go-tmpl-typer/pkg/archive"
-	"github.com/walteh/go-tmpl-typer/pkg/lsp/integration"
 	"github.com/walteh/go-tmpl-typer/pkg/lsp/protocol"
 	"gitlab.com/tozd/go/errors"
 )
@@ -39,8 +38,6 @@ type NvimIntegrationTestRunner struct {
 	mu         sync.Mutex // Protects file operations
 	rpcTracker *protocol.RPCTracker
 }
-
-var _ integration.IntegrationTestRunner = &NvimIntegrationTestRunner{}
 
 func NewNvimIntegrationTestRunner(t *testing.T, files map[string]string, si *protocol.ServerInstance, config NeovimConfig) (*NvimIntegrationTestRunner, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -278,17 +275,17 @@ capabilities.textDocument.hover = {
 -- capabilities.textDocument.semanticTokens = nil
 
 -- Use an on_attach function to only map the following keys
-local on_attach = function(client, bufnr)
-    print("LSP client attached:", vim.inspect(client))
-    print("Buffer:", bufnr)
-    print("Client capabilities:", vim.inspect(client.server_capabilities))
-    
-    -- Disable semantic tokens
-    -- client.server_capabilities.semanticTokensProvider = nil
-
-    -- Set buffer options
-    vim.api.nvim_buf_set_option(bufnr, 'omnifunc', 'v:lua.vim.lsp.omnifunc')
-end
+-- local on_attach = function(client, bufnr)
+--     print("LSP client attached:", vim.inspect(client))
+--     print("Buffer:", bufnr)
+--     print("Client capabilities:", vim.inspect(client.server_capabilities))
+--     
+--     -- Disable semantic tokens
+--     -- client.server_capabilities.semanticTokensProvider = nil
+-- 
+--     -- Set buffer options
+--     vim.api.nvim_buf_set_option(bufnr, 'omnifunc', 'v:lua.vim.lsp.omnifunc')
+-- end
 
 print("start default config")
 %[2]s

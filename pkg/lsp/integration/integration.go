@@ -15,7 +15,7 @@ type IntegrationTestRunner interface {
 	GetFormattedDocument(t *testing.T, ctx context.Context, uri protocol.DocumentURI) (string, error)
 
 	// Navigation & Symbol Operations
-	Hover(t *testing.T, ctx context.Context, params *protocol.HoverParams) (*protocol.Hover, error)
+	Hover(t *testing.T, ctx context.Context, params *protocol.HoverParams) (*protocol.Hover, []protocol.RPCMessage)
 	GetDefinition(t *testing.T, ctx context.Context, params *protocol.DefinitionParams) ([]*protocol.Location, error)
 	GetReferences(t *testing.T, ctx context.Context, params *protocol.ReferenceParams) ([]*protocol.Location, error)
 	GetDocumentSymbols(t *testing.T, ctx context.Context, params *protocol.DocumentSymbolParams) ([]*protocol.DocumentSymbol, error)
