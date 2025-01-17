@@ -169,3 +169,8 @@ tasks:
             }
         cmds:
             - ./scripts/run-tool.sh go-mod-upgrade --force
+
+    sync-aliasrc:
+        desc: sync aliasrc system
+        cmds:
+            - ./scripts/sync-aliasrc.sh
