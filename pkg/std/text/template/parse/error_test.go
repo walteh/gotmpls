@@ -14,14 +14,16 @@
 // - 🔄 Delimiters
 ///////////////////////////////////////////////////////
 
-package parse
+package parse_test
 
 import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tj/assert"
+
+	"github.com/walteh/gotmpls/pkg/std/text/template/parse"
 )
 
 type targetError struct {
@@ -114,9 +116,9 @@ var aggregationTests = []aggregationTest{
 func TestErrorAggregation(t *testing.T) {
 	for _, test := range aggregationTests {
 		t.Run(test.name, func(t *testing.T) {
-			tr := New(test.name)
-			tr.Mode = ParseComments
-			_, err := tr.Parse(test.template, "", "", make(map[string]*Tree))
+			tr := parse.New(test.name)
+			tr.Mode = parse.ParseComments
+			_, err := tr.Parse(test.template, "", "", make(map[string]*parse.Tree))
 			if len(test.expectedErrors) == 0 {
 				require.NoError(t, err)
 			} else {
