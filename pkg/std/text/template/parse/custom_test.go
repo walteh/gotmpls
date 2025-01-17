@@ -150,7 +150,9 @@ func TestErrorAggregation(t *testing.T) {
 			}
 		})
 	}
-	for targetError, count := range checkedErrors {
-		assert.GreaterOrEqual(t, count, 1, "error not processed: [message='%s' file='%s' function='%s']", targetError.message, targetError.file, targetError.function)
-	}
+	t.Run("all_errors_processed", func(t *testing.T) {
+		for targetError, count := range checkedErrors {
+			assert.GreaterOrEqual(t, count, 1, "error not processed: [message='%s' file='%s' function='%s']", targetError.message, targetError.file, targetError.function)
+		}
+	})
 }
