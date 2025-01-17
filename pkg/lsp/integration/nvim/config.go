@@ -10,7 +10,7 @@ local util = require 'lspconfig.util'
 local async = require 'lspconfig.async'
 
 -- Print loaded configs for debugging
-print("Available LSP configs:", vim.inspect(configs))
+-- print("Available LSP configs:", vim.inspect(configs))
 
 -- Configure capabilities
 local capabilities = vim.lsp.protocol.make_client_capabilities()
@@ -19,11 +19,16 @@ capabilities.textDocument.hover = {
     contentFormat = { "plaintext", "markdown" }
 }
 
+-- Enable semantic tokens
+
+
 -- Use an on_attach function to only map the following keys
 local on_attach = function(client, bufnr)
-    print("LSP client attached:", vim.inspect(client))
+   --  print("LSP client attached:", vim.inspect(client))
     print("Buffer:", bufnr)
-    print("Client capabilities:", vim.inspect(client.server_capabilities))
+  --  print("Client capabilities:", vim.inspect(client.server_capabilities))
+
+	vim.api.nvim_buf_set_option(bufnr, 'omnifunc', 'v:lua.vim.lsp.omnifunc')
 end
 `
 
@@ -35,11 +40,11 @@ type NeovimConfig interface {
 type GoTemplateConfig struct{}
 
 func (c *GoTemplateConfig) DefaultConfig(socketPath string) string {
-	return `if not configs.go_template then
-configs.go_template = {
+	return `if not configs.gotmpls then
+configs.gotmpls = {
         default_config = {
             cmd = { 'go', 'run', 'github.com/walteh/gotmpls/cmd/stdio-proxy', '` + socketPath + `' },
-            filetypes = { 'go-template', 'gotmpl' },
+            filetypes = { 'gotmpl' },
             root_dir = function(fname)
                 local path = vim.fn.getcwd()
                 print("Setting root dir to:", path)
@@ -56,17 +61,20 @@ configs.go_template = {
                 allow_incremental_sync = true,
             },
 			single_file_support = true,
+			on_attach = on_attach,
+
         },
     }
     -- Set up immediately after defining
-    lspconfig.go_template.setup {}
-    print("go_template server setup complete")
+    lspconfig.gotmpls.setup {
+    }
+    print("gotmpls server setup complete")
 end`
 }
 
 func (c *GoTemplateConfig) DefaultSetup() string {
-	return `if not lspconfig.go_template then
-    print("ERROR: go_template config not found!")
+	return `if not lspconfig.gotmpls then
+    print("ERROR: gotmpls config not found!")
 end`
 }
 
@@ -89,10 +97,18 @@ func (c *GoplsConfig) DefaultConfig(socketPath string) string {
 				debounce_text_changes = 0,
 				allow_incremental_sync = true,
 			},
+			settings = {
+				gopls = {
+					semanticTokens = true,
+				}
+			},
+			on_attach = on_attach,
+
 		}
 	}
 	-- Set up immediately after defining
-	lspconfig.gopls.setup {}
+	lspconfig.gopls.setup {
+    }
 	print("gopls server setup complete")
 end`
 }

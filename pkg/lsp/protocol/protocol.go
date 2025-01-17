@@ -100,6 +100,13 @@ type ServerInstance struct {
 	rpcTracker    *RPCTracker // Internal field for tracking RPC messages
 }
 
+func (me *ServerInstance) AddArgsToBackgroundCmd(args ...string) {
+	if me.backgroundCmd == nil {
+		return
+	}
+	me.backgroundCmd.Args = append(me.backgroundCmd.Args, args...)
+}
+
 func (s *ServerInstance) Server() *jrpc2.Server {
 	if s.server == nil {
 		panic("server not started")

@@ -191,7 +191,7 @@ type fancyResponse struct {
 	Error  any    `json:"error"`
 }
 
-const maxResultLength = 240
+const maxResultLength = 1000
 
 func (l *rpcTestLogger) LogResponse(ctx context.Context, res *jrpc2.Response) {
 	l.namedResponseLog(ctx, "server", res)

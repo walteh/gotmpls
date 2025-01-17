@@ -127,7 +127,7 @@ func NewServer(ctx context.Context) *Server {
 		documents:        NewDocumentManager(),
 		cancelFuncs:      &sync.Map{},
 		debug:            false, // Disabled debug mode
-		semanticProvider: template.NewTemplateTokenParser(),
+		semanticProvider: &template.TemplateTokenParser{},
 	}
 }
 
@@ -196,22 +196,46 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.ParamInitializ
 			TextDocumentSync: &protocol.Or_ServerCapabilities_textDocumentSync{
 				Value: protocol.Incremental,
 			},
+
 			SemanticTokensProvider: &protocol.SemanticTokensOptions{
 				Legend: protocol.SemanticTokensLegend{
 					TokenTypes: []string{
-						// string(protocol.Delim),
-						string(protocol.FunctionType),
-						string(protocol.VariableType),
+						string(protocol.NamespaceType),
 						string(protocol.TypeType),
-						string(protocol.StringType),
-						string(protocol.CommentType),
+						string(protocol.ClassType),
+						string(protocol.EnumType),
+						string(protocol.InterfaceType),
+						string(protocol.StructType),
+						string(protocol.TypeParameterType),
+						string(protocol.ParameterType),
+						string(protocol.VariableType),
+						string(protocol.PropertyType),
+						string(protocol.EnumMemberType),
+						string(protocol.EventType),
+						string(protocol.FunctionType),
+						string(protocol.MethodType),
+						string(protocol.MacroType),
 						string(protocol.KeywordType),
+						string(protocol.ModifierType),
+						string(protocol.CommentType),
+						string(protocol.StringType),
+						string(protocol.NumberType),
+						string(protocol.RegexpType),
 						string(protocol.OperatorType),
+						string(protocol.DecoratorType),
+						string(protocol.LabelType),
 					},
 					TokenModifiers: []string{
 						string(protocol.ModDeclaration),
 						string(protocol.ModDefinition),
 						string(protocol.ModReadonly),
+						string(protocol.ModStatic),
+						string(protocol.ModAbstract),
+						string(protocol.ModAsync),
+						string(protocol.ModDefaultLibrary),
+						string(protocol.ModDeprecated),
+						string(protocol.ModDocumentation),
+						string(protocol.ModModification),
 					},
 				},
 				Full:  &protocol.Or_SemanticTokensOptions_full{Value: true},

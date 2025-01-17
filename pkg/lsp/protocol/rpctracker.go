@@ -160,7 +160,7 @@ func (t *RPCTracker) WaitForMessages(since time.Time, count int, timeout time.Du
 		return result, true
 	}
 
-	ch, unsub := t.Subscribe(count - len(result))
+	ch, unsub := t.Subscribe(0)
 	defer unsub()
 
 	// Then wait for new messages

@@ -71,7 +71,7 @@ type Person struct {
 		hoverResult, rpcs := runner.Hover(t, ctx, protocol.NewHoverParams(file1, protocol.Position{Line: 1, Character: 3}))
 		require.Len(t, rpcs, 2, "should have 2 rpcs")
 		require.NotNil(t, hoverResult, "hover result should not be nil")
-		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```go-template\n.Name\n```", hoverResult.Contents.Value)
+		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```gotmpl\n.Name\n```", hoverResult.Contents.Value)
 		require.NotNil(t, hoverResult.Range, "hover range should not be nil")
 		require.Equal(t, uint32(1), hoverResult.Range.Start.Line, "range should start on line 1")
 		require.Equal(t, uint32(1), hoverResult.Range.End.Line, "range should end on line 1")
@@ -83,7 +83,7 @@ type Person struct {
 		hoverResult, rpcs = runner.Hover(t, ctx, protocol.NewHoverParams(file2, protocol.Position{Line: 1, Character: 3}))
 		require.Len(t, rpcs, 2, "should have 2 rpcs")
 		require.NotNil(t, hoverResult, "hover result should not be nil")
-		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tAge int\n}\n```\n\n### Template Access\n```go-template\n.Age\n```", hoverResult.Contents.Value)
+		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tAge int\n}\n```\n\n### Template Access\n```gotmpl\n.Age\n```", hoverResult.Contents.Value)
 		require.NotNil(t, hoverResult.Range, "hover range should not be nil")
 		require.Equal(t, uint32(1), hoverResult.Range.Start.Line, "range should start on line 1")
 		require.Equal(t, uint32(1), hoverResult.Range.End.Line, "range should end on line 1")
@@ -117,7 +117,7 @@ type Person struct {
 		hoverw := &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.Markdown,
-				Value: "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```go-template\n.Name\n```",
+				Value: "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```gotmpl\n.Name\n```",
 			},
 			Range: protocol.Range{
 				Start: protocol.Position{Line: 1, Character: 3},
@@ -130,19 +130,8 @@ type Person struct {
 		require.Len(t, rpcs, 2, "should have 2 rpcs")
 		require.Equal(t, hoverw, hoverResult, "hover result should match expected")
 
-		// Save current file before making changes
-		err = runner.Command("w")
-		require.NoError(t, err, "save should succeed")
-
-		// Change the file content
-		err = runner.Command("normal! ggdG")
-		require.NoError(t, err, "delete content should succeed")
-		err = runner.Command("normal! i{{- /*gotype: test.Person*/ -}}\n{{ .Age }}")
-		require.NoError(t, err, "insert content should succeed")
-
-		// Save the changes
-		err = runner.Command("w")
-		require.NoError(t, err, "save should succeed")
+		rpcs = runner.ApplyEdit(t, testFile, "{{- /*gotype: test.Person*/ -}}\n{{ .Age }}", true)
+		require.Len(t, rpcs, 1, "should have 1 rpcs")
 
 		// Test hover after change
 		hoverResult, rpcs = runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
@@ -179,7 +168,7 @@ type Person struct {
 		hoverResult, rpcs := runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
 		require.Len(t, rpcs, 2, "should have 2 rpcs")
 		require.NotNil(t, hoverResult, "hover result should not be nil")
-		require.Equal(t, "### Method Information\n\n```go\nfunc (*Person) GetName() (string)\n```\n\n### Return Type\n```go\nstring\n```\n\n### Template Usage\n```go-template\n.GetName\n```", hoverResult.Contents.Value)
+		require.Equal(t, "### Method Information\n\n```go\nfunc (*Person) GetName() (string)\n```\n\n### Return Type\n```go\nstring\n```\n\n### Template Usage\n```gotmpl\n.GetName\n```", hoverResult.Contents.Value)
 	})
 
 	t.Run("server_verifies_hover_ranges", func(t *testing.T) {
@@ -229,7 +218,7 @@ type Person struct {
 
 				if pos.expected {
 					require.NotNil(t, hoverResult, "hover result should not be nil")
-					require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tAddress struct {\n\t\tStreet string\n\t}\n}\n```\n\n### Template Access\n```go-template\n.Address.Street\n```", hoverResult.Contents.Value)
+					require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tAddress struct {\n\t\tStreet string\n\t}\n}\n```\n\n### Template Access\n```gotmpl\n.Address.Street\n```", hoverResult.Contents.Value)
 					require.NotNil(t, hoverResult.Range, "hover range should not be nil")
 					require.Equal(t, uint32(2), hoverResult.Range.Start.Line, "range should start on line 2")
 					require.Equal(t, uint32(2), hoverResult.Range.End.Line, "range should end on line 2")
@@ -267,7 +256,7 @@ type Person struct {
 		hoverResult, rpcs := runner.Hover(t, ctx, protocol.NewHoverParams(testFile, protocol.Position{Line: 1, Character: 3}))
 		require.Len(t, rpcs, 2, "should have 2 rpcs")
 		require.NotNil(t, hoverResult, "hover result should not be nil")
-		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```go-template\n.Name\n```", hoverResult.Contents.Value)
+		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```gotmpl\n.Name\n```", hoverResult.Contents.Value)
 	})
 }
 
@@ -418,7 +407,8 @@ type Person struct {
 func TestSemanticTokens(t *testing.T) {
 	t.Parallel()
 
-	t.Skip()
+	t.Skip("skipping semantic tokens test")
+
 	files := map[string]string{
 		"test.tmpl": `{{- /*gotype: test.Person*/ -}}
 {{ if eq .Name "test" }}

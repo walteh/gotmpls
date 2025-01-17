@@ -1,9 +1,4 @@
 {{- /*gotype: github.com/walteh/go-tmpl-types-vscode/examples/types.Person */ -}}
-{{- define "header" -}}
-# Person Information
-{{- end -}}
-
-{{template "header"}}
 
 Name: {{.Namex}}
 Age: {{.Age}}
@@ -16,4 +11,4 @@ Job: {{.GetJob | upper}}
 JobZ: {{printf "%s" .GetJob | upper}}
 JobZ: {{printf "hi" | upper | printf "%s" | upper}}
 
-{{end}} 
+{{end}}

@@ -5,6 +5,7 @@ go 1.23.1
 toolchain go1.23.4
 
 require (
+	github.com/alecthomas/participle/v2 v2.1.1
 	github.com/creachadair/jrpc2 v1.3.0
 	github.com/fatih/color v1.18.0
 	github.com/k0kubun/pp/v3 v3.4.1
@@ -12,7 +13,6 @@ require (
 	github.com/neovim/go-client v1.2.1
 	github.com/rs/xid v1.5.0
 	github.com/rs/zerolog v1.33.0
-	github.com/sourcegraph/jsonrpc2 v0.2.0
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.10.0
 	gitlab.com/tozd/go/errors v0.10.0
@@ -21,7 +21,6 @@ require (
 )
 
 require (
-	github.com/alecthomas/participle/v2 v2.1.1 // indirect
 	github.com/creachadair/mds v0.21.4 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect

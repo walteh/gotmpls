@@ -66,7 +66,7 @@ func TestFormatHoverResponse(t *testing.T) {
 			want: []string{
 				"### Template Function\n",
 				"```go\nfunc upper(arg1 string) string\n```",
-				"### Template Usage\n```go-template\nupper GetJob\n```",
+				"### Template Usage\n```gotmpl\nupper GetJob\n```",
 			},
 		},
 		{
@@ -92,7 +92,7 @@ func TestFormatHoverResponse(t *testing.T) {
 			want: []string{
 				"### Template Function\n",
 				"```go\nfunc upper(arg1 string) string\n```",
-				"### Template Usage\n```go-template\nGetJob | upper \"string\"\n```",
+				"### Template Usage\n```gotmpl\nGetJob | upper \"string\"\n```",
 			},
 		},
 		{
@@ -120,7 +120,7 @@ func TestFormatHoverResponse(t *testing.T) {
 			want: []string{
 				"### Type Information\n",
 				"```go\ntype Person struct {\n\tName string\n}\n```",
-				"\n### Template Access\n```go-template\n.Name\n```",
+				"\n### Template Access\n```gotmpl\n.Name\n```",
 			},
 		},
 	}
@@ -188,7 +188,7 @@ func (me *Person) chainPreview() (string) {
 ` + "```" + `
 
 #### Template Usage
-` + "```" + `go-template
+` + "```" + `gotmpl
 .GetJob | upper
 ` + "```" + ``,
 		},
@@ -250,7 +250,7 @@ func (me *Person) chainPreview() (string) {
 ` + "```" + `
 
 #### Template Usage
-` + "```" + `go-template
+` + "```" + `gotmpl
 .GetJob | lower | upper
 ` + "```" + ``,
 		},
@@ -317,7 +317,7 @@ func (me *Person) chainPreview() (string) {
 ` + "```" + `
 
 #### Template Usage
-` + "```" + `go-template
+` + "```" + `gotmpl
 .Name | replace "old" "new"
 ` + "```" + ``,
 		},

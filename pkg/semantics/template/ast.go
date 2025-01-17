@@ -1,79 +1,118 @@
 package template
 
 import (
-	"github.com/alecthomas/participle/v2"
+	"strings"
+
 	"github.com/alecthomas/participle/v2/lexer"
 )
 
 // Template represents a complete template file
 type Template struct {
-	Nodes []Node `@@*`
+	Pos lexer.Position
+
+	Nodes []*Node `@@*`
 }
 
-// Node represents a single node in the template
+// Node represents a node in the template
 type Node struct {
-	Text    *TextNode    `  @@`
-	Action  *ActionNode  `| @@`
-	Comment *CommentNode `| @@`
+	Pos lexer.Position
+
+	Text    *string  `(  @Text`
+	Action  *Action  ` | @@`
+	Comment *Comment ` | @@`
+	Control *Control ` | @@ )`
 }
 
-// TextNode represents plain text between actions
-type TextNode struct {
-	Content string `@Text`
-}
+// Action represents a template action (e.g., {{.Name}})
+type Action struct {
+	Pos lexer.Position
 
-// ActionNode represents a template action (anything between {{ and }})
-type ActionNode struct {
-	OpenDelim  string    `@Delimiter`
+	OpenDelim  string    `@OpenDelim`
 	Pipeline   *Pipeline `@@?`
-	CloseDelim string    `@Delimiter`
+	CloseDelim string    `@CloseDelim`
 }
 
-// CommentNode represents a template comment
-type CommentNode struct {
-	OpenDelim  string `@Delimiter`
-	Content    string `@Comment`
-	CloseDelim string `@Delimiter`
+// Comment represents a template comment
+type Comment struct {
+	Pos lexer.Position
+
+	OpenDelim  string `@OpenDelim`
+	Content    string `@CommentText`
+	CloseDelim string `@CloseDelim`
 }
 
-// Pipeline represents a sequence of commands
+// Control represents a control structure (if, range, with, etc.)
+type Control struct {
+	Pos lexer.Position
+
+	OpenDelim  string    `@OpenDelim`
+	Keyword    string    `@("if" | "range" | "with" | "template" | "block" | "define" | "end" | "else")`
+	Pipeline   *Pipeline `@@?`
+	CloseDelim string    `@CloseDelim`
+}
+
+// Pipeline represents a chain of commands
 type Pipeline struct {
+	Pos lexer.Position
+
 	Cmd  *Command  `@@`
 	Next *Pipeline `( "|" @@ )?`
 }
 
-// Command represents a command in a pipeline
+// ToString returns the string representation of the pipeline
+func (p *Pipeline) ToString() string {
+	if p == nil {
+		return ""
+	}
+	var parts []string
+	current := p
+	for current != nil {
+		parts = append(parts, current.Cmd.ToString())
+		current = current.Next
+	}
+	return strings.Join(parts, " | ")
+}
+
+// Command represents a command with its identifier and arguments
 type Command struct {
-	Identifier string     `@(DotIdent|Ident|Operator)`
-	Args       []Argument `@@*`
+	Pos lexer.Position
+
+	Identifier string `@(Ident | DotIdent)`
+	Args       []Arg  `@@*`
 }
 
-// Argument represents an argument to a command
-type Argument struct {
-	Variable string `@(DotIdent|Ident|Operator)`
-	Number   string `| @Number`
-	String   string `| @String`
+// ToString returns the string representation of the command
+func (c *Command) ToString() string {
+	if c == nil {
+		return ""
+	}
+	var parts []string
+	parts = append(parts, c.Identifier)
+	for _, arg := range c.Args {
+		parts = append(parts, arg.ToString())
+	}
+	return strings.Join(parts, " ")
 }
 
-var (
-	// TemplateLexer defines the lexer rules for Go templates
-	TemplateLexer = lexer.MustSimple([]lexer.SimpleRule{
-		{"Comment", `\/\*[^*]*\*\/`},
-		{"Delimiter", `{{-?|-?}}`},
-		{"Operator", `\||:=|eq|ne|lt|le\b|gt|ge|and|or|not`},
-		{"DotIdent", `\.[a-zA-Z_][a-zA-Z0-9_]*`},
-		{"Ident", `[$]?[a-zA-Z_][a-zA-Z0-9_]*`},
-		{"Number", `[-+]?\d*\.?\d+`},
-		{"String", `"(?:\\"|[^"])*"`},
-		{"Space", `[ \t]+`},
-		{"EOL", `[\n\r]+`},
-		{"Text", `[^{]+`},
-	})
+// Arg represents an argument to a command
+type Arg struct {
+	Pos lexer.Position
 
-	// Parser is the compiled template parser
-	Parser = participle.MustBuild[Template](
-		participle.Lexer(TemplateLexer),
-		participle.Elide("Space", "EOL"),
-		participle.UseLookahead(2),
-	)
-)
+	Number   *string `(  @Number`
+	String   *string ` | @String`
+	Variable *string ` | @(Ident | DotIdent) )`
+}
+
+// ToString returns the string representation of the argument
+func (a *Arg) ToString() string {
+	switch {
+	case a.Number != nil:
+		return *a.Number
+	case a.String != nil:
+		return *a.String
+	case a.Variable != nil:
+		return *a.Variable
+	default:
+		return ""
+	}
+}

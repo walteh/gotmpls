@@ -39,6 +39,70 @@ type NvimIntegrationTestRunner struct {
 	rpcTracker *protocol.RPCTracker
 }
 
+func (me *NvimIntegrationTestRunner) PrintNvimLogs(t *testing.T) {
+	t.Helper()
+
+	// Check the Neovim log
+	nvimLogPath := filepath.Join(me.TmpDir, "nvim.log")
+	if nvimLog, err := os.ReadFile(nvimLogPath); err == nil {
+
+		debugNvimLogLines := os.Getenv("DEBUG_NVIM_LOG_LINES")
+		var inter int
+		if debugNvimLogLines == "" {
+			t.Logf("DEBUG_NVIM_LOG_LINES not set, skipping log")
+		} else {
+			if debugNvimLogLines == "all" {
+				t.Logf("DEBUG_NVIM_LOG_LINES set to all, WARNING: this will print a lot of logs")
+				inter = math.MaxInt
+
+			} else {
+				inter, err = strconv.Atoi(debugNvimLogLines)
+				if err != nil {
+					t.Logf("could not parse DEBUG_NVIM_LOG_LINES (%s) as a number, using default of 50", debugNvimLogLines)
+					inter = 50
+				}
+			}
+			lastLines := lastN(strings.Split(string(nvimLog), "\n"), inter)
+			lastWord := "last"
+			if inter == math.MaxInt {
+				lastWord = "all"
+			}
+			t.Logf("nvim log (%s %d lines):\n%s", lastWord, len(lastLines), strings.Join(lastLines, "\n"))
+		}
+
+	}
+
+	// do the same for the gopls log
+	goplsLogPath := filepath.Join(me.TmpDir, "gopls.log")
+	if goplsLog, err := os.ReadFile(goplsLogPath); err == nil {
+
+		debugGoplsLogLines := os.Getenv("DEBUG_GOPLS_LOG_LINES")
+		var inter int
+		if debugGoplsLogLines == "" {
+			t.Logf("DEBUG_GOPLS_LOG_LINES not set, skipping log")
+		} else {
+			if debugGoplsLogLines == "all" {
+				t.Logf("DEBUG_GOPLS_LOG_LINES set to all, WARNING: this will print a lot of logs")
+				inter = math.MaxInt
+
+			} else {
+				inter, err = strconv.Atoi(debugGoplsLogLines)
+				if err != nil {
+					t.Logf("could not parse DEBUG_GOPLS_LOG_LINES (%s) as a number, using default of 50", debugGoplsLogLines)
+					inter = 50
+				}
+			}
+			lastLines := lastN(strings.Split(string(goplsLog), "\n"), inter)
+			lastWord := "last"
+			if inter == math.MaxInt {
+				lastWord = "all"
+			}
+			t.Logf("gopls log (%s %d lines):\n%s", lastWord, len(lastLines), strings.Join(lastLines, "\n"))
+		}
+	}
+
+}
+
 func NewNvimIntegrationTestRunner(t *testing.T, files map[string]string, si *protocol.ServerInstance, config NeovimConfig) (*NvimIntegrationTestRunner, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
@@ -75,31 +139,7 @@ func NewNvimIntegrationTestRunner(t *testing.T, files map[string]string, si *pro
 			os.Remove(socketPath)
 		}()
 
-		// Check the Neovim log
-		nvimLogPath := filepath.Join(tmpDir, "nvim.log")
-		if nvimLog, err := os.ReadFile(nvimLogPath); err == nil {
-			debugNvimLogLines := os.Getenv("DEBUG_NVIM_LOG_LINES")
-			var inter int
-			if debugNvimLogLines == "" {
-				t.Logf("DEBUG_NVIM_LOG_LINES not set, skipping log")
-				return
-			} else if debugNvimLogLines == "all" {
-				t.Logf("DEBUG_NVIM_LOG_LINES set to all, WARNING: this will print a lot of logs")
-				inter = math.MaxInt
-			} else {
-				inter, err = strconv.Atoi(debugNvimLogLines)
-				if err != nil {
-					t.Logf("could not parse DEBUG_NVIM_LOG_LINES (%s) as a number, using default of 50", debugNvimLogLines)
-					inter = 50
-				}
-			}
-			lastLines := lastN(strings.Split(string(nvimLog), "\n"), inter)
-			lastWord := "last"
-			if inter == math.MaxInt {
-				lastWord = "all"
-			}
-			t.Logf("nvim log (%s %d lines):\n%s", lastWord, len(lastLines), strings.Join(lastLines, "\n"))
-		}
+		setup.PrintNvimLogs(t)
 
 	})
 
@@ -136,6 +176,7 @@ func NewNvimIntegrationTestRunner(t *testing.T, files map[string]string, si *pro
 			tmpDir: "/[TEMP_DIR]",
 		})
 		si.SetRPCTracker(setup.rpcTracker)
+		si.AddArgsToBackgroundCmd("-logfile=" + filepath.Join(tmpDir, "gopls.log"))
 		zerolog.Ctx(ctx).Info().Msg("Starting server...")
 
 		if err := si.StartAndWait(conn, conn); err != nil {
@@ -248,7 +289,7 @@ let &runtimepath = s:lspconfig_path . ',' . $VIMRUNTIME . ',' . s:lspconfig_path
 set packpath=%[1]s
 
 " Set up filetype detection
-autocmd! BufEnter *.tmpl setlocal filetype=go-template
+autocmd! BufEnter *.tmpl setlocal filetype=gotmpl
 
 " Load lspconfig
 runtime! plugin/lspconfig.lua
@@ -350,7 +391,7 @@ func (s *NvimIntegrationTestRunner) WaitForLSP(t *testing.T) error {
 			var clientInfo string
 			err = s.nvimInstance.Eval(`luaeval('vim.inspect(vim.lsp.get_active_clients())')`, &clientInfo)
 			if err == nil {
-				// s.t.Logf("LSP client info: %v", clientInfo)
+				// t.Logf("🔍 LSP client info: %v", clientInfo)
 			}
 		}
 
@@ -365,7 +406,7 @@ func (s *NvimIntegrationTestRunner) WaitForLSP(t *testing.T) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 	if !success {
-		return errors.Errorf("LSP client failed to attach")
+		return errors.Errorf("LSP client failed to attach or initialize")
 	}
 	return nil
 }
@@ -398,7 +439,9 @@ func (s *NvimIntegrationTestRunner) MustOpenFileWithLock(t *testing.T, path prot
 
 func (s *NvimIntegrationTestRunner) OpenFileWithLock(t *testing.T, path protocol.DocumentURI) (nvim.Buffer, func(), error) {
 	t.Helper()
+	t.Logf("Opening file: %s", path)
 	s.mu.Lock()
+	t.Logf("Locked")
 	cleanup := func() {
 		s.mu.Unlock()
 	}
@@ -413,7 +456,8 @@ func (s *NvimIntegrationTestRunner) OpenFileWithLock(t *testing.T, path protocol
 	}
 
 	pathStr := strings.TrimPrefix(string(path.Path()), "file://")
-	// s.t.Logf("Opening file: %s", pathStr)
+
+	// t.Logf("a")
 
 	// Force close any other buffers that might be open
 	if err := s.nvimInstance.Command("%bd!"); err != nil {
@@ -421,7 +465,44 @@ func (s *NvimIntegrationTestRunner) OpenFileWithLock(t *testing.T, path protocol
 		return 0, nil, errors.Errorf("failed to close all buffers: %w", err)
 	}
 
-	if err := s.nvimInstance.Command("edit " + pathStr); err != nil {
+	// t.Logf("b")
+
+	// // Create a new buffer and set its name
+	// createBufCmd := fmt.Sprintf(`
+	// 	local buf = vim.api.nvim_create_buf(true, false)
+	// 	vim.api.nvim_buf_set_name(buf, '%s')
+	// 	vim.api.nvim_set_current_buf(buf)
+	// 	return buf
+	// `, pathStr)
+
+	// var buffer nvim.Buffer
+	// err := s.nvimInstance.ExecLua(createBufCmd, &buffer)
+	// if err != nil {
+	// 	cleanup()
+	// 	return 0, nil, errors.Errorf("failed to create buffer: %w", err)
+	// }
+
+	// t.Logf("c")
+
+	// // Read file content and set buffer lines
+	// content, err := os.ReadFile(pathStr)
+	// if err != nil {
+	// 	cleanup()
+	// 	return 0, nil, errors.Errorf("failed to read file: %w", err)
+	// }
+
+	// lines := strings.Split(string(content), "\n")
+	// byteLines := make([][]byte, len(lines))
+	// for i, line := range lines {
+	// 	byteLines[i] = []byte(line)
+	// }
+	// if err := s.nvimInstance.SetBufferLines(buffer, 0, -1, true, byteLines); err != nil {
+	// 	cleanup()
+	// 	return 0, nil, errors.Errorf("failed to set buffer lines: %w", err)
+	// }
+
+	err := s.nvimInstance.Command("e " + pathStr)
+	if err != nil {
 		cleanup()
 		return 0, nil, errors.Errorf("failed to open file: %w", err)
 	}
@@ -432,13 +513,13 @@ func (s *NvimIntegrationTestRunner) OpenFileWithLock(t *testing.T, path protocol
 		return 0, nil, errors.Errorf("failed to get current buffer: %w", err)
 	}
 
-	// Set filetype to Go for .go files
-	if strings.HasSuffix(pathStr, ".go") {
-		if err = s.nvimInstance.SetBufferOption(buffer, "filetype", "go"); err != nil {
-			cleanup()
-			return 0, nil, errors.Errorf("failed to set filetype: %w", err)
-		}
-	}
+	// // Set filetype to Go for .go files
+	// if strings.HasSuffix(pathStr, ".go") {
+	// 	if err = s.nvimInstance.SetBufferOption(buffer, "filetype", "go"); err != nil {
+	// 		cleanup()
+	// 		return 0, nil, errors.Errorf("failed to set filetype: %w", err)
+	// 	}
+	// }
 
 	// Track the current buffer
 	s.currentBuffer = &struct {
@@ -466,7 +547,6 @@ func (s *NvimIntegrationTestRunner) OpenFileWithLock(t *testing.T, path protocol
 		return 0, nil, errors.Errorf("failed to attach LSP: %w", err)
 	}
 
-	// s.t.Logf("Successfully opened file %s with buffer %v", pathStr, buffer)
 	return buffer, cleanup, nil
 }
 

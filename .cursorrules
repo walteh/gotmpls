@@ -1,5 +1,12 @@
 always assume the existing code is correct unless you have a good reason to believe otherwise or you have been explicitly told otherwise
 never modify significant portions of code without asking
+testing code is your primary mehtod of validation, each change should have a very specific and snall test that covers it and it should be tested to make sure it works before moving on
+approach your work with a very specific and small goal in mind, then break that goal down into smaller goals until you have a plan to complete the task - follow the same approach for testing as well
+lay out our methodical approach to working on a task in the form of a test plan, then write the code to pass the test
+leave hints for yourself in the future in the form of todos and comments, assume that you will forget what you were thinking and that you will need to come back to it and that you will need to be able to understand what you were thinking - as an example, if the ast definitions for a package are in a specific file, mention that somewhere in the code so you know to look there when you need to reference them
+always be an expert in the 3rd party packages we heavily depend on, git clone them into a tmp directories for easy reference and access when relevant
+always use the root ./go insead of go from the shell path - there are helpful wrappers in the project that make it easier to run tools
+always use the root ./task instead of task from the shell path - there are helpful wrappers in the project that make it easier to run tasks
 
 documentation:
 use lots of emojis and draw ASCII art diagrams to help explain things, i am a visual learner

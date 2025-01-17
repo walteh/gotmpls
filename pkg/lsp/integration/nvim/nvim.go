@@ -192,7 +192,7 @@ func (s *NvimIntegrationTestRunner) triggerDiagnosticRefresh(t *testing.T, buf n
 	local client = vim.lsp.get_active_clients()[1]
 	if client then
 		-- Request diagnostics from gopls
-		client.request('textDocument/diagnostic', {
+		client.request_sync('textDocument/diagnostic', {
 			textDocument = {
 				uri = vim.uri_from_bufnr(%d)
 			}
@@ -257,14 +257,81 @@ func (s *NvimIntegrationTestRunner) loadNvimDiagnosticsFromBuffer(t *testing.T, 
 	return diags
 }
 
-// GetSemanticTokensFull returns semantic tokens for the entire document
+func (s *NvimIntegrationTestRunner) triggerSemanticTokensRefresh(t *testing.T, buf nvim.Buffer) *protocol.SemanticTokens {
+	t.Helper()
+	t.Logf("🔍 Triggering semantic tokens refresh for buffer %d", buf)
+	startTime := time.Now()
+
+	luaCmd := fmt.Sprintf(`
+	local client = vim.lsp.get_active_clients()[1]
+	if not client then
+		print("⚠️ No active LSP client found")
+		return nil
+	end
+
+	-- Request semantic tokens with request_sync
+	local result, err = client.request_sync('textDocument/semanticTokens/full', {
+		textDocument = {
+			uri = vim.uri_from_bufnr(%[1]d)
+		}
+	})
+	if err then
+		print("⚠️ Semantic tokens error:", vim.inspect(err))
+		return nil
+	end
+
+	if not result or not result.result then
+		print("⚠️ No semantic tokens in response")
+		return nil
+	end
+
+	return result.result
+	`,
+		buf,
+	)
+
+	result := s.MustExecLua(t, luaCmd)
+	if result == nil {
+		t.Log("⚠️ No semantic tokens response received")
+		return nil
+	}
+
+	by, err := json.Marshal(result)
+	require.NoError(t, err, "failed to marshal semantic tokens response")
+
+	var tokens protocol.SemanticTokens
+	require.NoError(t, json.Unmarshal(by, &tokens), "failed to unmarshal semantic tokens response")
+
+	t.Logf("🕒 Semantic tokens refresh completed in %v", time.Since(startTime))
+	return &tokens
+}
+
 func (s *NvimIntegrationTestRunner) GetSemanticTokensFull(t *testing.T, ctx context.Context, params *protocol.SemanticTokensParams) (*protocol.SemanticTokens, []protocol.RPCMessage) {
-	panic("not implemented")
+	t.Helper()
+	t.Log("🕒 Starting GetSemanticTokensFull")
+
+	// Open the file but don't close it
+	buf, cleanup, openTime := s.MustOpenFileWithLock(t, params.TextDocument.URI)
+	defer cleanup()
+
+	tokens := s.triggerSemanticTokensRefresh(t, buf)
+
+	rpcs, exp := s.rpcTracker.WaitForMessages(openTime, 2, 3*time.Second, func(msg protocol.RPCMessage) bool {
+		t.Logf("🔍 Checking RPC message: %v", msg.Method)
+		return msg.Method == "textDocument/semanticTokens/full"
+	})
+	require.True(t, exp, "time expired waiting for textDocument/semanticTokens/full")
+	require.Len(t, rpcs, 2, "expected 2 rpcs")
+
+	return tokens, rpcs
 }
 
 // GetSemanticTokensRange returns semantic tokens for a specific range
 func (s *NvimIntegrationTestRunner) GetSemanticTokensRange(t *testing.T, ctx context.Context, params *protocol.SemanticTokensRangeParams) (*protocol.SemanticTokens, []protocol.RPCMessage) {
-	panic("not implemented")
+	// For now, we'll just return the full tokens since Neovim's semantic tokens API doesn't have a range-specific method
+	return s.GetSemanticTokensFull(t, ctx, &protocol.SemanticTokensParams{
+		TextDocument: params.TextDocument,
+	})
 }
 
 // SaveAndQuit saves the current buffer and quits Neovim
@@ -305,7 +372,7 @@ func (s *NvimIntegrationTestRunner) SaveAndQuitWithOutput() (string, error) {
 
 // SaveFile saves the current buffer
 func (s *NvimIntegrationTestRunner) SaveFile(buffer nvim.Buffer) error {
-	return s.nvimInstance.Command("w")
+	return s.nvimInstance.Command("w!")
 }
 
 // GetDocumentText returns the current text content of a document
@@ -339,7 +406,7 @@ func (s *NvimIntegrationTestRunner) ApplyEdit(t *testing.T, uri protocol.Documen
 	require.NoError(t, err, "setting buffer lines should succeed")
 
 	if save {
-		s.MustNvimCommand(t, "w")
+		s.MustNvimCommand(t, "w!")
 	}
 
 	rpcs, exp := s.rpcTracker.WaitForMessages(fileOpenTime, 1, 3*time.Second, func(msg protocol.RPCMessage) bool {

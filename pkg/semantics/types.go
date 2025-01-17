@@ -22,6 +22,7 @@ const (
 	TokenTypeString
 	TokenTypeComment
 	TokenTypeNumber
+	TokenTypeText
 )
 
 const (

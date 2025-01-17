@@ -62,7 +62,7 @@ func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation,
 		content = append(content, sig)
 
 		// Template usage example
-		usage := "### Template Usage\n```go-template\n"
+		usage := "### Template Usage\n```gotmpl\n"
 		if len(variable.PipeArguments) > 0 {
 			usage += variable.Position.Text + " | " + method.Name
 			for _, arg := range variable.PipeArguments {
@@ -95,7 +95,7 @@ func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation,
 			}
 
 			// Template usage
-			content = append(content, "\n### Template Usage\n```go-template")
+			content = append(content, "\n### Template Usage\n```gotmpl")
 			content = append(content, variable.Position.Text)
 			content = append(content, "```")
 
@@ -111,7 +111,7 @@ func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation,
 			content = append(content, typeStr)
 
 			// Show the template access path
-			templatePath := "\n### Template Access\n```go-template\n"
+			templatePath := "\n### Template Access\n```gotmpl\n"
 			templatePath += variable.Position.Text
 			templatePath += "\n```"
 			content = append(content, templatePath)
@@ -119,7 +119,7 @@ func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation,
 	} else {
 		// Fallback for when we don't have type info
 		content = append(content, "### Template Reference\n")
-		content = append(content, "```go-template\n"+variable.Position.Text+"\n```")
+		content = append(content, "```gotmpl\n"+variable.Position.Text+"\n```")
 		content = append(content, "\n*Type information not available*")
 	}
 

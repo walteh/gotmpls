@@ -71,6 +71,8 @@ import (
 	"fmt"
 	"strings"
 	"text/template/parse"
+
+	"github.com/walteh/gotmpls/pkg/lsp/protocol"
 )
 
 // Place represents a position in text using line and character (column) numbers.
@@ -164,6 +166,23 @@ func NewRawPositionFromLineAndColumn(line, col int, text, fileText string) RawPo
 	}
 	offset += col
 	return RawPosition{Text: text, Offset: offset}
+}
+
+// ToRawPosition creates a RawPosition from a range of text.
+// This is useful when you need to create a position from a range of text.
+//
+// Example:
+//
+//	content := "Hello\nWorld"
+//	ranged := Range{Start: Place{Line: 0, Character: 0}, End: Place{Line: 0, Character: 5}}
+//	pos := ranged.ToRawPosition(content)
+//	// pos.Offset == 0, pos.Text == "Hello"
+func (ranged Range) ToRawPosition(content string) RawPosition {
+	start := NewRawPositionFromLineAndColumn(int(ranged.Start.Line), int(ranged.Start.Character), content, "")
+	end := NewRawPositionFromLineAndColumn(int(ranged.End.Line), int(ranged.End.Character), content, "")
+	contentz := content[start.Offset:end.Offset]
+	start.Text = contentz
+	return start
 }
 
 // NewIdentifierNodePosition creates a RawPosition from a template parser's IdentifierNode.
@@ -279,20 +298,38 @@ func (p RawPosition) GetEndPosition() RawPosition {
 	}
 }
 
-// GetRange converts a RawPosition to a Range using line/column coordinates.
+// deprecated: use ToRange instead
+func (p RawPosition) GetRange(fileText string) Range {
+	return p.ToRange(fileText)
+}
+
+// ToRange converts a RawPosition to a Range using line/column coordinates.
 // This is useful when you need to represent the position in editor-friendly coordinates.
 //
 // Example:
 //
 //	pos := RawPosition{Offset: 0, Text: "Hello"}
-//	rng := pos.GetRange(fileText)
+//	rng := pos.ToRange(fileText)
 //	// rng.Start == Place{0,0}, rng.End == Place{0,5}
-func (p RawPosition) GetRange(fileText string) Range {
+func (p RawPosition) ToRange(fileText string) Range {
 	startLine, startCol := p.GetLineAndColumn(fileText)
 	endLine, endCol := p.GetEndPosition().GetLineAndColumn(fileText)
 	return Range{
 		Start: Place{Line: startLine, Character: startCol},
 		End:   Place{Line: endLine, Character: endCol},
+	}
+}
+
+func (p RawPosition) ToLSPPosition(fileText string) protocol.Position {
+	rnge := p.GetRange(fileText)
+	return protocol.Position{Line: uint32(rnge.Start.Line), Character: uint32(rnge.Start.Character)}
+}
+
+func (p RawPosition) ToLSPRange(fileText string) protocol.Range {
+	rnge := p.GetRange(fileText)
+	return protocol.Range{
+		Start: protocol.Position{Line: uint32(rnge.Start.Line), Character: uint32(rnge.Start.Character)},
+		End:   protocol.Position{Line: uint32(rnge.End.Line), Character: uint32(rnge.End.Character)},
 	}
 }
 
@@ -319,5 +356,12 @@ func NewStringNodePosition(node *parse.StringNode) RawPosition {
 	return RawPosition{
 		Text:   node.Text,
 		Offset: int(node.Pos),
+	}
+}
+
+func NewRangeFromLSPRange(ranged protocol.Range) Range {
+	return Range{
+		Start: Place{Line: int(ranged.Start.Line), Character: int(ranged.Start.Character)},
+		End:   Place{Line: int(ranged.End.Line), Character: int(ranged.End.Character)},
 	}
 }
