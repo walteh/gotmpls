@@ -17,112 +17,140 @@
 package parse
 
 import (
-	"errors"
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tj/assert"
 )
 
-// verifies that we collect all parsing errors
-//
-// Template structure:
-// ┌──────────┐
-// │   Hello  │ (TextNode)
-// ├──────────┤
-// │  {{if   │ (Missing if condition)
-// └──────────┘
-func TestErrorAggregationOne(t *testing.T) {
-	// Given a template with a malformed if statement
-	template := "Hello {{if}}"
-
-	// When we parse it
-	trees, err := Parse("test", template, "{{", "}}", nil)
-	require.Error(t, err, "parsing template with errors should return error")
-
-	// Then we should get a tree with errors
-	tree := trees["test"]
-	require.NotNil(t, tree, "tree should not be nil")
-
-	// And the tree should have errors
-	errs := tree.Errors()
-	require.NotNil(t, errs, "errors should not be nil")
-	require.NotEmpty(t, errs, "should have at least one error")
-
-	// And the error should indicate missing if condition
-	assert.Contains(t, errs[0].Error(), "missing value", "error should mention missing value")
+type targetError struct {
+	message             string
+	file                string
+	function            string
+	missingTemplateInfo bool // true if it was created from something other than the t.errorf / t.errorfNoPanic method
 }
 
-// TestErrorAggregationTwo verifies that we collect multiple errors in a single parse
-//
-// the primary purpose of this test is to ensure that the error aggregation works
-//
-// Template structure:
-// ┌──────────┐
-// │   Hello  │ (TextNode)
-// ├──────────┤
-// │  {{if   │ (Missing if condition)
-// ├──────────┤
-// │  {{end  │ (Extra end)
-// └──────────┘
-func TestErrorAggregationTwo(t *testing.T) {
-	// Given a template with multiple errors
-	template := "Hello {{if}} {{end}} {{end}}" // Missing if condition and extra end
+var (
+	missingValueForIf = targetError{message: "missing value for if", file: "parse.go", function: "checkPipeline"}
+	unexpectedEOF     = targetError{message: "unexpected EOF", file: "parse.go", function: "itemList"}
+	unexpectedEnd     = targetError{message: "unexpected {{end}}", file: "parse.go", function: "itemList"}
+)
 
-	expectedErrors := []error{
-		errors.New("template: test:1: missing value for if"),
-		errors.New("template: test:1: unexpected {{end}}"),
-	}
-
-	// When we parse it
-	trees, err := Parse("test", template, "{{", "}}", nil)
-	require.EqualError(t, err, expectedErrors[0].Error()) // for backwards compatibility so all the other tests don't fail
-
-	// Then we should get a tree with errors
-	tree := trees["test"]
-	require.NotNil(t, tree, "tree should not be nil")
-
-	// And the tree should have multiple errors
-	errs := tree.Errors()
-	require.NotNil(t, errs, "errors should not be nil")
-	require.ElementsMatch(t, expectedErrors, errs, "errors should match expected")
+var targetErrors = []targetError{
+	missingValueForIf,
+	unexpectedEOF,
 }
 
-// TestErrorAggregationTwo verifies that we collect multiple errors in a single parse
-//
-// the primary purpose of this test is to ensure that the error aggregation works with the "missing value" error in parse.go
-//
-// Template structure:
-// ┌──────────┐
-// │   Hello  │ (TextNode)
-// ├──────────┤
-// │  {{if   │ (Missing if condition)
-// ├──────────┤
-// │  {{if   │ (Missing if condition)
-// ├──────────┤
-// │  {{if   │ (Missing if condition)
-// └──────────┘
-func TestErrorAggregationMissingValue(t *testing.T) {
-	// Given a template with a missing value
-	template := "Hello {{if}}{{if}}{{if}}"
+var checkedErrors = make(map[targetError]int)
 
-	expectedErrors := []error{
-		errors.New("template: test:1: missing value for if"),
-		errors.New("template: test:1: missing value for if"),
-		errors.New("template: test:1: missing value for if"),
-		errors.New("template: test:1: unexpected EOF"),
+func init() {
+	for _, err := range targetErrors {
+		checkedErrors[err] = 0
 	}
+	// special case because this error will never have something behind it
+	checkedErrors[unexpectedEOF] = 1
+}
 
-	// When we parse it
-	trees, err := Parse("test", template, "{{", "}}", nil)
-	require.Error(t, err, "parsing template with errors should return error")
+type aggregationTest struct {
+	name           string
+	template       string
+	expectedErrors []targetError
+}
 
-	// Then we should get a tree with errors
-	tree := trees["test"]
-	require.NotNil(t, tree, "tree should not be nil")
+var aggregationTests = []aggregationTest{
 
-	// And the tree should have errors
-	errs := tree.Errors()
-	require.NotNil(t, errs, "errors should not be nil")
-	require.ElementsMatch(t, expectedErrors, errs, "errors should match expected")
+	{
+		// Template structure:
+		// ┌──────────┐
+		// │   Hello  │ (TextNode)
+		// ├──────────┤
+		// │  {{if    │ (Missing if condition)
+		// └──────────┘
+		name:     "single_error_missing_end",
+		template: "Hello {{if}}",
+		expectedErrors: []targetError{
+			missingValueForIf,
+			unexpectedEOF,
+		},
+	},
+	{
+		// ┌──────────┐
+		// │   Hello  │ (TextNode)
+		// ├──────────┤
+		// │  {{if    │ (Missing if condition)
+		// ├──────────┤
+		// │  {{if    │ (Missing if condition)
+		// ├──────────┤
+		// │  {{if    │ (Missing if condition)
+		// └──────────┘
+		name:     "if_end_missing_content_extra_end",
+		template: "Hello {{if}} {{end}} {{end}}",
+		expectedErrors: []targetError{
+			missingValueForIf,
+			unexpectedEnd,
+		},
+	},
+	{
+		name:     "if_end_missing_with_comments",
+		template: "Hello {{if}} {{/* comment */}} {{end}} {{end}}",
+		expectedErrors: []targetError{
+			missingValueForIf,
+			unexpectedEnd,
+		},
+	},
+	{
+		name:     "missing_value_if",
+		template: "Hello {{if}}{{if}}{{if}}",
+		expectedErrors: []targetError{
+			missingValueForIf,
+			missingValueForIf,
+			missingValueForIf,
+			unexpectedEOF,
+		},
+	},
+}
+
+func TestErrorAggregation(t *testing.T) {
+	for _, test := range aggregationTests {
+		t.Run(test.name, func(t *testing.T) {
+			tr := New(test.name)
+			tr.Mode = ParseComments
+			_, err := tr.Parse(test.template, "", "", make(map[string]*Tree))
+			if len(test.expectedErrors) == 0 {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err) // for backwards compatibility so all the other tests don't fail
+			}
+			// we need to rebuild the errors because the error type is different
+			// other will check the parser errors directly, but here we don't care about the type
+			returnedErrors := tr.Errors()
+			rebuiltErrors := make([]string, len(returnedErrors))
+			for i, err := range returnedErrors {
+				str := err.Error()
+				if strings.Contains(str, "template:") {
+					// remove the template: whatever:number:
+					str = strings.TrimPrefix(str, "template: ")
+					str = strings.TrimPrefix(str, test.name+":")
+					str = strings.Split(str, ":")[1]
+					str = strings.TrimSpace(str)
+				}
+				rebuiltErrors[i] = str
+			}
+			rebuiltExpectedErrors := make([]string, len(test.expectedErrors))
+			for i, err := range test.expectedErrors {
+				rebuiltExpectedErrors[i] = err.message
+			}
+			require.Equal(t, rebuiltExpectedErrors, rebuiltErrors)
+			for i, err := range test.expectedErrors {
+				if i < len(returnedErrors)-1 {
+					// we don't check the last error because nothing was aggregated behind it
+					checkedErrors[err]++
+				}
+			}
+		})
+	}
+	for targetError, count := range checkedErrors {
+		assert.GreaterOrEqual(t, count, 1, "error not processed: [message='%s' file='%s' function='%s']", targetError.message, targetError.file, targetError.function)
+	}
 }
