@@ -332,7 +332,8 @@ func (t *Tree) parse() {
 		}
 		switch n := t.textOrAction(); n.Type() {
 		case nodeEnd, nodeElse:
-			t.errorf("unexpected %s", n)
+			// t.errorf("unexpected %s", n)
+			t.errorfNoPanic("unexpected %s", n)
 		default:
 			t.Root.append(n)
 		}
@@ -527,7 +528,6 @@ decls:
 func (t *Tree) checkPipeline(pipe *PipeNode, context string) {
 	// Reject empty pipelines
 	if len(pipe.Cmds) == 0 {
-		// t.errorf("missing value for %s", context)
 		t.errorfNoPanic("missing value for %s", context)
 		return
 	}
@@ -663,7 +663,8 @@ func (t *Tree) blockControl() Node {
 	var end Node
 	block.Root, end = block.itemList()
 	if end.Type() != nodeEnd {
-		t.errorf("unexpected %s in %s", end, context)
+		// t.errorf("unexpected %s in %s", end, context)
+		t.errorfNoPanic("unexpected %s in %s", end, context)
 	}
 	block.add()
 	block.stopParse()

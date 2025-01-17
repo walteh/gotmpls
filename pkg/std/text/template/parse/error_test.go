@@ -34,17 +34,30 @@ type targetError struct {
 }
 
 var (
+	// Pipeline Errors
 	missingValueForIf = targetError{message: "missing value for if", file: "parse.go", function: "checkPipeline"}
-	unexpectedEOF     = targetError{message: "unexpected EOF", file: "parse.go", function: "itemList"}
-	unexpectedEnd     = targetError{message: "unexpected {{end}}", file: "parse.go", function: "itemList"}
+
+	// Syntax Errors
+	unexpectedEOF = targetError{message: "unexpected EOF", file: "parse.go", function: "itemList"}
+	unexpectedEnd = targetError{message: "unexpected {{end}}", file: "parse.go", function: "itemList"}
 )
 
 var targetErrors = []targetError{
 	missingValueForIf,
+	unexpectedEnd,
 	unexpectedEOF,
 }
 
 var checkedErrors = make(map[targetError]int)
+
+func markCheckedErrors(t *testing.T, errors []targetError) {
+	for i, err := range errors {
+		// we don't check the last error because nothing was aggregated behind it
+		if i < len(errors)-1 {
+			checkedErrors[err]++
+		}
+	}
+}
 
 func init() {
 	for _, err := range targetErrors {
@@ -61,7 +74,6 @@ type aggregationTest struct {
 }
 
 var aggregationTests = []aggregationTest{
-
 	{
 		// Template structure:
 		// ┌──────────┐
@@ -95,9 +107,10 @@ var aggregationTests = []aggregationTest{
 	},
 	{
 		name:     "if_end_missing_with_comments",
-		template: "Hello {{if}} {{/* comment */}} {{end}} {{end}}",
+		template: "Hello {{if}} {{/* comment */}} {{end}} {{end}}{{end}}",
 		expectedErrors: []targetError{
 			missingValueForIf,
+			unexpectedEnd,
 			unexpectedEnd,
 		},
 	},
@@ -144,12 +157,7 @@ func TestErrorAggregation(t *testing.T) {
 				rebuiltExpectedErrors[i] = err.message
 			}
 			require.Equal(t, rebuiltExpectedErrors, rebuiltErrors)
-			for i, err := range test.expectedErrors {
-				if i < len(returnedErrors)-1 {
-					// we don't check the last error because nothing was aggregated behind it
-					checkedErrors[err]++
-				}
-			}
+			markCheckedErrors(t, test.expectedErrors)
 		})
 	}
 	t.Run("all_errors_processed", func(t *testing.T) {

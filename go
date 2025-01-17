@@ -5,7 +5,7 @@ set -euo pipefail
 if [ "${1:-}" == "test" ]; then
 	shift
 	./scripts/run-tool.sh gotestsum \
-		--format testname \
+		--format pkgname \
 		--format-icons hivis \
 		--hide-summary=skipped \
 		--raw-command -- go test -json -cover "$@"
