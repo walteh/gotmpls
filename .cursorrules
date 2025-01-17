@@ -7,7 +7,7 @@ leave hints for yourself in the future in the form of todos and comments, assume
 always be an expert in the 3rd party packages we heavily depend on, git clone them into a tmp directories for easy reference and access when relevant
 always use the root ./go insead of go from the shell path - there are helpful wrappers in the project that make it easier to run tools
 always use the root ./task instead of task from the shell path - there are helpful wrappers in the project that make it easier to run tasks
-
+when theree are multiple test failures, always fix them one by one, never try to fix them all at once
 documentation:
 use lots of emojis and draw ASCII art diagrams to help explain things, i am a visual learner
 document things visually like crazy - not just for humans, but so that agents are able to pick up where you left off and continue working while understanding your reasoning

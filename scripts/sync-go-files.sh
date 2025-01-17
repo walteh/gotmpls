@@ -28,6 +28,7 @@ set -euo pipefail
 
 # 🔍 Validate required arguments
 if [ "$#" -lt 2 ]; then
+
 	echo "❌ Missing required arguments"
 	echo "📖 Usage: $0 <github-url> <destination-dir> [--string-to-replace <pattern>]"
 	echo "   Example: $0 github.com/golang/tools/blob/master/gopls/internal/protocol/generate ./pkg/lsp/generator"

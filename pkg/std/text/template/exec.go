@@ -7,12 +7,13 @@ package template
 import (
 	"errors"
 	"fmt"
-	"internal/fmtsort"
 	"io"
 	"reflect"
 	"runtime"
 	"strings"
 	"text/template/parse"
+
+	"github.com/walteh/gotmpls/pkg/std/internal/fmtsort" // modi
 )
 
 // maxExecDepth specifies the maximum stack depth of templates within

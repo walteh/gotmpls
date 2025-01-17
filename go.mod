@@ -11,6 +11,7 @@ require (
 	github.com/k0kubun/pp/v3 v3.4.1
 	github.com/kylelemons/godebug v1.1.0
 	github.com/neovim/go-client v1.2.1
+	github.com/rogpeppe/go-internal v1.9.0
 	github.com/rs/xid v1.5.0
 	github.com/rs/zerolog v1.33.0
 	github.com/spf13/cobra v1.8.1
