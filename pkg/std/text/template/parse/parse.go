@@ -32,6 +32,7 @@ type Tree struct {
 	treeSet    map[string]*Tree
 	actionLine int // line of left delim starting action
 	rangeDepth int
+	errors     []error // all errors encountered during parsing
 }
 
 // A mode value is a set of flags (or 0). Modes control parser behavior.
@@ -55,14 +56,22 @@ func (t *Tree) Copy() *Tree {
 	}
 }
 
-// Parse returns a map from template name to [Tree], created by parsing the
-// templates described in the argument string. The top-level template will be
-// given the specified name. If an error is encountered, parsing stops and an
-// empty map is returned with the error.
+// Parse returns a map from template name to parse.Tree, created by parsing the
+// templates described in the argument string. The top-level template will be given
+// the specified name. If an error is encountered, parsing stops and an empty map
+// is returned with the error.
 func Parse(name, text, leftDelim, rightDelim string, funcs ...map[string]any) (map[string]*Tree, error) {
 	treeSet := make(map[string]*Tree)
 	t := New(name)
 	t.text = text
+	if len(funcs) > 0 {
+		t.funcs = funcs
+	}
+
+	// Add the tree to the set before attempting to parse
+	treeSet[name] = t
+
+	// Attempt to parse
 	_, err := t.Parse(text, leftDelim, rightDelim, treeSet, funcs...)
 	return treeSet, err
 }
@@ -160,13 +169,26 @@ func (t *Tree) ErrorContext(n Node) (location, context string) {
 // errorf formats the error and terminates processing.
 func (t *Tree) errorf(format string, args ...any) {
 	t.Root = nil
-	format = fmt.Sprintf("template: %s:%d: %s", t.ParseName, t.token[0].line, format)
-	panic(fmt.Errorf(format, args...))
+	err := fmt.Errorf("template: %s:%d: %s", t.ParseName, t.token[0].line, fmt.Sprintf(format, args...))
+	t.errors = append(t.errors, err)
+	panic(err)
 }
 
 // error terminates processing.
 func (t *Tree) error(err error) {
-	t.errorf("%s", err)
+	t.Root = nil
+	t.errors = append(t.errors, err)
+	panic(err)
+}
+
+func (t *Tree) addErrorf(format string, args ...any) {
+	err := fmt.Errorf("template: %s:%d: %s", t.ParseName, t.token[0].line, fmt.Sprintf(format, args...))
+	t.errors = append(t.errors, err)
+}
+
+// Errors returns all errors encountered during parsing.
+func (t *Tree) Errors() []error {
+	return t.errors
 }
 
 // expect consumes the next token and guarantees it has the required type.
@@ -213,6 +235,10 @@ func (t *Tree) recover(errp *error) {
 			t.stopParse()
 		}
 		*errp = e.(error)
+	}
+
+	if len(t.errors) > 0 {
+		*errp = t.errors[0]
 	}
 }
 
@@ -509,8 +535,11 @@ decls:
 func (t *Tree) checkPipeline(pipe *PipeNode, context string) {
 	// Reject empty pipelines
 	if len(pipe.Cmds) == 0 {
-		t.errorf("missing value for %s", context)
+		t.addErrorf("missing value for %s", context)
+		return
+		// t.errorf("missing value for %s", context)
 	}
+
 	// Only the first command of a pipeline can start with a non executable operand
 	for i, c := range pipe.Cmds[1:] {
 		switch c.Args[0].Type() {
