@@ -226,7 +226,6 @@ func (t *Tree) recover(errp *error) {
 		if t != nil {
 			t.stopParse()
 		}
-		*errp = e.(error)
 	}
 
 	if len(t.errors) > 0 {
@@ -330,10 +329,14 @@ func (t *Tree) parse() {
 			}
 			t.backup2(delim)
 		}
-		switch n := t.textOrAction(); n.Type() {
+		n := t.textOrAction()
+		if n == nil {
+			t.next()
+			continue
+		}
+		switch n.Type() {
 		case nodeEnd, nodeElse:
-			// t.errorf("unexpected %s", n)
-			t.errorfNoPanic("unexpected %s", n)
+			t.errorf("unexpected %s", n)
 		default:
 			t.Root.append(n)
 		}
@@ -370,6 +373,10 @@ func (t *Tree) itemList() (list *ListNode, next Node) {
 	list = t.newList(t.peekNonSpace().pos)
 	for t.peekNonSpace().typ != itemEOF {
 		n := t.textOrAction()
+		if n == nil {
+			t.next()
+			continue
+		}
 		switch n.Type() {
 		case nodeEnd, nodeElse:
 			return list, n
@@ -394,7 +401,8 @@ func (t *Tree) textOrAction() Node {
 	case itemComment:
 		return t.newComment(token.pos, token.val)
 	default:
-		t.unexpected(token, "input")
+		t.errorfNoPanic("unexpected %s in input", token)
+		// t.unexpected(token, "input")
 	}
 	return nil
 }

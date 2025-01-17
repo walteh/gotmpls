@@ -52,3 +52,10 @@ func (t *Tree) errorfNoPanic(format string, args ...any) {
 func (t *Tree) Errors() []*ParseError {
 	return t.errors
 }
+
+// errorfNoPanic returns an error token but does not terminate the scan
+// func (l *lexer) errorfNoPanic(format string, args ...any) stateFn {
+// 	l.item = item{itemError, l.start, fmt.Sprintf(format, args...), l.startLine}
+
+// 	return nil
+// }

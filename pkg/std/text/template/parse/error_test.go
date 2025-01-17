@@ -17,6 +17,7 @@
 package parse_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -40,12 +41,21 @@ var (
 	// Syntax Errors
 	unexpectedEOF = targetError{message: "unexpected EOF", file: "parse.go", function: "itemList"}
 	unexpectedEnd = targetError{message: "unexpected {{end}}", file: "parse.go", function: "itemList"}
+
+	// Action Errors
+	unclosedAction = targetError{message: "unclosed action", file: "parse.go", function: "parse"}
 )
 
 var targetErrors = []targetError{
 	missingValueForIf,
 	unexpectedEnd,
 	unexpectedEOF,
+	unclosedAction,
+}
+
+var errorsThatCanOnlyShowUpAtTheEnd = []targetError{
+	unexpectedEOF,
+	unclosedAction,
 }
 
 var checkedErrors = make(map[targetError]int)
@@ -53,7 +63,7 @@ var checkedErrors = make(map[targetError]int)
 func markCheckedErrors(t *testing.T, errors []targetError) {
 	for i, err := range errors {
 		// we don't check the last error because nothing was aggregated behind it
-		if i < len(errors)-1 {
+		if i < len(errors)-1 || slices.Contains(errorsThatCanOnlyShowUpAtTheEnd, err) {
 			checkedErrors[err]++
 		}
 	}
@@ -63,8 +73,6 @@ func init() {
 	for _, err := range targetErrors {
 		checkedErrors[err] = 0
 	}
-	// special case because this error will never have something behind it
-	checkedErrors[unexpectedEOF] = 1
 }
 
 type aggregationTest struct {
@@ -99,15 +107,16 @@ var aggregationTests = []aggregationTest{
 		// │  {{if    │ (Missing if condition)
 		// └──────────┘
 		name:     "if_end_missing_content_extra_end",
-		template: "Hello {{if}} {{end}} {{end}}",
+		template: "Hello {{if}} {{end}} {{end}}{{end}}",
 		expectedErrors: []targetError{
 			missingValueForIf,
+			unexpectedEnd,
 			unexpectedEnd,
 		},
 	},
 	{
 		name:     "if_end_missing_with_comments",
-		template: "Hello {{if}} {{/* comment */}} {{end}} {{end}}{{end}}",
+		template: "Hello {{if}} {{/* comment */}} {{end}} {{end}}{{end}}{{if}}",
 		expectedErrors: []targetError{
 			missingValueForIf,
 			unexpectedEnd,
@@ -122,6 +131,17 @@ var aggregationTests = []aggregationTest{
 			missingValueForIf,
 			missingValueForIf,
 			unexpectedEOF,
+		},
+	},
+	{
+		// Template structure:
+		// ┌──────────┐
+		// │   {{.Y   │ (Another unclosed action with field)
+		// └──────────┘
+		name:     "another_unclosed_action",
+		template: "{{.Y",
+		expectedErrors: []targetError{
+			unclosedAction,
 		},
 	},
 }
