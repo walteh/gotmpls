@@ -20,4 +20,7 @@ import (
 	_ "github.com/srikrsna/protoc-gen-gotag"
 	_ "github.com/vektra/mockery/v2"
 	_ "github.com/walteh/retab/v2/cmd/retab"
+
+	_ "github.com/alecthomas/participle/v2/cmd/participle"
+	_ "github.com/alecthomas/participle/v2/cmd/railroad"
 )

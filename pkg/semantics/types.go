@@ -23,6 +23,7 @@ const (
 	TokenTypeComment
 	TokenTypeNumber
 	TokenTypeText
+	TokenTypeField
 )
 
 const (

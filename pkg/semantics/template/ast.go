@@ -1,118 +1,271 @@
+// Package template provides parsing and analysis for Go templates with support for multiple text formats.
 package template
 
-import (
-	"strings"
+// AST Structure for Template Parser
+//
+// This file outlines the proposed structure for parsing Go templates into an AST.
+// The parser will support multiple output formats (starting with JSON and TXT).
+//
+// ╭──────────────────────────────────────────────────────────╮
+// │                    AST Structure                         │
+// │                                                          │
+// │           Template                                       │
+// │              │                                           │
+// │              ├─── Node                                   │
+// │              │     ├─── TextNode                        │
+// │              │     │     └─── ContentParser             │
+// │              │     ├─── ActionNode                      │
+// │              │     └─── CommentNode                     │
+// │              │                                           │
+// │              └─── ContentParser                         │
+// │                    ├─── TextParser (default)            │
+// │                    ├─── JSONParser                      │
+// │                    └─── (future: YAML, JS, etc)         │
+// ╰──────────────────────────────────────────────────────────╯
+//
+// Lexer State Machine:
+// ┌──────────────────┐
+// │       Root       │
+// │                  │
+// │  [Text outside   │
+// │   delimiters]    │
+// └──────────┬───────┘
+//            │
+//            │ "{{" encountered
+//            ▼
+// ┌──────────────────┐
+// │      Action      │
+// │                  │
+// │  [Inside action  │
+// │   delimiters]    │
+// └──────────┬───────┘
+//            │
+//            │ "}}" encountered
+//            ▼
+// Back to Root State
+//
+// The lexer uses different rules based on the current state:
+// - Root State: Matches text and opening delimiters
+// - Action State: Matches identifiers, operators, and closing delimiters
+//
+// Pipeline Structure:
+// ┌──────────────────┐
+// │     Pipeline     │
+// │                  │
+// │  First Command   │
+// │  Rest Commands   │
+// └──────────┬───────┘
+//            │
+//            ├── FuncCall
+//            │   └── Args
+//            │
+//            ├── MethodCall
+//            │   └── Args
+//            │
+//            └── Argument
+//                ├── String
+//                ├── Number
+//                ├── Bool
+//                ├── Nil
+//                ├── Dot
+//                ├── Field
+//                └── SubExpr
 
-	"github.com/alecthomas/participle/v2/lexer"
-)
-
-// Template represents a complete template file
+// Template represents a complete template with a sequence of nodes
 type Template struct {
-	Pos lexer.Position
-
 	Nodes []*Node `@@*`
 }
 
-// Node represents a node in the template
+// Node represents a single node in the template
+// It can be either a TextNode, ActionNode, or CommentNode
 type Node struct {
-	Pos lexer.Position
-
-	Text    *string  `(  @Text`
-	Action  *Action  ` | @@`
-	Comment *Comment ` | @@`
-	Control *Control ` | @@ )`
+	Text    *TextNode    `@@ |`
+	Action  *ActionNode  `@@ |`
+	Comment *CommentNode `@@`
 }
 
-// Action represents a template action (e.g., {{.Name}})
-type Action struct {
-	Pos lexer.Position
-
-	OpenDelim  string    `@OpenDelim`
-	Pipeline   *Pipeline `@@?`
-	CloseDelim string    `@CloseDelim`
+func (n *Node) ToString() string {
+	if n.Text != nil {
+		return n.Text.ToString()
+	}
+	if n.Action != nil {
+		return n.Action.ToString()
+	}
+	if n.Comment != nil {
+		return n.Comment.ToString()
+	}
+	return ""
 }
 
-// Comment represents a template comment
-type Comment struct {
-	Pos lexer.Position
-
-	OpenDelim  string `@OpenDelim`
-	Content    string `@CommentText`
-	CloseDelim string `@CloseDelim`
+// TextNode represents plain text outside of delimiters
+type TextNode struct {
+	Text string `@Text`
 }
 
-// Control represents a control structure (if, range, with, etc.)
-type Control struct {
-	Pos lexer.Position
-
-	OpenDelim  string    `@OpenDelim`
-	Keyword    string    `@("if" | "range" | "with" | "template" | "block" | "define" | "end" | "else")`
-	Pipeline   *Pipeline `@@?`
-	CloseDelim string    `@CloseDelim`
+func (t *TextNode) ToString() string {
+	return t.Text
 }
 
-// Pipeline represents a chain of commands
+// ActionNode represents code inside delimiters {{...}}
+type ActionNode struct {
+	Pipeline *Pipeline `"{{" @@ "}}"`
+}
+
+func (a *ActionNode) ToString() string {
+	if a.Pipeline == nil {
+		return "{{}}"
+	}
+	return "{{" + a.Pipeline.ToString() + "}}"
+}
+
+// CommentNode represents comments {{/* ... */}}
+type CommentNode struct {
+	Text string `@InlineComment`
+}
+
+func (c *CommentNode) ToString() string {
+	return c.Text
+}
+
+// Pipeline represents a sequence of commands
 type Pipeline struct {
-	Pos lexer.Position
-
-	Cmd  *Command  `@@`
-	Next *Pipeline `( "|" @@ )?`
+	First *Command   `@@`
+	Rest  []*Command `( "|" @@ )*`
 }
 
-// ToString returns the string representation of the pipeline
 func (p *Pipeline) ToString() string {
-	if p == nil {
+	if p.First == nil {
 		return ""
 	}
-	var parts []string
-	current := p
-	for current != nil {
-		parts = append(parts, current.Cmd.ToString())
-		current = current.Next
+	result := p.First.ToString()
+	for _, cmd := range p.Rest {
+		result += " | " + cmd.ToString()
 	}
-	return strings.Join(parts, " | ")
+	return result
 }
 
-// Command represents a command with its identifier and arguments
+// Command represents a single command in a pipeline
+// It can be either a function call, method call, or variable reference
 type Command struct {
-	Pos lexer.Position
-
-	Identifier string `@(Ident | DotIdent)`
-	Args       []Arg  `@@*`
+	FuncCall   *FuncCall   `@@ |`
+	MethodCall *MethodCall `@@ |`
+	Argument   *Argument   `@@`
 }
 
-// ToString returns the string representation of the command
 func (c *Command) ToString() string {
-	if c == nil {
-		return ""
+	if c.FuncCall != nil {
+		return c.FuncCall.ToString()
 	}
-	var parts []string
-	parts = append(parts, c.Identifier)
-	for _, arg := range c.Args {
-		parts = append(parts, arg.ToString())
+	if c.MethodCall != nil {
+		return c.MethodCall.ToString()
 	}
-	return strings.Join(parts, " ")
+	if c.Argument != nil {
+		return c.Argument.ToString()
+	}
+	return ""
 }
 
-// Arg represents an argument to a command
-type Arg struct {
-	Pos lexer.Position
-
-	Number   *string `(  @Number`
-	String   *string ` | @String`
-	Variable *string ` | @(Ident | DotIdent) )`
+// FuncCall represents a function call with arguments
+type FuncCall struct {
+	Name string      `@Ident`
+	Args []*Argument `@@*`
 }
 
-// ToString returns the string representation of the argument
-func (a *Arg) ToString() string {
-	switch {
-	case a.Number != nil:
-		return *a.Number
-	case a.String != nil:
+func (f *FuncCall) ToString() string {
+	result := f.Name
+	for _, arg := range f.Args {
+		result += " " + arg.ToString()
+	}
+	return result
+}
+
+// MethodCall represents a method call on a variable or field
+type MethodCall struct {
+	Name string      `@Ident`
+	Args []*Argument `@@*`
+}
+
+func (m *MethodCall) ToString() string {
+	result := m.Name
+	for _, arg := range m.Args {
+		result += " " + arg.ToString()
+	}
+	return result
+}
+
+// Argument represents a value that can be passed to a function or method
+type Argument struct {
+	String  *string   `@String |`
+	Number  *string   `@Number |`
+	Bool    *bool     `( @"true" | @"false" ) |`
+	Nil     bool      `@"nil" |`
+	Field   *Field    `@@ |`
+	SubExpr *Pipeline `"(" @@ ")"`
+}
+
+func (a *Argument) ToString() string {
+	if a.String != nil {
 		return *a.String
-	case a.Variable != nil:
-		return *a.Variable
-	default:
-		return ""
 	}
+	if a.Number != nil {
+		return *a.Number
+	}
+	if a.Bool != nil {
+		if *a.Bool {
+			return "true"
+		}
+		return "false"
+	}
+	if a.Nil {
+		return "nil"
+	}
+	if a.Field != nil {
+		return a.Field.ToString()
+	}
+	if a.SubExpr != nil {
+		return "(" + a.SubExpr.ToString() + ")"
+	}
+	return ""
+}
+
+// Field represents a field access on a variable
+type Field struct {
+	Dot   bool     `@"."`
+	Names []string `@Ident ( "." @Ident )*`
+}
+
+func (f *Field) ToString() string {
+	result := ""
+	if f.Dot {
+		result = "."
+	}
+	for i, name := range f.Names {
+		if i > 0 {
+			result += "."
+		}
+		result += name
+	}
+	return result
+}
+
+// ContentParser is an interface for parsing text into different formats
+type ContentParser interface {
+	Parse(text string) (interface{}, error)
+}
+
+// TextParser implements ContentParser for unstructured text
+type TextParser struct{}
+
+func (p *TextParser) Parse(text string) (interface{}, error) {
+	return text, nil
+}
+
+// JSONParser implements ContentParser for JSON format
+type JSONParser struct {
+	Examples map[string]interface{}
+}
+
+func (p *JSONParser) Parse(text string) (interface{}, error) {
+	// TODO: Implement JSON parsing based on examples
+	return nil, nil
 }
