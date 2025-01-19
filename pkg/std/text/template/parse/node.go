@@ -844,6 +844,7 @@ func (e *elseNode) Copy() Node {
 type BranchNode struct {
 	NodeType
 	Pos
+	Keyword  item
 	tr       *Tree
 	Line     int       // The line number in the input. Deprecated: Kept for compatibility.
 	Pipe     *PipeNode // The pipeline to be evaluated.
@@ -889,11 +890,11 @@ func (b *BranchNode) tree() *Tree {
 func (b *BranchNode) Copy() Node {
 	switch b.NodeType {
 	case NodeIf:
-		return b.tr.newIf(b.Pos, b.Line, b.Pipe, b.List, b.ElseList)
+		return b.tr.newIf(b.Pos, b.Line, b.Pipe, b.List, b.ElseList, b.Keyword)
 	case NodeRange:
-		return b.tr.newRange(b.Pos, b.Line, b.Pipe, b.List, b.ElseList)
+		return b.tr.newRange(b.Pos, b.Line, b.Pipe, b.List, b.ElseList, b.Keyword)
 	case NodeWith:
-		return b.tr.newWith(b.Pos, b.Line, b.Pipe, b.List, b.ElseList)
+		return b.tr.newWith(b.Pos, b.Line, b.Pipe, b.List, b.ElseList, b.Keyword)
 	default:
 		panic("unknown branch type")
 	}
@@ -904,12 +905,12 @@ type IfNode struct {
 	BranchNode
 }
 
-func (t *Tree) newIf(pos Pos, line int, pipe *PipeNode, list, elseList *ListNode) *IfNode {
-	return &IfNode{BranchNode{tr: t, NodeType: NodeIf, Pos: pos, Line: line, Pipe: pipe, List: list, ElseList: elseList}}
+func (t *Tree) newIf(pos Pos, line int, pipe *PipeNode, list, elseList *ListNode, keyword item) *IfNode {
+	return &IfNode{BranchNode{tr: t, NodeType: NodeIf, Pos: pos, Line: line, Pipe: pipe, List: list, ElseList: elseList, Keyword: keyword}}
 }
 
 func (i *IfNode) Copy() Node {
-	return i.tr.newIf(i.Pos, i.Line, i.Pipe.CopyPipe(), i.List.CopyList(), i.ElseList.CopyList())
+	return i.tr.newIf(i.Pos, i.Line, i.Pipe.CopyPipe(), i.List.CopyList(), i.ElseList.CopyList(), i.Keyword)
 }
 
 // BreakNode represents a {{break}} action.
@@ -951,12 +952,12 @@ type RangeNode struct {
 	BranchNode
 }
 
-func (t *Tree) newRange(pos Pos, line int, pipe *PipeNode, list, elseList *ListNode) *RangeNode {
-	return &RangeNode{BranchNode{tr: t, NodeType: NodeRange, Pos: pos, Line: line, Pipe: pipe, List: list, ElseList: elseList}}
+func (t *Tree) newRange(pos Pos, line int, pipe *PipeNode, list, elseList *ListNode, keyword item) *RangeNode {
+	return &RangeNode{BranchNode{tr: t, NodeType: NodeRange, Pos: pos, Line: line, Pipe: pipe, List: list, ElseList: elseList, Keyword: keyword}}
 }
 
 func (r *RangeNode) Copy() Node {
-	return r.tr.newRange(r.Pos, r.Line, r.Pipe.CopyPipe(), r.List.CopyList(), r.ElseList.CopyList())
+	return r.tr.newRange(r.Pos, r.Line, r.Pipe.CopyPipe(), r.List.CopyList(), r.ElseList.CopyList(), r.Keyword)
 }
 
 // WithNode represents a {{with}} action and its commands.
@@ -964,12 +965,12 @@ type WithNode struct {
 	BranchNode
 }
 
-func (t *Tree) newWith(pos Pos, line int, pipe *PipeNode, list, elseList *ListNode) *WithNode {
-	return &WithNode{BranchNode{tr: t, NodeType: NodeWith, Pos: pos, Line: line, Pipe: pipe, List: list, ElseList: elseList}}
+func (t *Tree) newWith(pos Pos, line int, pipe *PipeNode, list, elseList *ListNode, keyword item) *WithNode {
+	return &WithNode{BranchNode{tr: t, NodeType: NodeWith, Pos: pos, Line: line, Pipe: pipe, List: list, ElseList: elseList, Keyword: keyword}}
 }
 
 func (w *WithNode) Copy() Node {
-	return w.tr.newWith(w.Pos, w.Line, w.Pipe.CopyPipe(), w.List.CopyList(), w.ElseList.CopyList())
+	return w.tr.newWith(w.Pos, w.Line, w.Pipe.CopyPipe(), w.List.CopyList(), w.ElseList.CopyList(), w.Keyword)
 }
 
 // TemplateNode represents a {{template}} action.

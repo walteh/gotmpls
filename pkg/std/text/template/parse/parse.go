@@ -521,8 +521,9 @@ func (t *Tree) checkPipeline(pipe *PipeNode, context string) {
 	}
 }
 
-func (t *Tree) parseControl(context string) (pos Pos, line int, pipe *PipeNode, list, elseList *ListNode) {
+func (t *Tree) parseControl(context string) (pos Pos, line int, pipe *PipeNode, list, elseList *ListNode, keyword item) {
 	defer t.popVars(len(t.vars))
+	keyword = t.lex.item
 	pipe = t.pipeline(context, itemRightDelim)
 	if context == "range" {
 		t.rangeDepth++
@@ -532,6 +533,7 @@ func (t *Tree) parseControl(context string) (pos Pos, line int, pipe *PipeNode, 
 	if context == "range" {
 		t.rangeDepth--
 	}
+
 	switch next.Type() {
 	case nodeEnd: //done
 	case nodeElse:
@@ -546,11 +548,11 @@ func (t *Tree) parseControl(context string) (pos Pos, line int, pipe *PipeNode, 
 		// To do this, parse the "if" or "with" as usual and stop at it {{end}};
 		// the subsequent{{end}} is assumed. This technique works even for long if-else-if chains.
 		if context == "if" && t.peek().typ == itemIf {
-			t.next() // Consume the "if" token.
+			keyword = t.next() // Consume the "if" token.
 			elseList = t.newList(next.Position())
 			elseList.append(t.ifControl())
 		} else if context == "with" && t.peek().typ == itemWith {
-			t.next()
+			keyword = t.next()
 			elseList = t.newList(next.Position())
 			elseList.append(t.withControl())
 		} else {
@@ -560,7 +562,7 @@ func (t *Tree) parseControl(context string) (pos Pos, line int, pipe *PipeNode, 
 			}
 		}
 	}
-	return pipe.Position(), pipe.Line, pipe, list, elseList
+	return pipe.Position(), pipe.Line, pipe, list, elseList, keyword
 }
 
 // If:
