@@ -44,6 +44,9 @@ const (
 
 	// TokenComment represents a template comment
 	TokenComment
+
+	// TokenNumber represents a numeric literal (e.g., 0, 1.5)
+	TokenNumber
 )
 
 // TokenModifier represents additional characteristics of a token
@@ -90,6 +93,8 @@ func (t TokenType) String() string {
 		return "string"
 	case TokenComment:
 		return "comment"
+	case TokenNumber:
+		return "number"
 	default:
 		return "unknown"
 	}

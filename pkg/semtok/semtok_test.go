@@ -85,10 +85,71 @@ func TestVariableTokens(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:  "test_variable_with_len",
+			input: "{{ len .Items }}",
+			expected: []semtok.Token{
+				{
+					Type:     semtok.TokenFunction,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("len", 2),
+				},
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".Items", 6),
+				},
+			},
+		},
+		{
+			name:  "test_variable_with_index",
+			input: "{{ index .Array 0 }}",
+			expected: []semtok.Token{
+				{
+					Type:     semtok.TokenFunction,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("index", 2),
+				},
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".Array", 8),
+				},
+				{
+					Type:     semtok.TokenNumber,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("0", 15),
+				},
+			},
+		},
+		{
+			name:  "test_variable_with_chained_modifiers",
+			input: "{{ len (index .Array 0) }}",
+			expected: []semtok.Token{
+				{
+					Type:     semtok.TokenFunction,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("len", 2),
+				},
+				{
+					Type:     semtok.TokenFunction,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("index", 7),
+				},
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".Array", 13),
+				},
+				{
+					Type:     semtok.TokenNumber,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("0", 20),
+				},
+			},
+		},
 		// TODO(@semtok): Add more variable test cases
-		// - Multiple variables
-		// - Nested variables
-		// - Variables with modifiers
+		// - Variables with more complex modifiers
 	}
 
 	for _, tt := range tests {

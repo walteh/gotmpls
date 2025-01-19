@@ -95,3 +95,11 @@ func NewTextNodePosition(node *parse.TextNode) RawPosition {
 func NewDotNodePosition(node *parse.DotNode) RawPosition {
 	return RawPosition{Text: ".", Offset: int(node.Pos) - 1}
 }
+
+// NewNumberNodePosition creates a RawPosition from a template parser's NumberNode
+func NewNumberNodePosition(node *parse.NumberNode) RawPosition {
+	return RawPosition{
+		Text:   node.String(),
+		Offset: int(node.Pos) - 1,
+	}
+}

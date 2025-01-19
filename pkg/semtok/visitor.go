@@ -69,7 +69,6 @@ func newVisitor(ctx context.Context, content []byte) (*tokenVisitor, error) {
 
 // visitNode dispatches to the appropriate visit method based on node type
 func (v *tokenVisitor) visitNode(node parse.Node) error {
-
 	switch n := node.(type) {
 	case *parse.ActionNode:
 		return v.visitAction(n)
@@ -99,6 +98,8 @@ func (v *tokenVisitor) visitNode(node parse.Node) error {
 		return v.visitComment(n)
 	case *parse.DotNode:
 		return v.visitDot(n)
+	case *parse.NumberNode:
+		return v.visitNumber(n)
 	default:
 		// TODO(@semtok): Add support for other node types
 		return nil
@@ -354,6 +355,16 @@ func (v *tokenVisitor) visitDot(node *parse.DotNode) error {
 		Type:     TokenVariable,
 		Modifier: ModifierNone,
 		Range:    position.NewDotNodePosition(node),
+	})
+	return nil
+}
+
+// visitNumber processes a number node (e.g., 0, 1.5)
+func (v *tokenVisitor) visitNumber(node *parse.NumberNode) error {
+	v.tokens = append(v.tokens, Token{
+		Type:     TokenNumber,
+		Modifier: ModifierNone,
+		Range:    position.NewNumberNodePosition(node),
 	})
 	return nil
 }
