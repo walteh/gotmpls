@@ -3,9 +3,23 @@ package ast
 import (
 	"go/types"
 	"reflect"
+	"strings"
 
 	"github.com/walteh/gotmpls/pkg/astreflect"
+	"github.com/walteh/gotmpls/pkg/std/text/template"
 )
+
+func Extras() template.FuncMap {
+	return template.FuncMap{
+		"upper":      strings.ToUpper,
+		"replace":    strings.ReplaceAll,
+		"split":      strings.Split,
+		"join":       strings.Join,
+		"trim":       strings.TrimSpace,
+		"trimPrefix": strings.TrimPrefix,
+		"trimSuffix": strings.TrimSuffix,
+	}
+}
 
 // TemplateMethodInfo represents information about a template method
 type TemplateMethodInfo struct {
@@ -19,7 +33,7 @@ func generateBuiltinTemplateMethods() map[string]*TemplateMethodInfo {
 	methods := make(map[string]*TemplateMethodInfo)
 
 	// Combine both builtin and extra functions
-	allFuncs := Builtins()
+	allFuncs := template.BuiltinsExported()
 	for name, fn := range Extras() {
 		allFuncs[name] = fn
 	}
