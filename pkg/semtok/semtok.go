@@ -31,8 +31,10 @@ package semtok
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/walteh/gotmpls/pkg/position"
+	"github.com/walteh/gotmpls/pkg/std/text/template/parse"
 )
 
 // GetTokensForText returns semantic tokens for the given template text.
@@ -45,11 +47,27 @@ import (
 //	   }
 //	   // Use tokens...
 func GetTokensForText(ctx context.Context, content []byte) ([]Token, error) {
-	// TODO(@semtok): Implement token generation
-	// 1. Parse template
-	// 2. Visit AST nodes
-	// 3. Convert to semantic tokens
-	return nil, nil
+
+	parser := parse.New("semtok")
+	parser.Mode = parse.ParseComments | parse.SkipFuncCheck
+
+	// Parse the template
+	tree, err := parser.Parse(string(content), "{{", "}}", map[string]*parse.Tree{})
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a visitor and walk the AST
+	visitor, err := newVisitor(ctx, content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create visitor: %w", err)
+	}
+
+	if err := visitor.visitNode(tree.Root); err != nil {
+		return nil, fmt.Errorf("failed to visit nodes: %w", err)
+	}
+
+	return visitor.getTokens(), nil
 }
 
 // GetTokensForRange returns semantic tokens for a specific range in the template.
@@ -66,5 +84,13 @@ func GetTokensForRange(ctx context.Context, content []byte, ranged *position.Raw
 	// 1. Parse template
 	// 2. Filter nodes in range
 	// 3. Convert to semantic tokens
+	return nil, nil
+}
+
+// GetTokensForFile is an alias for GetTokensForText that's specifically
+// meant for processing entire files.
+func GetTokensForFile(ctx context.Context, content []byte) ([]uint32, error) {
+	// TODO(@semtok): Implement file-based token generation
+	// This should convert our Token structs to the LSP's uint32 array format
 	return nil, nil
 }
