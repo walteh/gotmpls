@@ -49,7 +49,34 @@ func TestVariableTokens(t *testing.T) {
 				{
 					Type:     semtok.TokenVariable,
 					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition(".Name", 3),
+					Range:    position.NewBasicPosition(".Name", 2),
+				},
+			},
+		},
+		{
+			name:  "test_multiple_variables",
+			input: "{{ .First }} {{ .Second }}",
+			expected: []semtok.Token{
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".First", 2),
+				},
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".Second", 15),
+				},
+			},
+		},
+		{
+			name:  "test_nested_variable",
+			input: "{{ .User.Name }}",
+			expected: []semtok.Token{
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".User.Name", 2),
 				},
 			},
 		},
@@ -86,12 +113,12 @@ func TestFunctionTokens(t *testing.T) {
 				{
 					Type:     semtok.TokenFunction,
 					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition("printf", 3),
+					Range:    position.NewBasicPosition("printf", 2),
 				},
 				{
 					Type:     semtok.TokenVariable,
 					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition(".Name", 10),
+					Range:    position.NewBasicPosition(".Name", 9),
 				},
 			},
 		},
@@ -123,28 +150,129 @@ func TestKeywordTokens(t *testing.T) {
 	}{
 		{
 			name:  "test_if_keyword",
-			input: "{{ if .Ready }}ready{{end}}",
+			input: "{{ if .Ready }}ready{{end}}{{ if .Readz }}readz{{end}}",
 			expected: []semtok.Token{
 				{
 					Type:     semtok.TokenKeyword,
 					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition("if", 3),
+					Range:    position.NewBasicPosition("if", 2),
 				},
 				{
 					Type:     semtok.TokenVariable,
 					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition(".Ready", 6),
+					Range:    position.NewBasicPosition(".Ready", 5),
 				},
 				{
 					Type:     semtok.TokenKeyword,
 					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition("end", 20),
+					Range:    position.NewBasicPosition("end", 19),
+				},
+			},
+		},
+		{
+			name:  "test_if_else_comment",
+			input: "{{ if .Ready }}ready{{else if .Readz }}{{/* readz */}}yo{{end}}",
+			expected: []semtok.Token{
+
+				{
+					Type:     semtok.TokenKeyword,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("if", 2),
+				},
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".Ready", 5),
+				},
+				{
+					Type:     semtok.TokenString,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("ready", 14),
+				},
+
+				{
+					Type:     semtok.TokenKeyword,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("else if", 21),
+				},
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".Readz", 29),
+				},
+
+				{
+					Type:     semtok.TokenComment,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("/* readz */", 40),
+				},
+
+				{
+					Type:     semtok.TokenString,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("yo", 53),
+				},
+
+				{
+					Type:     semtok.TokenKeyword,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("end", 57),
+				},
+			},
+		},
+		{
+			name:  "test_range_keyword",
+			input: "{{ range .Items }}{{.}}{{end}}",
+			expected: []semtok.Token{
+				{
+					Type:     semtok.TokenKeyword,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("range", 2),
+				},
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".Items", 8),
+				},
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".", 15),
+				},
+				{
+					Type:     semtok.TokenKeyword,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("end", 24),
+				},
+			},
+		},
+		{
+			name:  "test_with_keyword",
+			input: "{{ with .User }}{{.Name}}{{end}}",
+			expected: []semtok.Token{
+				{
+					Type:     semtok.TokenKeyword,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("with", 3),
+				},
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".User", 8),
+				},
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".Name", 17),
+				},
+				{
+					Type:     semtok.TokenKeyword,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("end", 26),
 				},
 			},
 		},
 		// TODO(@semtok): Add more keyword test cases
-		// - range keyword
-		// - with keyword
 		// - template keyword
 		// - define keyword
 	}

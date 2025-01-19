@@ -781,32 +781,32 @@ func (s *StringNode) Copy() Node {
 	return s.tr.newString(s.Pos, s.Quoted, s.Text)
 }
 
-// endNode represents an {{end}} action.
+// EndNode represents an {{end}} action.
 // It does not appear in the final parse tree.
-type endNode struct {
+type EndNode struct {
 	NodeType
 	Pos
 	tr      *Tree
 	keyword item
 }
 
-func (t *Tree) newEnd(pos Pos, keyword item) *endNode {
-	return &endNode{tr: t, NodeType: nodeEnd, Pos: pos, keyword: keyword}
+func (t *Tree) newEnd(pos Pos, keyword item) *EndNode {
+	return &EndNode{tr: t, NodeType: nodeEnd, Pos: pos, keyword: keyword}
 }
 
-func (e *endNode) String() string {
+func (e *EndNode) String() string {
 	return "{{end}}"
 }
 
-func (e *endNode) writeTo(sb *strings.Builder) {
+func (e *EndNode) writeTo(sb *strings.Builder) {
 	sb.WriteString(e.String())
 }
 
-func (e *endNode) tree() *Tree {
+func (e *EndNode) tree() *Tree {
 	return e.tr
 }
 
-func (e *endNode) Copy() Node {
+func (e *EndNode) Copy() Node {
 	return e.tr.newEnd(e.Pos, e.keyword)
 }
 

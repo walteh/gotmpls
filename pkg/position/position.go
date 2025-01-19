@@ -71,8 +71,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/walteh/gotmpls/pkg/std/text/template/parse"
-
 	"github.com/walteh/gotmpls/pkg/lsp/protocol"
 )
 
@@ -184,33 +182,6 @@ func (ranged Range) ToRawPosition(content string) RawPosition {
 	contentz := content[start.Offset:end.Offset]
 	start.Text = contentz
 	return start
-}
-
-// NewIdentifierNodePosition creates a RawPosition from a template parser's IdentifierNode.
-// This is used when working with Go's template/parse package to convert AST nodes
-// to our position system.
-//
-// Note: The parser's Position() is 1-based, so we subtract 1 to convert to 0-based.
-func NewIdentifierNodePosition(node *parse.IdentifierNode) RawPosition {
-	return RawPosition{
-		Text:   node.String(),
-		Offset: int(node.Position() - 1),
-	}
-}
-
-// NewFieldNodePosition creates a RawPosition from a template parser's FieldNode.
-// This handles field access expressions like ".Field.SubField" by focusing on
-// the last identifier in the chain.
-//
-// Example:
-//
-//	{{.User.Name}} -> focuses on "Name" part
-func NewFieldNodePosition(node *parse.FieldNode) RawPosition {
-	ident := node.Ident[len(node.Ident)-1]
-	return RawPosition{
-		Text:   node.String(),
-		Offset: int(node.Pos) - (len(node.String()) - len(ident)),
-	}
 }
 
 // HasRangeOverlapWith determines if this position overlaps with another position's range.
@@ -350,14 +321,6 @@ func (me RawPositionArray) ToStrings() []string {
 		texts = append(texts, pos.String())
 	}
 	return texts
-}
-
-// NewStringNodePosition creates a new position from a string node
-func NewStringNodePosition(node *parse.StringNode) RawPosition {
-	return RawPosition{
-		Text:   node.Text,
-		Offset: int(node.Pos),
-	}
 }
 
 func NewRangeFromLSPRange(ranged protocol.Range) Range {

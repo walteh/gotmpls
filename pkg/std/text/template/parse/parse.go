@@ -353,6 +353,9 @@ func (t *Tree) itemList() (list *ListNode, next Node) {
 		n := t.textOrAction()
 		switch n.Type() {
 		case nodeEnd, nodeElse:
+			if n.Type() == nodeEnd {
+				list.append(n)
+			}
 			return list, n
 		}
 		list.append(n)
@@ -548,13 +551,19 @@ func (t *Tree) parseControl(context string) (pos Pos, line int, pipe *PipeNode, 
 		// To do this, parse the "if" or "with" as usual and stop at it {{end}};
 		// the subsequent{{end}} is assumed. This technique works even for long if-else-if chains.
 		if context == "if" && t.peek().typ == itemIf {
-			keyword = t.next() // Consume the "if" token.
+			t.next() // Consume the "if" token.
 			elseList = t.newList(next.Position())
-			elseList.append(t.ifControl())
+			control := t.ifControl()
+			control.(*IfNode).keyword.val = "else if"
+			control.(*IfNode).keyword.pos = control.(*IfNode).keyword.pos - 5
+			elseList.append(control)
 		} else if context == "with" && t.peek().typ == itemWith {
-			keyword = t.next()
+			t.next() // Consume the "with" token.
 			elseList = t.newList(next.Position())
-			elseList.append(t.withControl())
+			control := t.withControl()
+			control.(*WithNode).keyword.val = "else with"
+			control.(*WithNode).keyword.pos = control.(*WithNode).keyword.pos - 5
+			elseList.append(control)
 		} else {
 			elseList, next = t.itemList()
 			if next.Type() != nodeEnd {
@@ -602,8 +611,9 @@ func (t *Tree) withControl() Node {
 //
 // End keyword is past.
 func (t *Tree) endControl() Node {
+	curr := t.lex.item
 	item := t.expect(itemRightDelim, "end")
-	return t.newEnd(item.pos, item)
+	return t.newEnd(item.pos, curr)
 }
 
 // Else:

@@ -69,6 +69,7 @@ func newVisitor(ctx context.Context, content []byte) (*tokenVisitor, error) {
 
 // visitNode dispatches to the appropriate visit method based on node type
 func (v *tokenVisitor) visitNode(node parse.Node) error {
+
 	switch n := node.(type) {
 	case *parse.ActionNode:
 		return v.visitAction(n)
@@ -82,10 +83,51 @@ func (v *tokenVisitor) visitNode(node parse.Node) error {
 		return v.visitString(n)
 	case *parse.PipeNode:
 		return v.visitPipe(n)
+	case *parse.CommandNode:
+		return v.visitCommand(n)
+	case *parse.IfNode:
+		return v.visitIf(n)
+	case *parse.RangeNode:
+		return v.visitRange(n)
+	case *parse.WithNode:
+		return v.visitWith(n)
+	case *parse.EndNode:
+		return v.visitEnd(n)
+	case *parse.TextNode:
+		return v.visitText(n)
+	case *parse.CommentNode:
+		return v.visitComment(n)
 	default:
 		// TODO(@semtok): Add support for other node types
 		return nil
 	}
+}
+
+func (v *tokenVisitor) visitText(node *parse.TextNode) error {
+	v.tokens = append(v.tokens, Token{
+		Type:     TokenString,
+		Modifier: ModifierNone,
+		Range:    position.NewTextNodePosition(node),
+	})
+	return nil
+}
+
+func (v *tokenVisitor) visitEnd(node *parse.EndNode) error {
+	v.tokens = append(v.tokens, Token{
+		Type:     TokenKeyword,
+		Modifier: ModifierNone,
+		Range:    position.NewKeywordPosition(node),
+	})
+	return nil
+}
+
+func (v *tokenVisitor) visitComment(node *parse.CommentNode) error {
+	v.tokens = append(v.tokens, Token{
+		Type:     TokenComment,
+		Modifier: ModifierNone,
+		Range:    position.NewCommentNodePosition(node),
+	})
+	return nil
 }
 
 // visitList processes a list of nodes
@@ -132,20 +174,9 @@ func (v *tokenVisitor) visitPipe(node *parse.PipeNode) error {
 
 // visitField processes a field node (e.g., .Name)
 func (v *tokenVisitor) visitField(node *parse.FieldNode) error {
-	// Get the full field text
-	text := node.String()
-
-	// Create position from node
-	// For field nodes, we want the position to be at the start of the action
-	// not at the dot of the nested field
-	pos := int(node.Pos)
-	adjustedPos := pos - len(text) + 1
-	if adjustedPos < 0 {
-		adjustedPos = pos // fallback to original position if calculation would go negative
-	}
 
 	// Create the position
-	rawPos := position.NewBasicPosition(text, adjustedPos)
+	rawPos := position.NewFieldNodePosition(node)
 
 	// Try to get additional info from diagnostic parser
 	var modifier TokenModifier = ModifierNone
@@ -168,7 +199,7 @@ func (v *tokenVisitor) visitField(node *parse.FieldNode) error {
 // visitIdentifier processes an identifier node (e.g., printf)
 func (v *tokenVisitor) visitIdentifier(node *parse.IdentifierNode) error {
 	// Create position from node
-	pos := position.NewBasicPosition(node.Ident, int(node.Pos))
+	pos := position.NewIdentifierNodePosition(node)
 
 	// Try to get additional info from diagnostic parser
 	var tokenType TokenType = TokenFunction
@@ -201,6 +232,121 @@ func (v *tokenVisitor) visitString(node *parse.StringNode) error {
 		Modifier: ModifierNone,
 		Range:    position.NewBasicPosition(text, int(node.Pos)),
 	})
+	return nil
+}
+
+// visitCommand processes a command node (e.g., printf "hello")
+func (v *tokenVisitor) visitCommand(node *parse.CommandNode) error {
+	// Visit all arguments
+	for _, arg := range node.Args {
+		if err := v.visitNode(arg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// visitIf processes an if node (e.g., {{ if .Ready }}...{{ end }})
+func (v *tokenVisitor) visitIf(node *parse.IfNode) error {
+	// Add the 'if' keyword token
+	v.tokens = append(v.tokens, Token{
+		Type:     TokenKeyword,
+		Modifier: ModifierNone,
+		Range:    position.NewKeywordPosition(node),
+	})
+
+	// Visit the condition
+	if err := v.visitPipe(node.Pipe); err != nil {
+		return err
+	}
+
+	// Visit the true branch
+	if err := v.visitList(node.List); err != nil {
+		return err
+	}
+
+	// Visit the else branch if it exists
+	if node.ElseList != nil {
+		// TODO(@semtok): Add 'else' token
+		if err := v.visitList(node.ElseList); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// visitRange processes a range node (e.g., {{ range .Items }}...{{ end }})
+func (v *tokenVisitor) visitRange(node *parse.RangeNode) error {
+	// Add the 'range' keyword token
+	v.tokens = append(v.tokens, Token{
+		Type:     TokenKeyword,
+		Modifier: ModifierNone,
+		Range:    position.NewKeywordPosition(node),
+	})
+
+	// Visit the range expression
+	if err := v.visitPipe(node.Pipe); err != nil {
+		return err
+	}
+
+	// Visit the range body
+	if err := v.visitList(node.List); err != nil {
+		return err
+	}
+
+	// Visit the else branch if it exists
+	if node.ElseList != nil {
+		// TODO(@semtok): Add 'else' token
+		if err := v.visitList(node.ElseList); err != nil {
+			return err
+		}
+	}
+
+	// Add the 'end' keyword token
+	v.tokens = append(v.tokens, Token{
+		Type:     TokenKeyword,
+		Modifier: ModifierNone,
+		Range:    position.NewBranchEndPosition(&node.BranchNode),
+	})
+
+	return nil
+}
+
+// visitWith processes a with node (e.g., {{ with .User }}...{{ end }})
+func (v *tokenVisitor) visitWith(node *parse.WithNode) error {
+	// Add the 'with' keyword token
+	v.tokens = append(v.tokens, Token{
+		Type:     TokenKeyword,
+		Modifier: ModifierNone,
+		Range:    position.NewKeywordPosition(node),
+	})
+
+	// Visit the with expression
+	if err := v.visitPipe(node.Pipe); err != nil {
+		return err
+	}
+
+	// Visit the with body
+	if err := v.visitList(node.List); err != nil {
+		return err
+	}
+
+	// Visit the else branch if it exists
+	if node.ElseList != nil {
+		// TODO(@semtok): Add 'else' token
+		if err := v.visitList(node.ElseList); err != nil {
+			return err
+		}
+	}
+
+	// Add the 'end' keyword token
+	v.tokens = append(v.tokens, Token{
+		Type:     TokenKeyword,
+		Modifier: ModifierNone,
+		Range:    position.NewBranchEndPosition(&node.BranchNode),
+	})
+
 	return nil
 }
 
