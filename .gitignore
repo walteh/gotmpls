@@ -1,3 +1,6 @@
 .DS_Store
 .archive/
 out
+
+.task/checksum/**
+!.task/checksum/generate-taskfiles

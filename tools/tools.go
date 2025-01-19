@@ -22,5 +22,6 @@ import (
 	_ "github.com/walteh/retab/v2/cmd/retab"
 
 	_ "github.com/alecthomas/participle/v2/cmd/railroad"
+	_ "github.com/ianlewis/todos/internal/cmd/todos"
 	_ "github.com/walteh/gotmpls/gen/participle"
 )

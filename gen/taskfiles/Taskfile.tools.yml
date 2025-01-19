@@ -61,6 +61,10 @@ tasks:
     desc: run railroad - built from github.com/alecthomas/participle/v2/cmd/railroad
     cmds:
       - ./scripts/run-tool.sh railroad {{.CLI_ARGS}}
+  todos:
+    desc: run todos - built from github.com/ianlewis/todos/internal/cmd/todos
+    cmds:
+      - ./scripts/run-tool.sh todos {{.CLI_ARGS}}
   participle:
     desc: run participle - built from ./gen/participle
     cmds:
