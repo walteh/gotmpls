@@ -335,13 +335,9 @@ var builtins = map[string]any{
 }
 
 func testParse(doCopy bool, t *testing.T) {
-
 	textFormat = "%q"
 	defer func() { textFormat = "%s" }()
 	for _, test := range parseTests {
-		if test.name != "block definition" || test.ok != hasError {
-			continue
-		}
 		tmpl, err := New(test.name).Parse(test.input, "", "", make(map[string]*Tree), builtins)
 		switch {
 		case err == nil && !test.ok:
