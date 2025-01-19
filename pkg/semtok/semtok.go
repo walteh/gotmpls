@@ -63,6 +63,8 @@ func GetTokensForText(ctx context.Context, content []byte) ([]Token, error) {
 		return nil, fmt.Errorf("failed to create visitor: %w", err)
 	}
 
+	visitor.visitTree(tree)
+
 	if err := visitor.visitNode(tree.Root); err != nil {
 		return nil, fmt.Errorf("failed to visit nodes: %w", err)
 	}

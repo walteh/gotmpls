@@ -67,6 +67,17 @@ func newVisitor(ctx context.Context, content []byte) (*tokenVisitor, error) {
 	}, nil
 }
 
+func (v *tokenVisitor) visitTree(node *parse.Tree) {
+	if node.CanRelyOnKeyword() {
+		v.tokens = append(v.tokens, Token{
+			Type:     TokenKeyword,
+			Modifier: ModifierNone,
+			Range:    position.NewKeywordPosition(node),
+		})
+	}
+	return
+}
+
 // visitNode dispatches to the appropriate visit method based on node type
 func (v *tokenVisitor) visitNode(node parse.Node) error {
 	switch n := node.(type) {

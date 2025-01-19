@@ -35,6 +35,10 @@ type Tree struct {
 	treeSet    map[string]*Tree
 	actionLine int // line of left delim starting action
 	rangeDepth int
+
+	defineNodeKeyword item
+	defineNodeValue   item
+	hasDefineNode     bool
 }
 
 // A mode value is a set of flags (or 0). Modes control parser behavior.
@@ -311,13 +315,14 @@ func (t *Tree) parse() {
 	for t.peek().typ != itemEOF {
 		if t.peek().typ == itemLeftDelim {
 			delim := t.next()
-			if t.nextNonSpace().typ == itemDefine {
+			nns := t.nextNonSpace()
+			if nns.typ == itemDefine {
 				newT := New("definition") // name will be updated once we know it.
 				newT.text = t.text
 				newT.Mode = t.Mode
 				newT.ParseName = t.ParseName
 				newT.startParse(t.funcs, t.lex, t.treeSet)
-				newT.parseDefinition()
+				newT.parseDefinition(nns)
 				continue
 			}
 			t.backup2(delim)
@@ -334,11 +339,13 @@ func (t *Tree) parse() {
 // parseDefinition parses a {{define}} ...  {{end}} template definition and
 // installs the definition in t.treeSet. The "define" keyword has already
 // been scanned.
-func (t *Tree) parseDefinition() {
+func (t *Tree) parseDefinition(keyword item) {
 	const context = "define clause"
-	name := t.expectOneOf(itemString, itemRawString, context)
+	t.hasDefineNode = true
+	t.defineNodeKeyword = keyword
+	t.defineNodeValue = t.expectOneOf(itemString, itemRawString, context)
 	var err error
-	t.Name, err = strconv.Unquote(name.val)
+	t.Name, err = strconv.Unquote(t.defineNodeValue.val)
 	if err != nil {
 		t.error(err)
 	}
@@ -404,7 +411,7 @@ func (t *Tree) clearActionLine() {
 func (t *Tree) action() (n Node) {
 	switch token := t.nextNonSpace(); token.typ {
 	case itemBlock:
-		return t.blockControl()
+		return t.blockControl(token)
 	case itemBreak:
 		return t.breakControl(token.pos, token.line, token)
 	case itemContinue:
@@ -652,7 +659,7 @@ func (t *Tree) elseControl() Node {
 // Block keyword is past.
 // The name must be something that can evaluate to a string.
 // The pipeline is mandatory.
-func (t *Tree) blockControl() Node {
+func (t *Tree) blockControl(keyword item) Node {
 	const context = "block clause"
 
 	token := t.nextNonSpace()
@@ -660,6 +667,9 @@ func (t *Tree) blockControl() Node {
 	pipe := t.pipeline(context, itemRightDelim)
 
 	block := New(name) // name will be updated once we know it.
+	block.defineNodeKeyword = keyword
+	block.defineNodeValue = token
+	block.hasDefineNode = true
 	block.text = t.text
 	block.Mode = t.Mode
 	block.ParseName = t.ParseName
