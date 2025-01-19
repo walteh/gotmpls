@@ -812,12 +812,13 @@ func (e *endNode) Copy() Node {
 type elseNode struct {
 	NodeType
 	Pos
-	tr   *Tree
-	Line int // The line number in the input. Deprecated: Kept for compatibility.
+	Keyword item
+	tr      *Tree
+	Line    int // The line number in the input. Deprecated: Kept for compatibility.
 }
 
-func (t *Tree) newElse(pos Pos, line int) *elseNode {
-	return &elseNode{tr: t, NodeType: nodeElse, Pos: pos, Line: line}
+func (t *Tree) newElse(pos Pos, line int, keyword item) *elseNode {
+	return &elseNode{tr: t, NodeType: nodeElse, Pos: pos, Line: line, Keyword: keyword}
 }
 
 func (e *elseNode) Type() NodeType {
@@ -837,7 +838,7 @@ func (e *elseNode) tree() *Tree {
 }
 
 func (e *elseNode) Copy() Node {
-	return e.tr.newElse(e.Pos, e.Line)
+	return e.tr.newElse(e.Pos, e.Line, e.Keyword)
 }
 
 // BranchNode is the common representation of if, range, and with.

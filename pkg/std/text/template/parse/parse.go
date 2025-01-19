@@ -616,10 +616,10 @@ func (t *Tree) elseControl() Node {
 	// treated as "{{else}}{{if ..." and "{{else}}{{with ...".
 	// So return the else node here.
 	if peek.typ == itemIf || peek.typ == itemWith {
-		return t.newElse(peek.pos, peek.line)
+		return t.newElse(peek.pos, peek.line, peek)
 	}
 	token := t.expect(itemRightDelim, "else")
-	return t.newElse(token.pos, token.line)
+	return t.newElse(token.pos, token.line, peek)
 }
 
 // Block:
