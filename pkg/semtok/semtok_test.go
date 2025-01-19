@@ -63,6 +63,11 @@ func TestVariableTokens(t *testing.T) {
 					Range:    position.NewBasicPosition(".First", 2),
 				},
 				{
+					Type:     semtok.TokenString,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(" ", 11),
+				},
+				{
 					Type:     semtok.TokenVariable,
 					Modifier: semtok.ModifierNone,
 					Range:    position.NewBasicPosition(".Second", 15),
@@ -150,7 +155,7 @@ func TestKeywordTokens(t *testing.T) {
 	}{
 		{
 			name:  "test_if_keyword",
-			input: "{{ if .Ready }}ready{{end}}{{ if .Readz }}readz{{end}}",
+			input: "{{ if .Ready }}ready{{end}}",
 			expected: []semtok.Token{
 				{
 					Type:     semtok.TokenKeyword,
@@ -163,9 +168,14 @@ func TestKeywordTokens(t *testing.T) {
 					Range:    position.NewBasicPosition(".Ready", 5),
 				},
 				{
+					Type:     semtok.TokenString,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("ready", 14),
+				},
+				{
 					Type:     semtok.TokenKeyword,
 					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition("end", 19),
+					Range:    position.NewBasicPosition("end", 21),
 				},
 			},
 		},
@@ -212,11 +222,59 @@ func TestKeywordTokens(t *testing.T) {
 					Modifier: semtok.ModifierNone,
 					Range:    position.NewBasicPosition("yo", 53),
 				},
-
 				{
 					Type:     semtok.TokenKeyword,
 					Modifier: semtok.ModifierNone,
 					Range:    position.NewBasicPosition("end", 57),
+				},
+			},
+		},
+		{
+			name:  "test_if_else_comment_with_space_in_else_if",
+			input: "{{ if .Ready }}ready{{else  if .Readz }}{{/* readz */}}yo{{end}}",
+			expected: []semtok.Token{
+				{
+					Type:     semtok.TokenKeyword,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("if", 2),
+				},
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".Ready", 5),
+				},
+				{
+					Type:     semtok.TokenString,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("ready", 14),
+				},
+
+				{
+					Type:     semtok.TokenKeyword,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("else  if", 21),
+				},
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".Readz", 30),
+				},
+
+				{
+					Type:     semtok.TokenComment,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("/* readz */", 41),
+				},
+
+				{
+					Type:     semtok.TokenString,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("yo", 54),
+				},
+				{
+					Type:     semtok.TokenKeyword,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("end", 58),
 				},
 			},
 		},
@@ -237,7 +295,7 @@ func TestKeywordTokens(t *testing.T) {
 				{
 					Type:     semtok.TokenVariable,
 					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition(".", 15),
+					Range:    position.NewBasicPosition(".", 19),
 				},
 				{
 					Type:     semtok.TokenKeyword,
@@ -253,7 +311,7 @@ func TestKeywordTokens(t *testing.T) {
 				{
 					Type:     semtok.TokenKeyword,
 					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition("with", 3),
+					Range:    position.NewBasicPosition("with", 2),
 				},
 				{
 					Type:     semtok.TokenVariable,
