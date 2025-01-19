@@ -97,6 +97,8 @@ func (v *tokenVisitor) visitNode(node parse.Node) error {
 		return v.visitText(n)
 	case *parse.CommentNode:
 		return v.visitComment(n)
+	case *parse.DotNode:
+		return v.visitDot(n)
 	default:
 		// TODO(@semtok): Add support for other node types
 		return nil
@@ -185,6 +187,16 @@ func (v *tokenVisitor) visitField(node *parse.FieldNode) error {
 			// If this is a first occurrence, mark it as a declaration
 			// TODO(@semtok): Implement declaration detection
 		}
+	}
+
+	// If this is just a dot, create a dot token
+	if len(node.Ident) == 0 {
+		v.tokens = append(v.tokens, Token{
+			Type:     TokenVariable,
+			Modifier: modifier,
+			Range:    position.NewBasicPosition(".", int(node.Pos)),
+		})
+		return nil
 	}
 
 	// Create a variable token for the field
@@ -303,13 +315,6 @@ func (v *tokenVisitor) visitRange(node *parse.RangeNode) error {
 		}
 	}
 
-	// Add the 'end' keyword token
-	v.tokens = append(v.tokens, Token{
-		Type:     TokenKeyword,
-		Modifier: ModifierNone,
-		Range:    position.NewBranchEndPosition(&node.BranchNode),
-	})
-
 	return nil
 }
 
@@ -340,13 +345,16 @@ func (v *tokenVisitor) visitWith(node *parse.WithNode) error {
 		}
 	}
 
-	// Add the 'end' keyword token
-	v.tokens = append(v.tokens, Token{
-		Type:     TokenKeyword,
-		Modifier: ModifierNone,
-		Range:    position.NewBranchEndPosition(&node.BranchNode),
-	})
+	return nil
+}
 
+// visitDot processes a dot node (e.g., .)
+func (v *tokenVisitor) visitDot(node *parse.DotNode) error {
+	v.tokens = append(v.tokens, Token{
+		Type:     TokenVariable,
+		Modifier: ModifierNone,
+		Range:    position.NewDotNodePosition(node),
+	})
 	return nil
 }
 

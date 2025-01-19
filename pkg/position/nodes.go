@@ -29,6 +29,8 @@ func NewCommentNodePosition(node *parse.CommentNode) RawPosition {
 //
 //	{{.User.Name}} -> focuses on "Name" part
 func NewFieldNodePosition(node *parse.FieldNode) RawPosition {
+	// the Pos reflects just the final identifier in the field node
+	// so we need to calculate the offset based on the entire field text
 	ident := node.Ident[len(node.Ident)-1]
 	return RawPosition{
 		Text:   node.String(),
@@ -88,4 +90,8 @@ func NewKeywordPosition(keyword parse.KeywordNode) RawPosition {
 
 func NewTextNodePosition(node *parse.TextNode) RawPosition {
 	return RawPosition{Text: string(node.Text), Offset: int(node.Pos) - 1}
+}
+
+func NewDotNodePosition(node *parse.DotNode) RawPosition {
+	return RawPosition{Text: ".", Offset: int(node.Pos) - 1}
 }

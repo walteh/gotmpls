@@ -316,7 +316,7 @@ func TestKeywordTokens(t *testing.T) {
 				{
 					Type:     semtok.TokenVariable,
 					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition(".User", 8),
+					Range:    position.NewBasicPosition(".User", 7),
 				},
 				{
 					Type:     semtok.TokenVariable,
@@ -379,32 +379,42 @@ func TestComplexTemplates(t *testing.T) {
 				{
 					Type:     semtok.TokenKeyword,
 					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition("if", 3),
+					Range:    position.NewBasicPosition("if", 2),
 				},
 				{
 					Type:     semtok.TokenVariable,
 					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition(".Ready", 6),
-				},
-				{
-					Type:     semtok.TokenFunction,
-					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition("printf", 17),
+					Range:    position.NewBasicPosition(".Ready", 5),
 				},
 				{
 					Type:     semtok.TokenString,
 					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition(`"Ready: %v"`, 24),
+					Range:    position.NewBasicPosition("\n\t", 14),
+				},
+				{
+					Type:     semtok.TokenFunction,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("printf", 19),
+				},
+				{
+					Type:     semtok.TokenString,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(`"Ready: %v"`, 27),
 				},
 				{
 					Type:     semtok.TokenVariable,
 					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition(".Status", 35),
+					Range:    position.NewBasicPosition(".Status", 38),
+				},
+				{
+					Type:     semtok.TokenString,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("\n", 48),
 				},
 				{
 					Type:     semtok.TokenKeyword,
 					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition("end", 45),
+					Range:    position.NewBasicPosition("end", 52),
 				},
 			},
 		},
