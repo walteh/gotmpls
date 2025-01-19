@@ -188,10 +188,98 @@ func TestFunctionTokens(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:  "test_builtin_function_len",
+			input: "{{ len .Items }}",
+			expected: []semtok.Token{
+				{
+					Type:     semtok.TokenFunction,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("len", 2),
+				},
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".Items", 6),
+				},
+			},
+		},
+		{
+			name:  "test_custom_function",
+			input: "{{ myFunc .Value }}",
+			expected: []semtok.Token{
+				{
+					Type:     semtok.TokenFunction,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("myFunc", 2),
+				},
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".Value", 9),
+				},
+			},
+		},
+		{
+			name:  "test_function_chain",
+			input: "{{ .Name | upper  | printf }}",
+			expected: []semtok.Token{
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".Name", 2),
+				},
+				{
+					Type:     semtok.TokenOperator,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("|", 8),
+				},
+				{
+					Type:     semtok.TokenFunction,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("upper", 10),
+				},
+				{
+					Type:     semtok.TokenOperator,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("|", 17),
+				},
+				{
+					Type:     semtok.TokenFunction,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("printf", 19),
+				},
+			},
+		},
+		{
+			name:  "test_function_multiple_args",
+			input: `{{ printf "%s-%s" .First .Last }}`,
+			expected: []semtok.Token{
+				{
+					Type:     semtok.TokenFunction,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition("printf", 2),
+				},
+				{
+					Type:     semtok.TokenString,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(`"%s-%s"`, 9),
+				},
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".First", 17),
+				},
+				{
+					Type:     semtok.TokenVariable,
+					Modifier: semtok.ModifierNone,
+					Range:    position.NewBasicPosition(".Last", 24),
+				},
+			},
+		},
 		// TODO(@semtok): Add more function test cases
-		// - Built-in functions
-		// - Custom functions
-		// - Function chains
+		// - Functions with complex arguments
+		// - Functions with nested function calls
 	}
 
 	for _, tt := range tests {
@@ -460,7 +548,7 @@ func TestComplexTemplates(t *testing.T) {
 				{
 					Type:     semtok.TokenString,
 					Modifier: semtok.ModifierNone,
-					Range:    position.NewBasicPosition(`"Ready: %v"`, 27),
+					Range:    position.NewBasicPosition(`"Ready: %v"`, 26),
 				},
 				{
 					Type:     semtok.TokenVariable,

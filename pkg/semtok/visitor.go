@@ -168,7 +168,16 @@ func (v *tokenVisitor) visitAction(node *parse.ActionNode) error {
 // visitPipe processes a pipe node (e.g., .Name | printf)
 func (v *tokenVisitor) visitPipe(node *parse.PipeNode) error {
 	// Visit all commands in the pipe
-	for _, cmd := range node.Cmds {
+	for i, cmd := range node.Cmds {
+		// Add pipe operator token between commands
+		if i > 0 {
+			v.tokens = append(v.tokens, Token{
+				Type:     TokenOperator,
+				Modifier: ModifierNone,
+				Range:    position.NewPipeOperatorPosition(cmd),
+			})
+		}
+
 		// First argument might be a function name
 		if len(cmd.Args) > 0 {
 			if err := v.visitNode(cmd.Args[0]); err != nil {
@@ -254,7 +263,7 @@ func (v *tokenVisitor) visitString(node *parse.StringNode) error {
 	v.tokens = append(v.tokens, Token{
 		Type:     TokenString,
 		Modifier: ModifierNone,
-		Range:    position.NewBasicPosition(text, int(node.Pos)),
+		Range:    position.NewStringNodePosition(node),
 	})
 	return nil
 }

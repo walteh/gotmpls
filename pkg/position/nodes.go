@@ -1,6 +1,10 @@
 package position
 
-import "github.com/walteh/gotmpls/pkg/std/text/template/parse"
+import (
+	"strings"
+
+	"github.com/walteh/gotmpls/pkg/std/text/template/parse"
+)
 
 // NewIdentifierNodePosition creates a RawPosition from a template parser's IdentifierNode.
 // This is used when working with Go's template/parse package to convert AST nodes
@@ -40,9 +44,15 @@ func NewFieldNodePosition(node *parse.FieldNode) RawPosition {
 
 // NewStringNodePosition creates a new position from a string node
 func NewStringNodePosition(node *parse.StringNode) RawPosition {
+	// Handle escaped quotes in the text
+	text := node.Text
+	if !strings.HasPrefix(text, `"`) {
+		text = `"` + text + `"`
+	}
+
 	return RawPosition{
-		Text:   node.Text,
-		Offset: int(node.Pos),
+		Text:   text,
+		Offset: int(node.Pos) - 1,
 	}
 }
 
@@ -101,5 +111,15 @@ func NewNumberNodePosition(node *parse.NumberNode) RawPosition {
 	return RawPosition{
 		Text:   node.String(),
 		Offset: int(node.Pos) - 1,
+	}
+}
+
+// NewPipeOperatorPosition creates a RawPosition for a pipe operator (|)
+// The position is calculated from the command node's position minus 3 to account for
+// the space before the pipe operator and the pipe operator itself.
+func NewPipeOperatorPosition(node *parse.CommandNode) RawPosition {
+	return RawPosition{
+		Text:   "|",
+		Offset: int(node.Position()) - 3,
 	}
 }
