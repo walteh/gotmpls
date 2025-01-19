@@ -175,28 +175,21 @@ func (block *BlockInfo) walkNode(ctx context.Context, node parse.Node, scope str
 				if i > 0 && lastResult != nil {
 					args = append(args, *lastResult)
 				} else {
-					// Track argument index for each variable
 					for j, arg := range cmd.Args {
 						if j == 0 {
-							continue // Skip function name
+							continue
 						}
 						switch v := arg.(type) {
 						case *parse.FieldNode:
 							item := createVarLocation(v, scope, seenVars)
 							if item != nil {
-								ivlt := VariableLocationOrType{
-									Variable:      item,
-									ArgumentIndex: j - 1, // Store 0-based argument index
-								}
+								ivlt := VariableLocationOrType{Variable: item}
 								block.Variables = append(block.Variables, *item)
 								args = append(args, ivlt)
 								lastResult = &ivlt
 							}
 						case *parse.StringNode:
-							args = append(args, VariableLocationOrType{
-								Type:          types.Typ[types.String],
-								ArgumentIndex: j - 1, // Store 0-based argument index
-							})
+							args = append(args, VariableLocationOrType{Type: types.Typ[types.String]})
 						}
 					}
 				}
@@ -207,10 +200,6 @@ func (block *BlockInfo) walkNode(ctx context.Context, node parse.Node, scope str
 						allArgs = append(allArgs, args...)
 						item := createFuncLocation(fn, allArgs, scope, seenFuncs)
 						if item != nil {
-							// Get function signature for special behaviors
-							if sig := GetFunctionSignature(fn.Ident); sig != nil {
-								item.Signature = sig
-							}
 							block.Functions = append(block.Functions, *item)
 							lastResult = &VariableLocationOrType{Variable: item}
 						}
@@ -394,17 +383,15 @@ func hackGetEndPositionForBlock(t *parse.Tree) position.RawPosition {
 // }
 
 type VariableLocationOrType struct {
-	Variable      *VariableLocation
-	Type          types.Type
-	ArgumentIndex int // 0-based index when used as a function argument
+	Variable *VariableLocation
+	Type     types.Type
 }
 
 // VariableLocation represents a variable usage in a template
 type VariableLocation struct {
 	Position      position.RawPosition
-	PipeArguments []VariableLocationOrType
-	Scope         string
-	Signature     *FunctionSignature // For functions, their signature
+	PipeArguments []VariableLocationOrType // either a VariableLocation or some other types.Type
+	Scope         string                   // The scope of the variable (e.g., template name or block ID)
 }
 
 func (me *VariableLocation) GetTypePaths(th *TypeHint) []string {
@@ -539,55 +526,4 @@ func (me *VariableLocation) GetPipedArguments(block *BlockInfo, getReturnTypes f
 		Arguments: args,
 		Variable:  me,
 	}
-}
-
-// FunctionArgumentInfo provides information about how a variable is used as a function argument
-type FunctionArgumentInfo struct {
-	FunctionName   string
-	ArgumentIndex  int // 0-based index of the argument
-	TotalArguments int
-}
-
-// FunctionSignature describes a function's type signature and special behaviors
-type FunctionSignature struct {
-	Name             string
-	ArgumentTypes    []types.Type
-	ReturnTypes      []types.Type
-	SpecialBehaviors map[int]string // Map of argument index to special behavior (e.g. "format_string" for printf's first arg)
-}
-
-// GetFunctionInfoForVariable returns information about how a variable is used as a function argument
-func (block *BlockInfo) GetFunctionInfoForVariable(pos position.RawPosition) *FunctionArgumentInfo {
-	// Search through all functions in the block
-	for _, fn := range block.Functions {
-		// Check each argument
-		for i, arg := range fn.PipeArguments {
-			if arg.Variable != nil && arg.Variable.Position.ID() == pos.ID() {
-				return &FunctionArgumentInfo{
-					FunctionName:   fn.Name(),
-					ArgumentIndex:  i,
-					TotalArguments: len(fn.PipeArguments),
-				}
-			}
-		}
-	}
-	return nil
-}
-
-// GetFunctionSignature returns the signature for a function by name
-func GetFunctionSignature(name string) *FunctionSignature {
-	// TODO: Build this out with a proper registry of functions
-	// For now just handle printf as an example
-	switch name {
-	case "printf", "sprintf":
-		return &FunctionSignature{
-			Name:          name,
-			ArgumentTypes: []types.Type{types.Typ[types.String]}, // First arg is format string
-			ReturnTypes:   []types.Type{types.Typ[types.String]},
-			SpecialBehaviors: map[int]string{
-				0: "format_string", // First argument is a format string
-			},
-		}
-	}
-	return nil
 }
