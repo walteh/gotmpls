@@ -277,6 +277,7 @@ func TestFunctionTokens(t *testing.T) {
 				},
 			},
 		},
+
 		// TODO(@semtok): Add more function test cases
 		// - Functions with complex arguments
 		// - Functions with nested function calls
@@ -289,6 +290,7 @@ func TestFunctionTokens(t *testing.T) {
 				require.Error(t, err, "expected error for test case")
 				return
 			}
+
 			require.NoError(t, err, "unexpected error getting tokens")
 			assert.Equal(t, tt.expected, tokens, "tokens should match expected")
 		})

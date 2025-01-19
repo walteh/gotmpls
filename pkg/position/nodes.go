@@ -102,8 +102,12 @@ func NewTextNodePosition(node *parse.TextNode) RawPosition {
 	return RawPosition{Text: string(node.Text), Offset: int(node.Pos) - 1}
 }
 
+// NewDotNodePosition creates a RawPosition from a template parser's DotNode
 func NewDotNodePosition(node *parse.DotNode) RawPosition {
-	return RawPosition{Text: ".", Offset: int(node.Pos) - 1}
+	return RawPosition{
+		Text:   ".",
+		Offset: int(node.Pos) - 1,
+	}
 }
 
 // NewNumberNodePosition creates a RawPosition from a template parser's NumberNode
@@ -115,11 +119,44 @@ func NewNumberNodePosition(node *parse.NumberNode) RawPosition {
 }
 
 // NewPipeOperatorPosition creates a RawPosition for a pipe operator (|)
-// The position is calculated from the command node's position minus 3 to account for
-// the space before the pipe operator and the pipe operator itself.
+// The position is calculated from the previous command's end position plus 1 for the space
 func NewPipeOperatorPosition(node *parse.CommandNode) RawPosition {
+	// Get the end position of the previous command
+	// endPos := int(node.Position()) - len(node.String()) - 1
 	return RawPosition{
 		Text:   "|",
 		Offset: int(node.Position()) - 3,
+	}
+}
+
+// NewIfNodePosition creates a RawPosition from a template parser's IfNode
+func NewIfNodePosition(node *parse.IfNode) RawPosition {
+	return RawPosition{
+		Text:   "if",
+		Offset: int(node.Pos),
+	}
+}
+
+// NewRangeNodePosition creates a RawPosition from a template parser's RangeNode
+func NewRangeNodePosition(node *parse.RangeNode) RawPosition {
+	return RawPosition{
+		Text:   "range",
+		Offset: int(node.Pos),
+	}
+}
+
+// NewWithNodePosition creates a RawPosition from a template parser's WithNode
+func NewWithNodePosition(node *parse.WithNode) RawPosition {
+	return RawPosition{
+		Text:   "with",
+		Offset: int(node.Pos),
+	}
+}
+
+// NewEndNodePosition creates a RawPosition from a template parser's EndNode
+func NewEndNodePosition(node *parse.EndNode) RawPosition {
+	return RawPosition{
+		Text:   "end",
+		Offset: int(node.Pos),
 	}
 }

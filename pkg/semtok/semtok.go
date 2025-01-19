@@ -31,10 +31,11 @@ package semtok
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/walteh/gotmpls/pkg/parser"
 	"github.com/walteh/gotmpls/pkg/position"
 	"github.com/walteh/gotmpls/pkg/std/text/template/parse"
+	"gitlab.com/tozd/go/errors"
 )
 
 // GetTokensForText returns semantic tokens for the given template text.
@@ -46,30 +47,33 @@ import (
 //	       return err
 //	   }
 //	   // Use tokens...
-func GetTokensForText(ctx context.Context, content []byte) ([]Token, error) {
-
-	parser := parse.New("semtok")
-	parser.Mode = parse.ParseComments | parse.SkipFuncCheck
-
-	// Parse the template
-	tree, err := parser.Parse(string(content), "{{", "}}", map[string]*parse.Tree{})
+func GetTokensForText(ctx context.Context, text []byte) ([]Token, error) {
+	// Parse with our diagnostic parser
+	parsedFile, err := parser.Parse(ctx, "", text)
 	if err != nil {
-		return nil, err
+		return nil, errors.Errorf("parsing template: %w", err)
 	}
 
-	// Create a visitor and walk the AST
-	visitor, err := newVisitor(ctx, content)
+	// Parse with standard parser
+	tree := parse.New("")
+	tree.Mode = parse.ParseComments | parse.SkipFuncCheck
+	treeSet := make(map[string]*parse.Tree)
+	_, err = tree.Parse(string(text), "{{", "}}", treeSet)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create visitor: %w", err)
+		return nil, errors.Errorf("parsing template: %w", err)
 	}
+
+	// Create visitor for the root block
+	visitor := newTokenVisitor(&parsedFile.Blocks[0])
 
 	visitor.visitTree(tree)
 
-	if err := visitor.visitNode(tree.Root); err != nil {
-		return nil, fmt.Errorf("failed to visit nodes: %w", err)
+	// Walk the tree
+	for _, node := range tree.Root.Nodes {
+		visitor.Visit(node)
 	}
 
-	return visitor.getTokens(), nil
+	return visitor.tokens, nil
 }
 
 // GetTokensForRange returns semantic tokens for a specific range in the template.
