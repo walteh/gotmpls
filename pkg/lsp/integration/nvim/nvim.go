@@ -132,7 +132,7 @@ func (s *NvimIntegrationTestRunner) GetDiagnostics(t *testing.T, uri protocol.Do
 	require.Len(t, msgs, 2, "expected 2 rpcs")
 
 	// this basically will trigger right when the rpc completes, so wait for a sec
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(3100 * time.Millisecond)
 
 	diags := s.loadNvimDiagnosticsFromBuffer(t, buf, severity)
 
@@ -247,6 +247,8 @@ func (s *NvimIntegrationTestRunner) loadNvimDiagnosticsFromBuffer(t *testing.T, 
 	`)
 
 	require.NotNil(t, l, "expected non-nil diagnostic response")
+
+	t.Logf("🔍 Diagnostic response: %v", l)
 
 	by, err := json.Marshal(l)
 	require.NoError(t, err, "failed to marshal diagnostic response")

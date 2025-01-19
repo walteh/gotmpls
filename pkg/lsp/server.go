@@ -16,8 +16,6 @@ import (
 	"github.com/walteh/gotmpls/pkg/lsp/protocol"
 	"github.com/walteh/gotmpls/pkg/parser"
 	"github.com/walteh/gotmpls/pkg/position"
-	"github.com/walteh/gotmpls/pkg/semantics"
-	"github.com/walteh/gotmpls/pkg/semantics/template"
 	"gitlab.com/tozd/go/errors"
 	"gopkg.in/fsnotify.v1"
 )
@@ -117,17 +115,14 @@ type Server struct {
 
 	// LSP client for notifications
 	instance *protocol.ServerInstance
-
-	semanticProvider semantics.Provider
 }
 
 func NewServer(ctx context.Context) *Server {
 	return &Server{
-		id:               xid.New().String(),
-		documents:        NewDocumentManager(),
-		cancelFuncs:      &sync.Map{},
-		debug:            false, // Disabled debug mode
-		semanticProvider: &template.TemplateTokenParser{},
+		id:          xid.New().String(),
+		documents:   NewDocumentManager(),
+		cancelFuncs: &sync.Map{},
+		debug:       false, // Disabled debug mode
 	}
 }
 
@@ -579,12 +574,12 @@ func (s *Server) SemanticTokensFull(ctx context.Context, params *protocol.Semant
 	logger := zerolog.Ctx(ctx)
 	logger.Debug().Str("uri", string(params.TextDocument.URI)).Msg("getting semantic tokens")
 
-	doc, ok := s.documents.Get(params.TextDocument.URI)
+	_, ok := s.documents.Get(params.TextDocument.URI)
 	if !ok {
 		return nil, errors.Errorf("document not found: %s", params.TextDocument.URI)
 	}
 
-	return s.semanticProvider.GetTokensForFile(ctx, string(params.TextDocument.URI), doc.Content)
+	return nil, nil
 }
 
 func (s *Server) SemanticTokensFullDelta(ctx context.Context, params *protocol.SemanticTokensDeltaParams) (any, error) {
@@ -595,12 +590,12 @@ func (s *Server) SemanticTokensRange(ctx context.Context, params *protocol.Seman
 	logger := zerolog.Ctx(ctx)
 	logger.Debug().Str("uri", string(params.TextDocument.URI)).Msg("getting semantic tokens for range")
 
-	doc, ok := s.documents.Get(params.TextDocument.URI)
+	_, ok := s.documents.Get(params.TextDocument.URI)
 	if !ok {
 		return nil, errors.Errorf("document not found: %s", params.TextDocument.URI)
 	}
 
-	return s.semanticProvider.GetTokensForRange(ctx, string(params.TextDocument.URI), doc.Content, params.Range)
+	return nil, nil
 }
 
 func (s *Server) SignatureHelp(ctx context.Context, params *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error) {
