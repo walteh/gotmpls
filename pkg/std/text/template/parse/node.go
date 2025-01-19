@@ -461,11 +461,12 @@ func (d *DotNode) Copy() Node {
 type NilNode struct {
 	NodeType
 	Pos
-	tr *Tree
+	tr      *Tree
+	keyword item
 }
 
-func (t *Tree) newNil(pos Pos) *NilNode {
-	return &NilNode{tr: t, NodeType: NodeNil, Pos: pos}
+func (t *Tree) newNil(pos Pos, keyword item) *NilNode {
+	return &NilNode{tr: t, NodeType: NodeNil, Pos: pos, keyword: keyword}
 }
 
 func (n *NilNode) Type() NodeType {
@@ -488,7 +489,7 @@ func (n *NilNode) tree() *Tree {
 }
 
 func (n *NilNode) Copy() Node {
-	return n.tr.newNil(n.Pos)
+	return n.tr.newNil(n.Pos, n.keyword)
 }
 
 // FieldNode holds a field (identifier starting with '.').
@@ -785,11 +786,12 @@ func (s *StringNode) Copy() Node {
 type endNode struct {
 	NodeType
 	Pos
-	tr *Tree
+	tr      *Tree
+	keyword item
 }
 
-func (t *Tree) newEnd(pos Pos) *endNode {
-	return &endNode{tr: t, NodeType: nodeEnd, Pos: pos}
+func (t *Tree) newEnd(pos Pos, keyword item) *endNode {
+	return &endNode{tr: t, NodeType: nodeEnd, Pos: pos, keyword: keyword}
 }
 
 func (e *endNode) String() string {
@@ -805,20 +807,20 @@ func (e *endNode) tree() *Tree {
 }
 
 func (e *endNode) Copy() Node {
-	return e.tr.newEnd(e.Pos)
+	return e.tr.newEnd(e.Pos, e.keyword)
 }
 
 // elseNode represents an {{else}} action. Does not appear in the final tree.
 type elseNode struct {
 	NodeType
 	Pos
-	Keyword item
 	tr      *Tree
 	Line    int // The line number in the input. Deprecated: Kept for compatibility.
+	keyword item
 }
 
 func (t *Tree) newElse(pos Pos, line int, keyword item) *elseNode {
-	return &elseNode{tr: t, NodeType: nodeElse, Pos: pos, Line: line, Keyword: keyword}
+	return &elseNode{tr: t, NodeType: nodeElse, Pos: pos, Line: line, keyword: keyword}
 }
 
 func (e *elseNode) Type() NodeType {
@@ -838,19 +840,19 @@ func (e *elseNode) tree() *Tree {
 }
 
 func (e *elseNode) Copy() Node {
-	return e.tr.newElse(e.Pos, e.Line, e.Keyword)
+	return e.tr.newElse(e.Pos, e.Line, e.keyword)
 }
 
 // BranchNode is the common representation of if, range, and with.
 type BranchNode struct {
 	NodeType
 	Pos
-	Keyword  item
 	tr       *Tree
 	Line     int       // The line number in the input. Deprecated: Kept for compatibility.
 	Pipe     *PipeNode // The pipeline to be evaluated.
 	List     *ListNode // What to execute if the value is non-empty.
 	ElseList *ListNode // What to execute if the value is empty (nil if absent).
+	keyword  item
 }
 
 func (b *BranchNode) String() string {
@@ -891,11 +893,11 @@ func (b *BranchNode) tree() *Tree {
 func (b *BranchNode) Copy() Node {
 	switch b.NodeType {
 	case NodeIf:
-		return b.tr.newIf(b.Pos, b.Line, b.Pipe, b.List, b.ElseList, b.Keyword)
+		return b.tr.newIf(b.Pos, b.Line, b.Pipe, b.List, b.ElseList, b.keyword)
 	case NodeRange:
-		return b.tr.newRange(b.Pos, b.Line, b.Pipe, b.List, b.ElseList, b.Keyword)
+		return b.tr.newRange(b.Pos, b.Line, b.Pipe, b.List, b.ElseList, b.keyword)
 	case NodeWith:
-		return b.tr.newWith(b.Pos, b.Line, b.Pipe, b.List, b.ElseList, b.Keyword)
+		return b.tr.newWith(b.Pos, b.Line, b.Pipe, b.List, b.ElseList, b.keyword)
 	default:
 		panic("unknown branch type")
 	}
@@ -907,11 +909,11 @@ type IfNode struct {
 }
 
 func (t *Tree) newIf(pos Pos, line int, pipe *PipeNode, list, elseList *ListNode, keyword item) *IfNode {
-	return &IfNode{BranchNode{tr: t, NodeType: NodeIf, Pos: pos, Line: line, Pipe: pipe, List: list, ElseList: elseList, Keyword: keyword}}
+	return &IfNode{BranchNode{tr: t, NodeType: NodeIf, Pos: pos, Line: line, Pipe: pipe, List: list, ElseList: elseList, keyword: keyword}}
 }
 
 func (i *IfNode) Copy() Node {
-	return i.tr.newIf(i.Pos, i.Line, i.Pipe.CopyPipe(), i.List.CopyList(), i.ElseList.CopyList(), i.Keyword)
+	return i.tr.newIf(i.Pos, i.Line, i.Pipe.CopyPipe(), i.List.CopyList(), i.ElseList.CopyList(), i.keyword)
 }
 
 // BreakNode represents a {{break}} action.
@@ -919,14 +921,15 @@ type BreakNode struct {
 	tr *Tree
 	NodeType
 	Pos
-	Line int
+	Line    int
+	keyword item
 }
 
-func (t *Tree) newBreak(pos Pos, line int) *BreakNode {
-	return &BreakNode{tr: t, NodeType: NodeBreak, Pos: pos, Line: line}
+func (t *Tree) newBreak(pos Pos, line int, keyword item) *BreakNode {
+	return &BreakNode{tr: t, NodeType: NodeBreak, Pos: pos, Line: line, keyword: keyword}
 }
 
-func (b *BreakNode) Copy() Node                  { return b.tr.newBreak(b.Pos, b.Line) }
+func (b *BreakNode) Copy() Node                  { return b.tr.newBreak(b.Pos, b.Line, b.keyword) }
 func (b *BreakNode) String() string              { return "{{break}}" }
 func (b *BreakNode) tree() *Tree                 { return b.tr }
 func (b *BreakNode) writeTo(sb *strings.Builder) { sb.WriteString("{{break}}") }
@@ -936,14 +939,15 @@ type ContinueNode struct {
 	tr *Tree
 	NodeType
 	Pos
-	Line int
+	Line    int
+	keyword item
 }
 
-func (t *Tree) newContinue(pos Pos, line int) *ContinueNode {
-	return &ContinueNode{tr: t, NodeType: NodeContinue, Pos: pos, Line: line}
+func (t *Tree) newContinue(pos Pos, line int, keyword item) *ContinueNode {
+	return &ContinueNode{tr: t, NodeType: NodeContinue, Pos: pos, Line: line, keyword: keyword}
 }
 
-func (c *ContinueNode) Copy() Node                  { return c.tr.newContinue(c.Pos, c.Line) }
+func (c *ContinueNode) Copy() Node                  { return c.tr.newContinue(c.Pos, c.Line, c.keyword) }
 func (c *ContinueNode) String() string              { return "{{continue}}" }
 func (c *ContinueNode) tree() *Tree                 { return c.tr }
 func (c *ContinueNode) writeTo(sb *strings.Builder) { sb.WriteString("{{continue}}") }
@@ -954,11 +958,11 @@ type RangeNode struct {
 }
 
 func (t *Tree) newRange(pos Pos, line int, pipe *PipeNode, list, elseList *ListNode, keyword item) *RangeNode {
-	return &RangeNode{BranchNode{tr: t, NodeType: NodeRange, Pos: pos, Line: line, Pipe: pipe, List: list, ElseList: elseList, Keyword: keyword}}
+	return &RangeNode{BranchNode{tr: t, NodeType: NodeRange, Pos: pos, Line: line, Pipe: pipe, List: list, ElseList: elseList, keyword: keyword}}
 }
 
 func (r *RangeNode) Copy() Node {
-	return r.tr.newRange(r.Pos, r.Line, r.Pipe.CopyPipe(), r.List.CopyList(), r.ElseList.CopyList(), r.Keyword)
+	return r.tr.newRange(r.Pos, r.Line, r.Pipe.CopyPipe(), r.List.CopyList(), r.ElseList.CopyList(), r.keyword)
 }
 
 // WithNode represents a {{with}} action and its commands.
@@ -967,25 +971,26 @@ type WithNode struct {
 }
 
 func (t *Tree) newWith(pos Pos, line int, pipe *PipeNode, list, elseList *ListNode, keyword item) *WithNode {
-	return &WithNode{BranchNode{tr: t, NodeType: NodeWith, Pos: pos, Line: line, Pipe: pipe, List: list, ElseList: elseList, Keyword: keyword}}
+	return &WithNode{BranchNode{tr: t, NodeType: NodeWith, Pos: pos, Line: line, Pipe: pipe, List: list, ElseList: elseList, keyword: keyword}}
 }
 
 func (w *WithNode) Copy() Node {
-	return w.tr.newWith(w.Pos, w.Line, w.Pipe.CopyPipe(), w.List.CopyList(), w.ElseList.CopyList(), w.Keyword)
+	return w.tr.newWith(w.Pos, w.Line, w.Pipe.CopyPipe(), w.List.CopyList(), w.ElseList.CopyList(), w.keyword)
 }
 
 // TemplateNode represents a {{template}} action.
 type TemplateNode struct {
 	NodeType
 	Pos
-	tr   *Tree
-	Line int       // The line number in the input. Deprecated: Kept for compatibility.
-	Name string    // The name of the template (unquoted).
-	Pipe *PipeNode // The command to evaluate as dot for the template.
+	tr      *Tree
+	Line    int       // The line number in the input. Deprecated: Kept for compatibility.
+	Name    string    // The name of the template (unquoted).
+	Pipe    *PipeNode // The command to evaluate as dot for the template.
+	keyword item
 }
 
-func (t *Tree) newTemplate(pos Pos, line int, name string, pipe *PipeNode) *TemplateNode {
-	return &TemplateNode{tr: t, NodeType: NodeTemplate, Pos: pos, Line: line, Name: name, Pipe: pipe}
+func (t *Tree) newTemplate(pos Pos, line int, name string, pipe *PipeNode, keyword item) *TemplateNode {
+	return &TemplateNode{tr: t, NodeType: NodeTemplate, Pos: pos, Line: line, Name: name, Pipe: pipe, keyword: keyword}
 }
 
 func (t *TemplateNode) String() string {
@@ -1009,5 +1014,5 @@ func (t *TemplateNode) tree() *Tree {
 }
 
 func (t *TemplateNode) Copy() Node {
-	return t.tr.newTemplate(t.Pos, t.Line, t.Name, t.Pipe.CopyPipe())
+	return t.tr.newTemplate(t.Pos, t.Line, t.Name, t.Pipe.CopyPipe(), t.keyword)
 }

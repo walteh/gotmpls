@@ -396,9 +396,9 @@ func (t *Tree) action() (n Node) {
 	case itemBlock:
 		return t.blockControl()
 	case itemBreak:
-		return t.breakControl(token.pos, token.line)
+		return t.breakControl(token.pos, token.line, token)
 	case itemContinue:
-		return t.continueControl(token.pos, token.line)
+		return t.continueControl(token.pos, token.line, token)
 	case itemElse:
 		return t.elseControl()
 	case itemEnd:
@@ -423,14 +423,14 @@ func (t *Tree) action() (n Node) {
 //	{{break}}
 //
 // Break keyword is past.
-func (t *Tree) breakControl(pos Pos, line int) Node {
+func (t *Tree) breakControl(pos Pos, line int, token item) Node {
 	if token := t.nextNonSpace(); token.typ != itemRightDelim {
 		t.unexpected(token, "{{break}}")
 	}
 	if t.rangeDepth == 0 {
 		t.errorf("{{break}} outside {{range}}")
 	}
-	return t.newBreak(pos, line)
+	return t.newBreak(pos, line, token)
 }
 
 // Continue:
@@ -438,14 +438,14 @@ func (t *Tree) breakControl(pos Pos, line int) Node {
 //	{{continue}}
 //
 // Continue keyword is past.
-func (t *Tree) continueControl(pos Pos, line int) Node {
+func (t *Tree) continueControl(pos Pos, line int, token item) Node {
 	if token := t.nextNonSpace(); token.typ != itemRightDelim {
 		t.unexpected(token, "{{continue}}")
 	}
 	if t.rangeDepth == 0 {
 		t.errorf("{{continue}} outside {{range}}")
 	}
-	return t.newContinue(pos, line)
+	return t.newContinue(pos, line, token)
 }
 
 // Pipeline:
@@ -602,7 +602,8 @@ func (t *Tree) withControl() Node {
 //
 // End keyword is past.
 func (t *Tree) endControl() Node {
-	return t.newEnd(t.expect(itemRightDelim, "end").pos)
+	item := t.expect(itemRightDelim, "end")
+	return t.newEnd(item.pos, item)
 }
 
 // Else:
@@ -649,7 +650,7 @@ func (t *Tree) blockControl() Node {
 	block.add()
 	block.stopParse()
 
-	return t.newTemplate(token.pos, token.line, name, pipe)
+	return t.newTemplate(token.pos, token.line, name, pipe, token)
 }
 
 // Template:
@@ -668,7 +669,7 @@ func (t *Tree) templateControl() Node {
 		// Do not pop variables; they persist until "end".
 		pipe = t.pipeline(context, itemRightDelim)
 	}
-	return t.newTemplate(token.pos, token.line, name, pipe)
+	return t.newTemplate(token.pos, token.line, name, pipe, token)
 }
 
 func (t *Tree) parseTemplateName(token item, context string) (name string) {
@@ -775,7 +776,7 @@ func (t *Tree) term() Node {
 	case itemDot:
 		return t.newDot(token.pos)
 	case itemNil:
-		return t.newNil(token.pos)
+		return t.newNil(token.pos, token)
 	case itemVariable:
 		return t.useVar(token.pos, token.val)
 	case itemField:
