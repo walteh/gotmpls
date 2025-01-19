@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/walteh/gotmpls/pkg/lsp/protocol"
 	"github.com/walteh/gotmpls/pkg/parser"
 	"github.com/walteh/gotmpls/pkg/position"
+	"github.com/walteh/gotmpls/pkg/semtok"
 	"gitlab.com/tozd/go/errors"
 	"gopkg.in/fsnotify.v1"
 )
@@ -574,28 +576,56 @@ func (s *Server) SemanticTokensFull(ctx context.Context, params *protocol.Semant
 	logger := zerolog.Ctx(ctx)
 	logger.Debug().Str("uri", string(params.TextDocument.URI)).Msg("getting semantic tokens")
 
-	_, ok := s.documents.Get(params.TextDocument.URI)
+	doc, ok := s.documents.Get(params.TextDocument.URI)
 	if !ok {
 		return nil, errors.Errorf("document not found: %s", params.TextDocument.URI)
 	}
 
-	return nil, nil
+	// Generate semantic tokens
+	tokens, err := semtok.GetTokensForText(ctx, []byte(doc.Content))
+	if err != nil {
+		return nil, errors.Errorf("generating semantic tokens: %w", err)
+	}
+
+	// Convert to LSP format
+	return s.convertToLSPTokens(tokens, doc.Content), nil
 }
 
 func (s *Server) SemanticTokensFullDelta(ctx context.Context, params *protocol.SemanticTokensDeltaParams) (any, error) {
-	return nil, nil // Not implemented yet
+	// We don't support delta updates yet, fallback to full
+	doc, ok := s.documents.Get(params.TextDocument.URI)
+	if !ok {
+		return nil, errors.Errorf("document not found: %s", params.TextDocument.URI)
+	}
+
+	// Generate semantic tokens
+	tokens, err := semtok.GetTokensForText(ctx, []byte(doc.Content))
+	if err != nil {
+		return nil, errors.Errorf("generating semantic tokens: %w", err)
+	}
+
+	// Convert to LSP format
+	return s.convertToLSPTokens(tokens, doc.Content), nil
 }
 
 func (s *Server) SemanticTokensRange(ctx context.Context, params *protocol.SemanticTokensRangeParams) (*protocol.SemanticTokens, error) {
 	logger := zerolog.Ctx(ctx)
 	logger.Debug().Str("uri", string(params.TextDocument.URI)).Msg("getting semantic tokens for range")
 
-	_, ok := s.documents.Get(params.TextDocument.URI)
+	doc, ok := s.documents.Get(params.TextDocument.URI)
 	if !ok {
 		return nil, errors.Errorf("document not found: %s", params.TextDocument.URI)
 	}
 
-	return nil, nil
+	// For now, we'll just return tokens for the full document
+	// TODO: Implement range-based token generation
+	tokens, err := semtok.GetTokensForText(ctx, []byte(doc.Content))
+	if err != nil {
+		return nil, errors.Errorf("generating semantic tokens: %w", err)
+	}
+
+	// Convert to LSP format
+	return s.convertToLSPTokens(tokens, doc.Content), nil
 }
 
 func (s *Server) SignatureHelp(ctx context.Context, params *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error) {
@@ -710,4 +740,132 @@ func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentUR
 	}
 
 	return s.instance.CallbackClient().PublishDiagnostics(ctx, params)
+}
+
+// Token type indices in the legend array
+const (
+	tokenTypeNamespace = iota
+	tokenTypeType
+	tokenTypeClass
+	tokenTypeEnum
+	tokenTypeInterface
+	tokenTypeStruct
+	tokenTypeTypeParameter
+	tokenTypeParameter
+	tokenTypeVariable
+	tokenTypeProperty
+	tokenTypeEnumMember
+	tokenTypeEvent
+	tokenTypeFunction
+	tokenTypeMethod
+	tokenTypeMacro
+	tokenTypeKeyword
+	tokenTypeModifier
+	tokenTypeComment
+	tokenTypeString
+	tokenTypeNumber
+	tokenTypeRegexp
+	tokenTypeOperator
+	tokenTypeDecorator
+	tokenTypeLabel
+)
+
+// Token modifier bit flags
+const (
+	tokenModDeclaration = 1 << iota
+	tokenModDefinition
+	tokenModReadonly
+	tokenModStatic
+	tokenModAbstract
+	tokenModAsync
+	tokenModDefaultLibrary
+	tokenModDeprecated
+	tokenModDocumentation
+	tokenModModification
+)
+
+// convertToLSPTokens converts our semantic tokens to LSP format
+func (s *Server) convertToLSPTokens(tokens []semtok.Token, content string) *protocol.SemanticTokens {
+	// LSP requires tokens to be sorted by line and character
+	sort.Slice(tokens, func(i, j int) bool {
+		iRange := tokens[i].Range.GetRange(content)
+		jRange := tokens[j].Range.GetRange(content)
+		if iRange.Start.Line != jRange.Start.Line {
+			return iRange.Start.Line < jRange.Start.Line
+		}
+		return iRange.Start.Character < jRange.Start.Character
+	})
+
+	// Convert to LSP's relative encoding
+	data := make([]uint32, 0, len(tokens)*5)
+	var prevLine, prevChar uint32
+
+	for _, tok := range tokens {
+		// Get token range
+		rng := tok.Range.GetRange(content)
+		line := uint32(rng.Start.Line)
+		char := uint32(rng.Start.Character)
+
+		// Calculate relative positions
+		deltaLine := line - prevLine
+		deltaChar := char
+		if deltaLine == 0 {
+			deltaChar = char - prevChar
+		}
+
+		// Map our token type to LSP token type index
+		tokenType := uint32(tokenTypeNamespace) // default to namespace
+		switch tok.Type {
+		case semtok.TokenVariable:
+			tokenType = uint32(tokenTypeVariable)
+		case semtok.TokenFunction:
+			tokenType = uint32(tokenTypeFunction)
+		case semtok.TokenKeyword:
+			tokenType = uint32(tokenTypeKeyword)
+		case semtok.TokenString:
+			tokenType = uint32(tokenTypeString)
+		case semtok.TokenNumber:
+			tokenType = uint32(tokenTypeNumber)
+		case semtok.TokenComment:
+			tokenType = uint32(tokenTypeComment)
+		case semtok.TokenOperator:
+			tokenType = uint32(tokenTypeOperator)
+		}
+
+		// Map our token modifier to LSP token modifier bit flags
+		tokenModifier := uint32(0)
+		switch tok.Modifier {
+		case semtok.ModifierDeclaration:
+			tokenModifier |= tokenModDeclaration
+		case semtok.ModifierDefinition:
+			tokenModifier |= tokenModDefinition
+		case semtok.ModifierReadonly:
+			tokenModifier |= tokenModReadonly
+		case semtok.ModifierStatic:
+			tokenModifier |= tokenModStatic
+		case semtok.ModifierDeprecated:
+			tokenModifier |= tokenModDeprecated
+		}
+
+		// Append the 5 values:
+		// 1. deltaLine - relative line number from the previous token
+		// 2. deltaChar - relative character from the start of the line
+		// 3. length - length of the token
+		// 4. tokenType - semantic classification of the token
+		// 5. tokenModifiers - token modifiers as bit flags
+		data = append(data,
+			deltaLine,
+			deltaChar,
+			uint32(len(tok.Range.Text)),
+			tokenType,
+			tokenModifier,
+		)
+
+		prevLine = line
+		prevChar = char
+	}
+
+	return &protocol.SemanticTokens{
+		Data: data,
+	}
 }
