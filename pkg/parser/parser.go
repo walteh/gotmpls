@@ -9,8 +9,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"text/template"
-	"text/template/parse"
+
+	"github.com/walteh/gotmpls/pkg/std/text/template"
+	"github.com/walteh/gotmpls/pkg/std/text/template/parse"
 
 	"github.com/rs/zerolog"
 	"github.com/walteh/gotmpls/pkg/position"

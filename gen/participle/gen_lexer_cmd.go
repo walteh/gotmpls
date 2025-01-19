@@ -9,9 +9,10 @@ import (
 	"regexp"
 	"regexp/syntax"
 	"sort"
-	"text/template"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/walteh/gotmpls/pkg/std/text/template"
 
 	"github.com/alecthomas/participle/v2/lexer"
 )

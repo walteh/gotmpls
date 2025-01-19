@@ -24,7 +24,7 @@ func TestLinkerGC(t *testing.T) {
 	const prog = `package main
 
 import (
-	_ "text/template"
+	_ "github.com/walteh/gotmpls/pkg/std/text/template"
 )
 
 type T struct{}

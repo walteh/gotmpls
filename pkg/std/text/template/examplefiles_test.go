@@ -9,7 +9,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"text/template"
+
+	"github.com/walteh/gotmpls/pkg/std/text/template"
 )
 
 // templateFile defines the contents of a template to be stored in a file, for testing.

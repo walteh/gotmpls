@@ -11,7 +11,8 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"text/template/parse"
+
+	"github.com/walteh/gotmpls/pkg/std/text/template/parse"
 )
 
 const (

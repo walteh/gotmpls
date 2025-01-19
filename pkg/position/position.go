@@ -70,7 +70,8 @@ package position
 import (
 	"fmt"
 	"strings"
-	"text/template/parse"
+
+	"github.com/walteh/gotmpls/pkg/std/text/template/parse"
 
 	"github.com/walteh/gotmpls/pkg/lsp/protocol"
 )
