@@ -1,17 +1,5 @@
 version: '3'
 
-# vars:
-#   TOOLS_OUTPUT_DIR: ./out/tools
-#   SCRIPTS_DIR: ./scripts
-
-# includes:
-#   script:
-#     taskfile: "./Taskfile.scripts.yml"
-#     # vars:
-#     #   SCRIPTS_DIR: ./scripts
-#     internal: true
-
-
 tasks:
   test2json:
     desc: run test2json - built from cmd/test2json
@@ -69,7 +57,11 @@ tasks:
     desc: run retab - built from github.com/walteh/retab/v2/cmd/retab
     cmds:
       - ./scripts/run-tool.sh retab {{.CLI_ARGS}}
-  generate:
-    desc: run generate - built from golang.org/x/tools/gopls/internal/protocol/generate
+  railroad:
+    desc: run railroad - built from github.com/alecthomas/participle/v2/cmd/railroad
     cmds:
-      - ./scripts/run-tool.sh generate {{.CLI_ARGS}}
+      - ./scripts/run-tool.sh railroad {{.CLI_ARGS}}
+  participle:
+    desc: run participle - built from ./gen/participle
+    cmds:
+      - ./scripts/run-tool.sh participle {{.CLI_ARGS}}

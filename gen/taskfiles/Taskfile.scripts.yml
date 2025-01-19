@@ -1,14 +1,23 @@
 version: '3'
 
-# vars:
-#   SCRIPTS_DIR: ./scripts
-
 tasks:
   build-tool:
     desc: run ./scripts/build-tool.sh
     cmds:
       - ./scripts/build-tool.sh {{.CLI_ARGS}}
+  download-repo-tarball:
+    desc: run ./scripts/download-repo-tarball.sh
+    cmds:
+      - ./scripts/download-repo-tarball.sh {{.CLI_ARGS}}
   run-tool:
     desc: run ./scripts/run-tool.sh
     cmds:
       - ./scripts/run-tool.sh {{.CLI_ARGS}}
+  sync-aliasrc:
+    desc: run ./scripts/sync-aliasrc.sh
+    cmds:
+      - ./scripts/sync-aliasrc.sh {{.CLI_ARGS}}
+  sync-go-files:
+    desc: run ./scripts/sync-go-files.sh
+    cmds:
+      - ./scripts/sync-go-files.sh {{.CLI_ARGS}}

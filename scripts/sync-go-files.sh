@@ -54,6 +54,7 @@ SOURCE_PATH="${BASH_REMATCH[4]}"
 
 # 📝 Store string replacements
 STRINGS_TO_REPLACE=()
+FILES_TO_IGNORE=()
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	--string-to-replace)
@@ -62,6 +63,14 @@ while [[ $# -gt 0 ]]; do
 			exit 1
 		fi
 		STRINGS_TO_REPLACE+=("$2")
+		shift 2
+		;;
+	--file-to-ignore)
+		if [[ $# -lt 2 ]]; then
+			echo "❌ Error: --file-to-ignore requires a pattern"
+			exit 1
+		fi
+		FILES_TO_IGNORE+=("$2")
 		shift 2
 		;;
 	*)
@@ -76,17 +85,23 @@ echo "🔄 Syncing files from github.com/$ORG/$REPO"
 echo "├── 🌿 Branch: $BRANCH"
 echo "├── 📂 Source: $SOURCE_PATH"
 echo "├── 🎯 Destination: $DEST_DIR"
-echo "└── 🔧 Replacements: ${STRINGS_TO_REPLACE[*]:-none}"
-
+echo "├── 🔧 Replacements: ${STRINGS_TO_REPLACE[*]:-none}"
+echo "└── 🫥 Files to ignore: ${FILES_TO_IGNORE[*]:-none}"
 # 📁 Create destination directory
 mkdir -p "$DEST_DIR"
 
 # 📥 Get list of .go files from the directory
 echo "🔍 Fetching file list..."
-FILES=$(curl -s "https://api.github.com/repos/$ORG/$REPO/contents/$SOURCE_PATH?ref=$BRANCH" | grep "\"path\"" | grep "\.go\"" | cut -d '"' -f 4)
+FILES=$(curl -s "https://api.github.com/repos/$ORG/$REPO/contents/$SOURCE_PATH?ref=$BRANCH" | grep "\"path\"" | cut -d '"' -f 4)
+
+# 🔍 Filter out files to ignore
+echo "🔍 Filtering out files to ignore..."
+for file in "${FILES_TO_IGNORE[@]}"; do
+	FILES=$(echo "$FILES" | grep -vE "$file")
+done
 
 if [ -z "$FILES" ]; then
-	echo "❌ No .go files found in the specified directory"
+	echo "❌ No files found in the specified directory"
 	exit 1
 fi
 
@@ -119,7 +134,7 @@ for file in $FILES; do
 
 	# Apply string replacements
 	for pattern in "${STRINGS_TO_REPLACE[@]}"; do
-		if [[ "$pattern" =~ ^([^:]+):([^:]+)$ ]]; then
+		if [[ "$pattern" =~ ^([^:]+):([^:]*)$ ]]; then
 			old="${BASH_REMATCH[1]}"
 			new="${BASH_REMATCH[2]}"
 			echo "🔧 Replacing '$old' with '$new'"

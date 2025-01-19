@@ -123,7 +123,7 @@ tasks:
             DEST: "{{.DEST}}"
         cmds:
             - |
-                ./scripts/sync-go-files.sh {{.SRC}} {{.DEST}} {{if .STRINGS_TO_REPLACE}}{{range $index, $str := .STRINGS_TO_REPLACE}} --string-to-replace "{{$str}}"{{end}}{{end}}
+                ./scripts/sync-go-files.sh {{.SRC}} {{.DEST}} {{if .STRINGS_TO_REPLACE}}{{range $index, $str := .STRINGS_TO_REPLACE}} --string-to-replace "{{$str}}"{{end}}{{end}} {{if .FILES_TO_IGNORE}}{{range $index, $file := .FILES_TO_IGNORE}} --file-to-ignore "{{$file}}"{{end}}{{end}}
         status:
             - test -d {{.DEST}}
 
@@ -145,6 +145,19 @@ tasks:
                       - sendParseError(ctx, reply,:sendParseError(ctx, conn, r,
                       - recoverHandlerPanic(r.Method()):recoverHandlerPanic(r.Method)
             - go generate ./pkg/lsp/protocol/generator
+
+    sync-participle:
+        desc: Sync participle files from alecthomas/participle
+        cmds:
+            - task: sync-go-files
+              vars:
+                  SRC: github.com/alecthomas/participle/blob/master/cmd/participle
+                  DEST: ./gen/participle
+                  FILES_TO_IGNORE:
+                      - "go.mod"
+                      - "go.sum"
+                  STRINGS_TO_REPLACE:
+                      - "replace github.com/alecthomas/participle/v2 => ../..:"
 
     go-mod-tidy:
         env:
