@@ -10,10 +10,13 @@ package parse
 
 import (
 	"bytes"
+
 	"fmt"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"gitlab.com/tozd/go/errors"
 )
 
 // Tree is the representation of a single parsed template.
@@ -212,7 +215,12 @@ func (t *Tree) recover(errp *error) {
 		if t != nil {
 			t.stopParse()
 		}
-		*errp = e.(error)
+		if _, ok := e.(error); ok {
+			*errp = e.(error)
+		}
+		if _, ok := e.(string); ok {
+			*errp = errors.New("recoverd: " + e.(string))
+		}
 	}
 }
 
@@ -287,6 +295,8 @@ func IsEmptyTree(n Node) bool {
 	case *TextNode:
 		return len(bytes.TrimSpace(n.Text)) == 0
 	case *WithNode:
+	case *EndNode:
+		return true
 	default:
 		panic("unknown node: " + n.String())
 	}
@@ -353,9 +363,6 @@ func (t *Tree) itemList() (list *ListNode, next Node) {
 		n := t.textOrAction()
 		switch n.Type() {
 		case nodeEnd, nodeElse:
-			if n.Type() == nodeEnd {
-				list.append(n)
-			}
 			return list, n
 		}
 		list.append(n)
@@ -537,9 +544,11 @@ func (t *Tree) parseControl(context string) (pos Pos, line int, pipe *PipeNode, 
 		t.rangeDepth--
 	}
 
-	switch next.Type() {
+	switch n := next.Type(); n {
 	case nodeEnd: //done
+		list.append(next)
 	case nodeElse:
+		kwPrefix := next.(*elseNode).ws
 		// Special case for "else if" and "else with".
 		// If the "else" is followed immediately by an "if" or "with",
 		// the elseControl will have left the "if" or "with" token pending. Treat
@@ -554,21 +563,22 @@ func (t *Tree) parseControl(context string) (pos Pos, line int, pipe *PipeNode, 
 			t.next() // Consume the "if" token.
 			elseList = t.newList(next.Position())
 			control := t.ifControl()
-			control.(*IfNode).keyword.val = "else if"
-			control.(*IfNode).keyword.pos = control.(*IfNode).keyword.pos - 5
+			control.(*IfNode).keyword.val = kwPrefix + "if"
+			control.(*IfNode).keyword.pos = control.(*IfNode).keyword.pos - Pos(len(kwPrefix))
 			elseList.append(control)
 		} else if context == "with" && t.peek().typ == itemWith {
 			t.next() // Consume the "with" token.
 			elseList = t.newList(next.Position())
 			control := t.withControl()
-			control.(*WithNode).keyword.val = "else with"
-			control.(*WithNode).keyword.pos = control.(*WithNode).keyword.pos - 5
+			control.(*WithNode).keyword.val = kwPrefix + "with"
+			control.(*WithNode).keyword.pos = control.(*WithNode).keyword.pos - Pos(len(kwPrefix))
 			elseList.append(control)
 		} else {
 			elseList, next = t.itemList()
 			if next.Type() != nodeEnd {
 				t.errorf("expected end; found %s", next)
 			}
+			elseList.append(next)
 		}
 	}
 	return pipe.Position(), pipe.Line, pipe, list, elseList, keyword
@@ -622,15 +632,17 @@ func (t *Tree) endControl() Node {
 //
 // Else keyword is past.
 func (t *Tree) elseControl() Node {
+	ws := int(t.lex.item.pos) + len(t.lex.item.val)
 	peek := t.peekNonSpace()
+	ws = int(peek.pos) - ws
 	// The "{{else if ... " and "{{else with ..." will be
 	// treated as "{{else}}{{if ..." and "{{else}}{{with ...".
 	// So return the else node here.
 	if peek.typ == itemIf || peek.typ == itemWith {
-		return t.newElse(peek.pos, peek.line, peek)
+		return t.newElse(peek.pos, peek.line, peek, "else"+strings.Repeat(" ", int(ws)))
 	}
 	token := t.expect(itemRightDelim, "else")
-	return t.newElse(token.pos, token.line, peek)
+	return t.newElse(token.pos, token.line, peek, "")
 }
 
 // Block:
@@ -657,6 +669,7 @@ func (t *Tree) blockControl() Node {
 	if end.Type() != nodeEnd {
 		t.errorf("unexpected %s in %s", end, context)
 	}
+	block.Root.append(end)
 	block.add()
 	block.stopParse()
 

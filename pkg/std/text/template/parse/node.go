@@ -105,6 +105,9 @@ func (l *ListNode) String() string {
 
 func (l *ListNode) writeTo(sb *strings.Builder) {
 	for _, n := range l.Nodes {
+		if n.Type() == nodeEnd {
+			continue
+		}
 		n.writeTo(sb)
 	}
 }
@@ -817,10 +820,11 @@ type elseNode struct {
 	tr      *Tree
 	Line    int // The line number in the input. Deprecated: Kept for compatibility.
 	keyword item
+	ws      string
 }
 
-func (t *Tree) newElse(pos Pos, line int, keyword item) *elseNode {
-	return &elseNode{tr: t, NodeType: nodeElse, Pos: pos, Line: line, keyword: keyword}
+func (t *Tree) newElse(pos Pos, line int, keyword item, keywordPrefix string) *elseNode {
+	return &elseNode{tr: t, NodeType: nodeElse, Pos: pos, Line: line, keyword: keyword, ws: keywordPrefix}
 }
 
 func (e *elseNode) Type() NodeType {
@@ -840,7 +844,7 @@ func (e *elseNode) tree() *Tree {
 }
 
 func (e *elseNode) Copy() Node {
-	return e.tr.newElse(e.Pos, e.Line, e.keyword)
+	return e.tr.newElse(e.Pos, e.Line, e.keyword, e.ws)
 }
 
 // BranchNode is the common representation of if, range, and with.
