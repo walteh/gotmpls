@@ -1,0 +1,265 @@
+package lsp_test
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	"github.com/walteh/gotmpls/gen/mockery"
+	"github.com/walteh/gotmpls/pkg/lsp"
+	"github.com/walteh/gotmpls/pkg/lsp/protocol"
+)
+
+// setupMockServer creates a server with a mock client for testing.
+// It returns the mock client for setting expectations and the server for making requests.
+func setupMockServer(t *testing.T, docs map[string]string) (context.Context, *mockery.MockClient_protocol, *lsp.Server, func(string) protocol.DocumentURI) {
+	t.Helper()
+
+	ctx := context.Background()
+
+	ctx = zerolog.New(zerolog.TestWriter{T: t}).With().Str("test", t.Name()).Timestamp().Logger().WithContext(ctx)
+
+	// Create server
+	server := lsp.NewServer(ctx)
+
+	// Create mock client and set it up
+	mockClient := mockery.NewMockClient_protocol(t)
+	server.SetCallbackClient(mockClient)
+
+	tmpDir := t.TempDir()
+
+	for uri, content := range docs {
+		var langID string
+		if strings.HasSuffix(uri, ".tmpl") {
+			langID = "gotmpl"
+		} else {
+			langID = "go"
+		}
+		docURI := mockToDocURI(filepath.Join(tmpDir, uri))
+		server.Documents().Store(docURI, &lsp.Document{
+			URI:        string(docURI),
+			LanguageID: protocol.LanguageKind(langID),
+			Version:    1,
+			Content:    content,
+		})
+		os.WriteFile(filepath.Join(tmpDir, uri), []byte(content), 0644)
+	}
+
+	return ctx, mockClient, server, func(uri string) protocol.DocumentURI {
+		if strings.HasPrefix(uri, "file://") {
+			return protocol.DocumentURI(uri)
+		}
+		return mockToDocURI(filepath.Join(tmpDir, uri))
+	}
+}
+
+func mockToDocURI(uri string) protocol.DocumentURI {
+	if strings.HasPrefix(uri, "file://") {
+		return protocol.DocumentURI(uri)
+	}
+	return protocol.DocumentURI("file://" + uri)
+}
+
+func TestMockServerHover(t *testing.T) {
+	t.Parallel()
+
+	t.Run("hover_shows_field_info", func(t *testing.T) {
+		t.Parallel()
+
+		files := map[string]string{
+			"go.mod": "module test",
+			"test.go": `package test
+
+import _ "embed"
+//go:embed test.tmpl
+var TestTemplate string
+
+type Person struct {
+	Name string
+}`,
+			"test.tmpl": `{{- /*gotype: test.Person*/ -}}
+{{ .Name }}`,
+		}
+
+		ctx, mockClient, server, toDocURI := setupMockServer(t, files)
+
+		// Set up expectations for diagnostics
+		mockClient.EXPECT().PublishDiagnostics(ctx, mock.MatchedBy(func(p *protocol.PublishDiagnosticsParams) bool {
+			return p.URI == toDocURI("test.tmpl")
+		})).Return(nil).Once()
+
+		// Open document to trigger initial diagnostics
+		err := server.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
+			TextDocument: protocol.TextDocumentItem{
+				URI:        toDocURI("test.tmpl"),
+				LanguageID: "gotmpl",
+				Version:    1,
+				Text:       files["test.tmpl"],
+			},
+		})
+		require.NoError(t, err, "document open should succeed")
+
+		// Get hover info
+		hoverResult, err := server.Hover(ctx, &protocol.HoverParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{
+					URI: toDocURI("test.tmpl"),
+				},
+				Position: protocol.Position{Line: 1, Character: 3},
+			},
+		})
+		require.NoError(t, err, "hover should succeed")
+		require.NotNil(t, hoverResult, "hover result should not be nil")
+		require.Equal(t, "### Type Information\n\n```go\ntype Person struct {\n\tName string\n}\n```\n\n### Template Access\n```gotmpl\n.Name\n```", hoverResult.Contents.Value)
+
+		mockClient.AssertExpectations(t)
+	})
+}
+
+func TestMockServerDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	t.Run("invalid_field_shows_diagnostic", func(t *testing.T) {
+		t.Parallel()
+
+		files := map[string]string{
+			"go.mod": "module test",
+			"test.go": `package test
+
+import _ "embed"
+//go:embed test.tmpl
+var TestTemplate string
+
+type Person struct {
+	Name string
+}`,
+			"test.tmpl": `{{- /*gotype: test.Person*/ -}}
+{{ .InvalidField }}`,
+		}
+
+		ctx, mockClient, server, toDocURI := setupMockServer(t, files)
+
+		var params *protocol.PublishDiagnosticsParams
+		// Set up expectations for diagnostics
+		mockClient.EXPECT().PublishDiagnostics(ctx, mock.MatchedBy(func(p *protocol.PublishDiagnosticsParams) bool {
+			params = p
+			return p.URI == toDocURI("test.tmpl")
+		})).Return(nil).Once()
+
+		// Trigger diagnostics by making a change
+		err := server.DidChange(ctx, &protocol.DidChangeTextDocumentParams{
+			TextDocument: protocol.VersionedTextDocumentIdentifier{
+				Version: 1,
+				TextDocumentIdentifier: protocol.TextDocumentIdentifier{
+					URI: toDocURI("test.tmpl"),
+				},
+			},
+			ContentChanges: []protocol.TextDocumentContentChangeEvent{
+				{
+					Text: "x",
+					Range: &protocol.Range{
+						Start: protocol.Position{Line: 1, Character: 16},
+						End:   protocol.Position{Line: 1, Character: 16},
+					},
+					RangeLength: 2,
+				},
+			},
+		})
+		require.NoError(t, err, "change should succeed")
+
+		mockClient.AssertExpectations(t)
+		expectedDiag := []protocol.Diagnostic{
+			{
+				Range: protocol.Range{
+					Start: protocol.Position{Line: 0, Character: 14},
+					End:   protocol.Position{Line: 0, Character: 25},
+				},
+				Severity: protocol.SeverityInformation,
+				Message:  "type hint successfully loaded: test.Person",
+			},
+			{
+				Range: protocol.Range{
+					Start: protocol.Position{Line: 1, Character: 3},
+					End:   protocol.Position{Line: 1, Character: 17},
+				},
+				Severity: protocol.SeverityError,
+				Message:  "field not found [ InvalidFieldx ] in type [ Person ]",
+			},
+		}
+		require.Equal(t, expectedDiag, params.Diagnostics)
+	})
+}
+
+func TestMockServerSemanticTokens(t *testing.T) {
+	t.Parallel()
+
+	t.Run("semantic_tokens_for_template", func(t *testing.T) {
+		t.Parallel()
+
+		files := map[string]string{
+			"go.mod": "module test",
+			"test.go": `package test
+
+import _ "embed"
+//go:embed test.tmpl
+var TestTemplate string
+
+type Person struct {
+	Name string
+}`,
+			"test.tmpl": `{{- /*gotype: test.Person*/ -}}
+{{ if eq .Name "test" }}
+	{{ printf "Hello, %s" .Name }}
+{{ end }}`,
+		}
+
+		ctx, mockClient, server, toDocURI := setupMockServer(t, files)
+
+		// Set up expectations for diagnostics
+		mockClient.EXPECT().PublishDiagnostics(ctx, mock.MatchedBy(func(p *protocol.PublishDiagnosticsParams) bool {
+			return p.URI == toDocURI("test.tmpl")
+		})).Return(nil).Once()
+
+		// Open document to trigger initial diagnostics
+		err := server.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
+			TextDocument: protocol.TextDocumentItem{
+				URI:        toDocURI("test.tmpl"),
+				LanguageID: "gotmpl",
+				Version:    1,
+				Text:       files["test.tmpl"],
+			},
+		})
+		require.NoError(t, err, "document open should succeed")
+
+		// Get semantic tokens for the entire file
+		tokens, err := server.SemanticTokensFull(ctx, &protocol.SemanticTokensParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: toDocURI("test.tmpl"),
+			},
+		})
+		require.NoError(t, err, "semantic tokens request should succeed")
+		require.NotNil(t, tokens, "semantic tokens should not be nil")
+		require.NotEmpty(t, tokens.Data, "should have semantic tokens")
+
+		// Get semantic tokens for a specific range
+		rangeTokens, err := server.SemanticTokensRange(ctx, &protocol.SemanticTokensRangeParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: toDocURI("test.tmpl"),
+			},
+			Range: protocol.Range{
+				Start: protocol.Position{Line: 1, Character: 0},
+				End:   protocol.Position{Line: 1, Character: 25},
+			},
+		})
+		require.NoError(t, err, "semantic tokens range request should succeed")
+		require.NotNil(t, rangeTokens, "semantic tokens for range should not be nil")
+		require.NotEmpty(t, rangeTokens.Data, "should have semantic tokens for range")
+
+		mockClient.AssertExpectations(t)
+	})
+}
