@@ -49,16 +49,16 @@ func (me *Handler) Run(ctx context.Context) error {
 	// Create a new LSP server with all the components it needs
 	server := lsp.NewServer(ctx)
 
-	opts := &jrpc2.ServerOptions{
-		RPCLog: &RPCLogger{},
-	}
-
 	if me.trace {
 		ctx = zerolog.New(os.Stderr).With().Str("name", "gotmpls").Logger().Level(zerolog.TraceLevel).WithContext(ctx)
 	} else if me.debug {
 		ctx = zerolog.New(os.Stderr).With().Str("name", "gotmpls").Logger().Level(zerolog.DebugLevel).WithContext(ctx)
 	} else {
 		ctx = zerolog.New(os.Stderr).With().Str("name", "gotmpls").Logger().Level(zerolog.InfoLevel).WithContext(ctx)
+	}
+
+	opts := &jrpc2.ServerOptions{
+		RPCLog: &RPCLogger{},
 	}
 
 	instance := protocol.NewServerInstance(ctx, server, opts)

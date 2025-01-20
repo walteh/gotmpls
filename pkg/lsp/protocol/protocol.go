@@ -81,6 +81,46 @@ func (s *Instance) newContext() context.Context {
 	return ctx
 }
 
+// // CustomLSP creates an LSP channel with a larger buffer size
+// func CustomLSP(r io.Reader, wc io.WriteCloser) channel.Channel {
+// 	// Create buffered reader with 8MB buffer size
+// 	br := bufio.NewReaderSize(r, 8*1024*1024)
+// 	// Create buffered writer with 8MB buffer size
+// 	bw := bufio.NewWriterSize(wc, 8*1024*1024)
+// 	return channel.Header("application/vscode-jsonrpc; charset=utf-8")(br, &writerCloser{bw, wc})
+// }
+
+// // writerCloser combines a buffered writer with a closer
+// type writerCloser struct {
+// 	*bufio.Writer
+// 	closer io.WriteCloser
+// }
+
+// func (w *writerCloser) Close() error {
+// 	if err := w.Writer.Flush(); err != nil {
+// 		return err
+// 	}
+// 	return w.closer.Close()
+// }
+
+func (s *Instance) StartAndWait(reader io.Reader, writer io.WriteCloser) error {
+	server, err := s.StartAndDetach(channel.LSP(reader, writer))
+	if err != nil {
+		return errors.Errorf("starting external server: %w", err)
+	}
+
+	return server.Wait()
+}
+
+func (s *Instance) StartAndWaitChannel(chans channel.Channel) error {
+	server, err := s.StartAndDetach(chans)
+	if err != nil {
+		return errors.Errorf("starting external server: %w", err)
+	}
+
+	return server.Wait()
+}
+
 func (s *Instance) StartAndDetach(chans channel.Channel) (*jrpc2.Server, error) {
 	multiLogger := &MultiRPCLogger{}
 
@@ -114,36 +154,15 @@ func (s *Instance) StartAndDetach(chans channel.Channel) (*jrpc2.Server, error) 
 			}
 		}()
 	}
-
+	s.serverOpts.NewContext = s.newContext
 	s.server = jrpc2.NewServer(s.methods, s.serverOpts)
 	s.server = s.server.Start(chans)
 
-	cli := jrpc2.NewClient(chans, nil)
-
-	s.logForwardingClient = &ClientCaller{client: cli}
+	s.logForwardingClient = &ClientDispatcher{instance: s}
 
 	return s.server, nil
 }
 
-func (s *Instance) StartAndWait(reader io.Reader, writer io.WriteCloser) error {
-
-	server, err := s.StartAndDetach(channel.LSP(reader, writer))
-	if err != nil {
-		return errors.Errorf("starting external server: %w", err)
-	}
-
-	return server.Wait()
-}
-
-func (s *Instance) StartAndWaitChannel(chans channel.Channel) error {
-
-	server, err := s.StartAndDetach(chans)
-	if err != nil {
-		return errors.Errorf("starting external server: %w", err)
-	}
-
-	return server.Wait()
-}
 func NewServerInstance(ctx context.Context, server Server, opts *jrpc2.ServerOptions) *ServerDispatcher {
 	methods := buildServerDispatchMap(server)
 

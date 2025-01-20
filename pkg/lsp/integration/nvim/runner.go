@@ -371,7 +371,7 @@ EOF`, lspConfigDir, config.DefaultConfig(socketPath), config.DefaultSetup(), sha
 
 // Helper method to wait for LSP to initialize
 func (s *NvimIntegrationTestRunner) WaitForLSP(t *testing.T) error {
-	t.Skip("this is not working, so ")
+	// t.Skip("this is not working, so ")
 	t.Helper()
 	prelogCount := 0
 	waitForLSP := func() bool {

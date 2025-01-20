@@ -128,23 +128,23 @@ func (_c *MockClient_protocol_CodeLensRefresh_Call) RunAndReturn(run func(contex
 }
 
 // Configuration provides a mock function with given fields: _a0, _a1
-func (_m *MockClient_protocol) Configuration(_a0 context.Context, _a1 *protocol.ParamConfiguration) ([]interface{}, error) {
+func (_m *MockClient_protocol) Configuration(_a0 context.Context, _a1 *protocol.ParamConfiguration) ([]protocol.LSPAny, error) {
 	ret := _m.Called(_a0, _a1)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Configuration")
 	}
 
-	var r0 []interface{}
+	var r0 []protocol.LSPAny
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *protocol.ParamConfiguration) ([]interface{}, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *protocol.ParamConfiguration) ([]protocol.LSPAny, error)); ok {
 		return rf(_a0, _a1)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *protocol.ParamConfiguration) []interface{}); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *protocol.ParamConfiguration) []protocol.LSPAny); ok {
 		r0 = rf(_a0, _a1)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]interface{})
+			r0 = ret.Get(0).([]protocol.LSPAny)
 		}
 	}
 
@@ -176,12 +176,12 @@ func (_c *MockClient_protocol_Configuration_Call) Run(run func(_a0 context.Conte
 	return _c
 }
 
-func (_c *MockClient_protocol_Configuration_Call) Return(_a0 []interface{}, _a1 error) *MockClient_protocol_Configuration_Call {
+func (_c *MockClient_protocol_Configuration_Call) Return(_a0 []protocol.LSPAny, _a1 error) *MockClient_protocol_Configuration_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockClient_protocol_Configuration_Call) RunAndReturn(run func(context.Context, *protocol.ParamConfiguration) ([]interface{}, error)) *MockClient_protocol_Configuration_Call {
+func (_c *MockClient_protocol_Configuration_Call) RunAndReturn(run func(context.Context, *protocol.ParamConfiguration) ([]protocol.LSPAny, error)) *MockClient_protocol_Configuration_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -233,7 +233,7 @@ func (_c *MockClient_protocol_DiagnosticRefresh_Call) RunAndReturn(run func(cont
 }
 
 // Event provides a mock function with given fields: _a0, _a1
-func (_m *MockClient_protocol) Event(_a0 context.Context, _a1 *interface{}) error {
+func (_m *MockClient_protocol) Event(_a0 context.Context, _a1 *any) error {
 	ret := _m.Called(_a0, _a1)
 
 	if len(ret) == 0 {
@@ -241,7 +241,7 @@ func (_m *MockClient_protocol) Event(_a0 context.Context, _a1 *interface{}) erro
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, *interface{}) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *any) error); ok {
 		r0 = rf(_a0, _a1)
 	} else {
 		r0 = ret.Error(0)
@@ -257,14 +257,14 @@ type MockClient_protocol_Event_Call struct {
 
 // Event is a helper method to define mock.On call
 //   - _a0 context.Context
-//   - _a1 *interface{}
+//   - _a1 *any
 func (_e *MockClient_protocol_Expecter) Event(_a0 interface{}, _a1 interface{}) *MockClient_protocol_Event_Call {
 	return &MockClient_protocol_Event_Call{Call: _e.mock.On("Event", _a0, _a1)}
 }
 
-func (_c *MockClient_protocol_Event_Call) Run(run func(_a0 context.Context, _a1 *interface{})) *MockClient_protocol_Event_Call {
+func (_c *MockClient_protocol_Event_Call) Run(run func(_a0 context.Context, _a1 *any)) *MockClient_protocol_Event_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*interface{}))
+		run(args[0].(context.Context), args[1].(*any))
 	})
 	return _c
 }
@@ -274,7 +274,7 @@ func (_c *MockClient_protocol_Event_Call) Return(_a0 error) *MockClient_protocol
 	return _c
 }
 
-func (_c *MockClient_protocol_Event_Call) RunAndReturn(run func(context.Context, *interface{}) error) *MockClient_protocol_Event_Call {
+func (_c *MockClient_protocol_Event_Call) RunAndReturn(run func(context.Context, *any) error) *MockClient_protocol_Event_Call {
 	_c.Call.Return(run)
 	return _c
 }

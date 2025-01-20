@@ -320,7 +320,7 @@ func (s *NvimIntegrationTestRunner) GetSemanticTokensFull(t *testing.T, ctx cont
 	tokens := s.triggerSemanticTokensRefresh(t, buf)
 
 	rpcs, exp := s.rpcTracker.WaitForMessages(openTime, 2, 3*time.Second, func(msg protocol.RPCMessage) bool {
-		t.Logf("🔍 Checking RPC message: %v", msg.Method)
+		// t.Logf("🔍 Checking RPC message: %v", msg.Method)
 		return msg.Method == "textDocument/semanticTokens/full"
 	})
 	require.True(t, exp, "time expired waiting for textDocument/semanticTokens/full")
