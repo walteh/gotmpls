@@ -416,6 +416,8 @@ func (s *NvimIntegrationTestRunner) ApplyEdit(t *testing.T, uri protocol.Documen
 		return msg.Method == "textDocument/didChange"
 	})
 
+	require.Len(t, rpcs, 1, "should have 1 rpc")
+
 	require.True(t, exp, "time expired waiting for textDocument/didChange")
 	return rpcs
 }
