@@ -72,10 +72,12 @@ func ApplyClientToZerolog(ctx context.Context, conn Client) context.Context {
 		ctx:  ctx,
 	}
 
+	level := zerolog.Ctx(ctx).GetLevel()
+
 	ctx = zerolog.New(writer).With().
-		// Str("method", method).
 		Str("id", myLoggerId).
 		Logger().
+		Level(level).
 		Hook(debug.CustomTimeHook{WithColor: false}).
 		Hook(debug.CustomCallerHook{WithColor: false}).
 		WithContext(ctx)

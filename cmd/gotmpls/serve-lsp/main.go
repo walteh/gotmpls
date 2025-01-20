@@ -13,6 +13,7 @@ import (
 
 type Handler struct {
 	debug bool
+	trace bool
 }
 
 func NewServeLSPCommand() *cobra.Command {
@@ -24,7 +25,7 @@ func NewServeLSPCommand() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&me.debug, "debug", false, "enable debug logging")
-
+	cmd.Flags().BoolVar(&me.trace, "trace", false, "enable trace logging")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		return me.Run(cmd.Context())
 	}
@@ -49,6 +50,14 @@ func (me *Handler) Run(ctx context.Context) error {
 
 	opts := &jrpc2.ServerOptions{
 		RPCLog: &RPCLogger{},
+	}
+
+	if me.trace {
+		ctx = zerolog.New(os.Stderr).With().Str("name", "gotmpls").Logger().Level(zerolog.TraceLevel).WithContext(ctx)
+	} else if me.debug {
+		ctx = zerolog.New(os.Stderr).With().Str("name", "gotmpls").Logger().Level(zerolog.DebugLevel).WithContext(ctx)
+	} else {
+		ctx = zerolog.New(os.Stderr).With().Str("name", "gotmpls").Logger().Level(zerolog.InfoLevel).WithContext(ctx)
 	}
 
 	instance := server.BuildServerInstance(ctx, opts)

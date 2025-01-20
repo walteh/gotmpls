@@ -122,12 +122,12 @@ func (r *Registry) AddInMemoryPackageForTesting(ctx context.Context, path string
 
 // GetPackage returns a package by name
 func (r *Registry) GetPackage(ctx context.Context, packageName string) (*types.Package, error) {
-	// zerolog.Ctx(ctx).Debug().Str("packageName", packageName).Interface("packages", r.Packages).Msg("looking for package")
+	// zerolog.Ctx(ctx).Trace().Str("packageName", packageName).Interface("packages", r.Packages).Msg("looking for package")
 
 	// First, try to find an exact match
 	for _, pkg := range r.Packages {
 		if pkg.Package.PkgPath == packageName {
-			zerolog.Ctx(ctx).Debug().Str("package", packageName).Msg("found exact match")
+			zerolog.Ctx(ctx).Trace().Str("package", packageName).Msg("found exact match")
 			return pkg.Package.Types, nil
 		}
 	}
@@ -135,7 +135,7 @@ func (r *Registry) GetPackage(ctx context.Context, packageName string) (*types.P
 	// Try to find by package name
 	for _, pkg := range r.Packages {
 		if path.Base(pkg.Package.PkgPath) == packageName {
-			zerolog.Ctx(ctx).Debug().Str("packageName", packageName).Str("path", pkg.Package.PkgPath).Msg("found by name")
+			zerolog.Ctx(ctx).Trace().Str("packageName", packageName).Str("path", pkg.Package.PkgPath).Msg("found by name")
 			return pkg.Package.Types, nil
 		}
 	}
@@ -143,12 +143,12 @@ func (r *Registry) GetPackage(ctx context.Context, packageName string) (*types.P
 	// Try to find by path suffix
 	for _, pkg := range r.Packages {
 		if strings.HasSuffix(pkg.Package.PkgPath, "/"+packageName) {
-			zerolog.Ctx(ctx).Debug().Str("packageName", packageName).Str("path", pkg.Package.PkgPath).Msg("found by suffix")
+			zerolog.Ctx(ctx).Trace().Str("packageName", packageName).Str("path", pkg.Package.PkgPath).Msg("found by suffix")
 			return pkg.Package.Types, nil
 		}
 	}
 
-	zerolog.Ctx(ctx).Debug().Str("packageName", packageName).Msg("not found")
+	zerolog.Ctx(ctx).Trace().Str("packageName", packageName).Msg("not found")
 	return nil, errors.Errorf("package %s not found", packageName)
 }
 

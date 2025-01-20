@@ -124,7 +124,7 @@ func (block *BlockInfo) walkNode(ctx context.Context, node parse.Node, scope str
 			if len(n.Pipe.Cmds) == 1 && len(n.Pipe.Cmds[0].Args) == 1 {
 				if field, ok := n.Pipe.Cmds[0].Args[0].(*parse.FieldNode); ok {
 					if item := createVarLocation(field, scope, seenVars); item != nil {
-						zerolog.Ctx(ctx).Debug().Msgf("adding variable %s in position %s to block %s", item.Name(), item.Position.ID(), block.Name)
+						zerolog.Ctx(ctx).Trace().Msgf("adding variable %s in position %s to block %s", item.Name(), item.Position.ID(), block.Name)
 						block.Variables = append(block.Variables, *item)
 					}
 				}
@@ -292,7 +292,7 @@ func ParseRawTemplate(ctx context.Context, content []byte, tmpl *template.Templa
 			scope = t.ParseName
 		}
 
-		zerolog.Ctx(ctx).Debug().Msgf("block %s scope: %s", t.Name(), scope)
+		zerolog.Ctx(ctx).Trace().Msgf("block %s scope: %s", t.Name(), scope)
 
 		// Process the template's AST
 		if err := block.walkNode(ctx, t.Tree.Root, scope, nil, seenVars, seenFuncs); err != nil {

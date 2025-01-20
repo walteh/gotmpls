@@ -83,12 +83,12 @@ func (f FieldVarOrFunc) Underlying() types.Type {
 // createFieldInfo creates a new FieldInfo from a types.Object (can be Var or Func)
 func createFieldInfo(ctx context.Context, obj FieldVarOrFunc, parent *TypeHintDefinition) (*FieldInfo, error) {
 	if obj.Var != nil {
-		zerolog.Ctx(ctx).Debug().
+		zerolog.Ctx(ctx).Trace().
 			Str("type", obj.Var.Type().String()).
 			Str("name", obj.Var.Name()).
 			Msg("creating field info for var")
 	} else if obj.Func != nil {
-		zerolog.Ctx(ctx).Debug().
+		zerolog.Ctx(ctx).Trace().
 			Str("type", obj.Func.Type().String()).
 			Str("name", obj.Func.Name()).
 			Msg("creating field info for func")
@@ -101,7 +101,7 @@ func createFieldInfo(ctx context.Context, obj FieldVarOrFunc, parent *TypeHintDe
 
 // createTypeInfoFromStruct creates a TypeInfo from a types.Struct
 func createTypeInfoFromStruct(ctx context.Context, name string, obj types.Type, strict bool, parent *TypeHintDefinition) (*TypeHintDefinition, error) {
-	zerolog.Ctx(ctx).Debug().
+	zerolog.Ctx(ctx).Trace().
 		Str("name", name).
 		Str("type", obj.String()).
 		Bool("strict", strict).
@@ -177,7 +177,7 @@ func GenerateFieldInfoFromPosition(ctx context.Context, typeInfo *TypeHintDefini
 		if part == "" {
 			continue
 		}
-		zerolog.Ctx(ctx).Debug().Str("part", part).Msgf("generating field '%s' in type '%s' using position '%s'", part, currentType.MyFieldInfo.Name, pos.ID())
+		zerolog.Ctx(ctx).Trace().Str("part", part).Msgf("generating field '%s' in type '%s' using position '%s'", part, currentType.MyFieldInfo.Name, pos.ID())
 		field, ok := currentType.Fields[part]
 		if !ok {
 			// "field not found" is relied on downstream in hover.go

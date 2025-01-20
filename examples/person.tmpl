@@ -6,8 +6,8 @@ Address:
   Street: {{.Address.Streetsz}}
   City: {{.Address.City}}
 
-{{if .HasJob}}
-Job: {{.GetJob | upper}}
+{{if .HasJob}} 
+Job: {{.GetJob | uppzer}}
 JobZ: {{printf "%s" .GetJob | upper}}
 JobZ: {{printf "hi" | upper | printf "%s" | upper}}
 

@@ -125,15 +125,20 @@ export function activate(context: vscode.ExtensionContext) {
 					case 3: // Info
 						str = `🟦 info       `;
 						break;
-					case 4: // Debug
+					case 5: // Trace
 						str = `🟪 debug      `;
 						break;
-					case 5: // Trace
+					case 4: // Debug
 						str = `⬜ trace      `;
 						break;
 					case 6: // Dependency
 						str = `⬜ dependency `;
 						break;
+				}
+
+				// if trace is disabled, skip 4 and 6
+				if (!vscode.workspace.getConfiguration('gotmpls').get('trace.server')) {
+					if (params.type === 4 || params.type === 6) return;
 				}
 
 				// Add time and source if available

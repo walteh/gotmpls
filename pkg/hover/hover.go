@@ -123,7 +123,7 @@ func FormatHoverResponse(ctx context.Context, variable *parser.VariableLocation,
 		content = append(content, "\n*Type information not available*")
 	}
 
-	zerolog.Ctx(ctx).Debug().
+	zerolog.Ctx(ctx).Trace().
 		Str("variable", variable.Position.Text).
 		Bool("has_method", method != nil).
 		Bool("has_type_info", typeInfo != nil).
@@ -142,13 +142,13 @@ func BuildHoverResponseFromParse(ctx context.Context, info *parser.ParsedTemplat
 			continue
 		}
 
-		zerolog.Ctx(ctx).Debug().Msgf("checking block %s against type hint %s (vars: %d)", block.Name, block.TypeHint.TypePath, len(block.Variables))
+		zerolog.Ctx(ctx).Trace().Msgf("checking block %s against type hint %s (vars: %d)", block.Name, block.TypeHint.TypePath, len(block.Variables))
 
 		for _, function := range block.Functions {
-			zerolog.Ctx(ctx).Debug().Any("function", function).Any("hover", hoverPosition).Msg("checking overlap")
-			zerolog.Ctx(ctx).Debug().Msgf("checking overlap of [%s:%d] with [%s:%d]", hoverPosition.Text, hoverPosition.Offset, function.Position.Text, function.Position.Offset)
+			zerolog.Ctx(ctx).Trace().Any("function", function).Any("hover", hoverPosition).Msg("checking overlap")
+			zerolog.Ctx(ctx).Trace().Msgf("checking overlap of [%s:%d] with [%s:%d]", hoverPosition.Text, hoverPosition.Offset, function.Position.Text, function.Position.Offset)
 			if hoverPosition.HasRangeOverlapWith(function.Position) {
-				zerolog.Ctx(ctx).Debug().Msgf("function %s at %v overlaps with position %v", function.Name(), function.Position, hoverPosition)
+				zerolog.Ctx(ctx).Trace().Msgf("function %s at %v overlaps with position %v", function.Name(), function.Position, hoverPosition)
 				method, err := ast.GenerateFunctionCallInfoFromPosition(ctx, function.Position)
 				if err != nil {
 					return nil, errors.Errorf("generating function call info: %w", err)
@@ -169,9 +169,9 @@ func BuildHoverResponseFromParse(ctx context.Context, info *parser.ParsedTemplat
 		}
 
 		for _, variable := range block.Variables {
-			zerolog.Ctx(ctx).Debug().Msgf("checking overlap of [%s:%d] with [%s:%d]", hoverPosition.Text, hoverPosition.Offset, variable.Position.Text, variable.Position.Offset)
+			zerolog.Ctx(ctx).Trace().Msgf("checking overlap of [%s:%d] with [%s:%d]", hoverPosition.Text, hoverPosition.Offset, variable.Position.Text, variable.Position.Offset)
 			if hoverPosition.HasRangeOverlapWith(variable.Position) {
-				zerolog.Ctx(ctx).Debug().Msgf("variable %s at %v overlaps with position %v", variable.Name(), variable.Position, hoverPosition)
+				zerolog.Ctx(ctx).Trace().Msgf("variable %s at %v overlaps with position %v", variable.Name(), variable.Position, hoverPosition)
 
 				typeInfo, err := ast.GenerateFieldInfoFromPosition(ctx, thd, variable.Position)
 				if err != nil {

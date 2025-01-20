@@ -59,7 +59,7 @@ func LoadPackageTypesFromFs(ctx context.Context, dir string, overlay map[string]
 	// 	return nil, errors.Errorf("no packages found in directory: %s (missing go.mod) files seen: %v", dir, filesSeen)
 	// }
 
-	// zerolog.Ctx(ctx).Debug().Msgf("analyzing packages in directory: %s\n", dir)
+	// zerolog.Ctx(ctx).Trace().Msgf("analyzing packages in directory: %s\n", dir)
 
 	// // Read go.mod to get module name
 	// modContent, err := os.ReadFile(modPath)
@@ -104,17 +104,17 @@ func LoadPackageTypesFromFs(ctx context.Context, dir string, overlay map[string]
 	for _, pkg := range pkgs {
 		pkgNames = append(pkgNames, pkg.Name)
 	}
-	zerolog.Ctx(ctx).Debug().Msgf("loaded %d packages: %v", len(pkgs), pkgNames)
+	zerolog.Ctx(ctx).Trace().Msgf("loaded %d packages: %v", len(pkgs), pkgNames)
 	for _, pkg := range pkgs {
-		zerolog.Ctx(ctx).Debug().Msgf("package: %s (path: %s)\n", pkg.Name, pkg.PkgPath)
+		zerolog.Ctx(ctx).Trace().Msgf("package: %s (path: %s)\n", pkg.Name, pkg.PkgPath)
 		if len(pkg.Errors) > 0 {
-			zerolog.Ctx(ctx).Debug().Msgf(" errors:\n")
+			zerolog.Ctx(ctx).Trace().Msgf(" errors:\n")
 			for _, err := range pkg.Errors {
-				zerolog.Ctx(ctx).Debug().Msgf("    - %v\n", err)
+				zerolog.Ctx(ctx).Trace().Msgf("    - %v\n", err)
 			}
 		}
 		if pkg.Module != nil {
-			zerolog.Ctx(ctx).Debug().Msgf("  module: %s\n", pkg.Module.Path)
+			zerolog.Ctx(ctx).Trace().Msgf("  module: %s\n", pkg.Module.Path)
 		}
 
 		pkgd[pkg.PkgPath] = pkg.Types

@@ -331,6 +331,8 @@ func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 			return errors.Errorf("document not found: %s", params.TextDocument.URI)
 		}
 
+		zerolog.Ctx(ctx).Debug().Str("uri", string(params.TextDocument.URI)).Str("content", doc.Content).Msg("document changed")
+
 		// Update document
 		doc.Version = params.TextDocument.Version
 		for _, change := range params.ContentChanges {
@@ -339,7 +341,7 @@ func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 			} else {
 				if change.Text != "" {
 					// zerolog.Ctx(ctx).Trace().Str("uri", string(params.TextDocument.URI)).Str("content", doc.Content).Any("change", change).Msg("document changed")
-					doc.Content = replaceContentFromRange(doc.Content, change.Range, change.Text)
+					doc.Content = replaceContentFromRange(ctx, doc.Content, change.Range, change.Text)
 				}
 			}
 		}
@@ -352,9 +354,14 @@ func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 	return nil
 }
 
-func replaceContentFromRange(content string, rangez *protocol.Range, text string) string {
+func replaceContentFromRange(ctx context.Context, content string, rangez *protocol.Range, text string) string {
 	startPos := position.NewRawPositionFromLineAndColumn(int(rangez.Start.Line), int(rangez.Start.Character), "", content)
 	endPos := position.NewRawPositionFromLineAndColumn(int(rangez.End.Line), int(rangez.End.Character), "", content)
+	zerolog.Ctx(ctx).Debug().Msgf(`replacing content from %s to %s with %s`, startPos.ID(), endPos.ID(), text)
+	// zerolog.Ctx(ctx).Debug().Str("Start", content[:startPos.Offset]).Msg("Start")
+	// zerolog.Ctx(ctx).Debug().Str("End", content[endPos.Offset:]).Msg("End")
+	// zerolog.Ctx(ctx).Debug().Str("Text", text).Msg("after: " + content[:startPos.Offset] + text + content[endPos.Offset:])
+
 	return content[:startPos.Offset] + text + content[endPos.Offset:]
 }
 
@@ -454,7 +461,7 @@ func (s *Server) Formatting(ctx context.Context, params *protocol.DocumentFormat
 }
 
 func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
-	zerolog.Ctx(ctx).Debug().Msgf("hover request received: %+v", params)
+	zerolog.Ctx(ctx).Trace().Msgf("hover request received: %+v", params)
 
 	uripath := params.TextDocument.URI.Path()
 
@@ -738,6 +745,8 @@ func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentUR
 		URI:         uri,
 		Diagnostics: diagnostics,
 	}
+
+	zerolog.Ctx(ctx).Debug().Msgf("publishing diagnostics: %+v", params)
 
 	return s.instance.CallbackClient().PublishDiagnostics(ctx, params)
 }
