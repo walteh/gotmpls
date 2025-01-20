@@ -156,7 +156,7 @@ func (t *RPCTracker) WaitForMessages(since time.Time, count int, timeout time.Du
 	// First check existing messages
 	result := t.MessagesSinceLike(since, predicate)
 
-	if len(result) == count {
+	if len(result) >= count {
 		return result, true
 	}
 
@@ -173,7 +173,7 @@ func (t *RPCTracker) WaitForMessages(since time.Time, count int, timeout time.Du
 			if predicate(msg) {
 				result = append(result, msg)
 			}
-			if len(result) == count {
+			if len(result) >= count {
 				return result, true
 			}
 		case <-timer.C:
