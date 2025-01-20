@@ -79,6 +79,10 @@ export function activate(context: vscode.ExtensionContext) {
 				outputChannel.appendLine(`[Server Debug] ${data}`);
 			});
 
+			serverProcess.on('error', (err) => {
+				outputChannel.appendLine(`[Server Error] ${err.message}`);
+			});
+
 			// Client options
 			const clientOptions: LanguageClientOptions = {
 				documentSelector: [{ scheme: 'file', language: 'gotmpl' }],
@@ -180,7 +184,7 @@ export function activate(context: vscode.ExtensionContext) {
 		.catch(err => {
 			outputChannel.appendLine(`Error finding executable: ${err.message}`);
 			outputChannel.appendLine(err.stack || '');
-			vscode.window.showErrorMessage(`Error starting template type checker: ${err.message}`);
+			vscode.window.showErrorMessage(`Error starting  gotmpls: ${err.message}`);
 		});
 }
 

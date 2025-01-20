@@ -41,6 +41,16 @@ func NewDocumentManager() *DocumentManager {
 	}
 }
 
+func (m *DocumentManager) GetNoFallback(uri protocol.DocumentURI) (*Document, bool) {
+	normalizedURI := normalizeURI(string(uri))
+	content, ok := m.store.Load(normalizedURI)
+	if content == nil {
+		return nil, ok
+	} else {
+		return content.(*Document), ok
+	}
+}
+
 func (m *DocumentManager) Get(uri protocol.DocumentURI) (*Document, bool) {
 	normalizedURI := normalizeURI(string(uri))
 	content, ok := m.store.Load(normalizedURI)
@@ -383,7 +393,7 @@ func (s *Server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocu
 	logger := zerolog.Ctx(ctx)
 	logger.Debug().Str("uri", string(params.TextDocument.URI)).Msg("document closed")
 
-	s.documents.Delete(string(params.TextDocument.URI))
+	s.documents.Delete(normalizeURI(string(params.TextDocument.URI)))
 	return nil
 }
 

@@ -88,22 +88,6 @@ type Person struct {
 
 		ctx, mockClient, server, toDocURI := setupMockServer(t, files)
 
-		// Set up expectations for diagnostics
-		mockClient.EXPECT().PublishDiagnostics(ctx, mock.MatchedBy(func(p *protocol.PublishDiagnosticsParams) bool {
-			return p.URI == toDocURI("test.tmpl")
-		})).Return(nil).Once()
-
-		// Open document to trigger initial diagnostics
-		err := server.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
-			TextDocument: protocol.TextDocumentItem{
-				URI:        toDocURI("test.tmpl"),
-				LanguageID: "gotmpl",
-				Version:    1,
-				Text:       files["test.tmpl"],
-			},
-		})
-		require.NoError(t, err, "document open should succeed")
-
 		// Get hover info
 		hoverResult, err := server.Hover(ctx, &protocol.HoverParams{
 			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
@@ -220,22 +204,6 @@ type Person struct {
 
 		ctx, mockClient, server, toDocURI := setupMockServer(t, files)
 
-		// Set up expectations for diagnostics
-		mockClient.EXPECT().PublishDiagnostics(ctx, mock.MatchedBy(func(p *protocol.PublishDiagnosticsParams) bool {
-			return p.URI == toDocURI("test.tmpl")
-		})).Return(nil).Once()
-
-		// Open document to trigger initial diagnostics
-		err := server.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
-			TextDocument: protocol.TextDocumentItem{
-				URI:        toDocURI("test.tmpl"),
-				LanguageID: "gotmpl",
-				Version:    1,
-				Text:       files["test.tmpl"],
-			},
-		})
-		require.NoError(t, err, "document open should succeed")
-
 		// Get semantic tokens for the entire file
 		tokens, err := server.SemanticTokensFull(ctx, &protocol.SemanticTokensParams{
 			TextDocument: protocol.TextDocumentIdentifier{
@@ -261,5 +229,116 @@ type Person struct {
 		require.NotEmpty(t, rangeTokens.Data, "should have semantic tokens for range")
 
 		mockClient.AssertExpectations(t)
+	})
+}
+
+func TestMockServerDocumentLifecycle(t *testing.T) {
+	t.Parallel()
+
+	t.Run("document_lifecycle", func(t *testing.T) {
+		t.Parallel()
+
+		files := map[string]string{
+			"go.mod": "module test",
+			"test.go": `package test
+
+import _ "embed"
+//go:embed test.tmpl
+var TestTemplate string
+
+type Person struct {
+	Name string
+}`,
+			"test.tmpl": `{{- /*gotype: test.Person*/ -}}
+{{ .Name }}`,
+		}
+
+		ctx, mockClient, server, toDocURI := setupMockServer(t, files)
+
+		// Set up expectations for diagnostics
+		mockClient.EXPECT().PublishDiagnostics(ctx, mock.MatchedBy(func(p *protocol.PublishDiagnosticsParams) bool {
+			return p.URI == toDocURI("test.tmpl")
+		})).Return(nil).Twice()
+
+		// Open document
+		err := server.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
+			TextDocument: protocol.TextDocumentItem{
+				URI:        toDocURI("test.tmpl"),
+				LanguageID: "gotmpl",
+				Version:    1,
+				Text:       files["test.tmpl"],
+			},
+		})
+		require.NoError(t, err, "document open should succeed")
+
+		// Save document
+		text := files["test.tmpl"]
+		err = server.DidSave(ctx, &protocol.DidSaveTextDocumentParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: toDocURI("test.tmpl"),
+			},
+			Text: &text,
+		})
+		require.NoError(t, err, "document save should succeed")
+
+		// Close document
+		err = server.DidClose(ctx, &protocol.DidCloseTextDocumentParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: toDocURI("test.tmpl"),
+			},
+		})
+		require.NoError(t, err, "document close should succeed")
+
+		// Verify document is removed from store
+		_, exists := server.Documents().GetNoFallback(toDocURI("test.tmpl"))
+		require.False(t, exists, "document should be removed after close")
+
+		mockClient.AssertExpectations(t)
+	})
+}
+
+func TestMockServerLifecycle(t *testing.T) {
+	t.Parallel()
+
+	t.Run("server_lifecycle", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := context.Background()
+		server := lsp.NewServer(ctx)
+
+		// Initialize server
+		params := &protocol.ParamInitialize{
+			XInitializeParams: protocol.XInitializeParams{
+				ProcessID: 1,
+				RootURI:   protocol.DocumentURI("file:///workspace"),
+				Capabilities: protocol.ClientCapabilities{
+					TextDocument: protocol.TextDocumentClientCapabilities{
+						SemanticTokens: protocol.SemanticTokensClientCapabilities{
+							DynamicRegistration: true,
+							Requests: protocol.ClientSemanticTokensRequestOptions{
+								Range: &protocol.Or_ClientSemanticTokensRequestOptions_range{Value: true},
+								Full:  &protocol.Or_ClientSemanticTokensRequestOptions_full{Value: true},
+							},
+							TokenTypes:     []string{"namespace", "type", "class", "enum", "interface", "struct", "typeParameter", "parameter", "variable", "property", "enumMember", "event", "function", "method", "macro", "keyword", "modifier", "comment", "string", "number", "regexp", "operator", "decorator"},
+							TokenModifiers: []string{"declaration", "definition", "readonly", "static", "deprecated", "abstract", "async", "modification", "documentation", "defaultLibrary"},
+							Formats:        []protocol.TokenFormat{protocol.Relative},
+						},
+					},
+				},
+			},
+		}
+		initResult, err := server.Initialize(ctx, params)
+		require.NoError(t, err, "initialize should succeed")
+		require.NotNil(t, initResult, "initialize result should not be nil")
+		require.NotNil(t, initResult.Capabilities.HoverProvider, "hover should be supported")
+		require.NotNil(t, initResult.Capabilities.SemanticTokensProvider, "semantic tokens should be supported")
+
+		// Shutdown server
+		err = server.Shutdown(ctx)
+		require.NoError(t, err, "shutdown should succeed")
+
+		// Exit server
+		err = server.Exit(ctx)
+		require.NoError(t, err, "exit should succeed")
 	})
 }
