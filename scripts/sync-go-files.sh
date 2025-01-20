@@ -96,9 +96,12 @@ FILES=$(curl -s "https://api.github.com/repos/$ORG/$REPO/contents/$SOURCE_PATH?r
 
 # 🔍 Filter out files to ignore
 echo "🔍 Filtering out files to ignore..."
-for file in "${FILES_TO_IGNORE[@]}"; do
-	FILES=$(echo "$FILES" | grep -vE "$file")
-done
+# if we have files to ignore, filter them out (don't throw unbound variable error)
+if [ ${#FILES_TO_IGNORE[@]} -gt 0 ]; then
+	for file in "${FILES_TO_IGNORE[@]}"; do
+		FILES=$(echo "$FILES" | grep -vE "$file")
+	done
+fi
 
 if [ -z "$FILES" ]; then
 	echo "❌ No files found in the specified directory"

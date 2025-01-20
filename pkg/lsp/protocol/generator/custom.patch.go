@@ -149,7 +149,7 @@ func writemyclient() {
 	for _, k := range cfuncs.keys() {
 		out.WriteString(cfuncs[k])
 	}
-	formatTo("tsclient.go", out.Bytes())
+	formatTo("tsclient.gen.go", out.Bytes())
 }
 
 func writemyserver() {
@@ -179,7 +179,7 @@ func buildServerDispatchMap(server Server) handler.Map {
 	for _, k := range sfuncs.keys() {
 		out.WriteString(sfuncs[k])
 	}
-	formatTo("tsserver.go", out.Bytes())
+	formatTo("tsserver.gen.go", out.Bytes())
 }
 
 func genCase(_ *Model, method string, param, result *Type, dir string) {
@@ -240,7 +240,7 @@ func genFunc(_ *Model, method string, param, result *Type, dir string, isnotify 
 		goResult = "[]LSPAny"
 	}
 	fname := methodName(method)
-	fmt.Fprintf(out, "func (s *Callback%%s) %s(ctx context.Context%s) %s {\n", fname, p, r)
+	fmt.Fprintf(out, "func (s *%%sDispatcher) %s(ctx context.Context%s) %s {\n", fname, p, r)
 
 	if !notNil(result) {
 		if isnotify {

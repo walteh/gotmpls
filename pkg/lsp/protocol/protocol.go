@@ -23,11 +23,11 @@ var (
 
 // Dispatcher types and interfaces
 
-type CallbackServer struct {
+type ServerDispatcher struct {
 	client *jrpc2.Client
 }
 
-func (c *CallbackServer) Notify(ctx context.Context, method string, params interface{}) error {
+func (c *ServerDispatcher) Notify(ctx context.Context, method string, params interface{}) error {
 	// zerolog.Ctx(ctx).Debug().
 	// 	Str("method", method).
 	// 	Interface("params", params).
@@ -35,7 +35,7 @@ func (c *CallbackServer) Notify(ctx context.Context, method string, params inter
 	return c.client.Notify(ctx, method, params)
 }
 
-func (c *CallbackServer) Callback(ctx context.Context, method string, params interface{}) (*jrpc2.Response, error) {
+func (c *ServerDispatcher) Callback(ctx context.Context, method string, params interface{}) (*jrpc2.Response, error) {
 	// zerolog.Ctx(ctx).Debug().
 
 	res, err := c.client.Call(ctx, method, params)
@@ -47,12 +47,12 @@ func (c *CallbackServer) Callback(ctx context.Context, method string, params int
 	return res, nil
 }
 
-type CallbackClient struct {
+type ClientDispatcher struct {
 	serverOpts *jrpc2.ServerOptions
 	server     *jrpc2.Server
 }
 
-func (c *CallbackClient) Notify(ctx context.Context, method string, params any) error {
+func (c *ClientDispatcher) Notify(ctx context.Context, method string, params any) error {
 	if rl, ok := c.serverOpts.RPCLog.(CallbackRPCLogger); ok {
 		rl.LogCallbackRequestRaw(ctx, method, params)
 	}
@@ -64,7 +64,7 @@ func (c *CallbackClient) Notify(ctx context.Context, method string, params any) 
 	return nil
 }
 
-func (c *CallbackClient) Callback(ctx context.Context, method string, params any) (*jrpc2.Response, error) {
+func (c *ClientDispatcher) Callback(ctx context.Context, method string, params any) (*jrpc2.Response, error) {
 	if rl, ok := c.serverOpts.RPCLog.(CallbackRPCLogger); ok {
 		rl.LogCallbackRequestRaw(ctx, method, params)
 	}
@@ -81,17 +81,17 @@ func (c *CallbackClient) Callback(ctx context.Context, method string, params any
 	return res, nil
 }
 
-func NewCallbackClient(server *jrpc2.Server, serverOpts *jrpc2.ServerOptions) *CallbackClient {
-	return &CallbackClient{server: server, serverOpts: serverOpts}
+func NewCallbackClient(server *jrpc2.Server, serverOpts *jrpc2.ServerOptions) *ClientDispatcher {
+	return &ClientDispatcher{server: server, serverOpts: serverOpts}
 }
 
-func NewCallbackServer(server *jrpc2.Client) *CallbackServer {
-	return &CallbackServer{client: server}
+func NewCallbackServer(server *jrpc2.Client) *ServerDispatcher {
+	return &ServerDispatcher{client: server}
 }
 
 type ServerInstance struct {
 	server         *jrpc2.Server
-	callbackClient *CallbackClient
+	callbackClient *ClientDispatcher
 	creationCtx    context.Context
 
 	ServerOpts    *jrpc2.ServerOptions
@@ -114,7 +114,7 @@ func (s *ServerInstance) Server() *jrpc2.Server {
 	return s.server
 }
 
-func (s *ServerInstance) CallbackClient() *CallbackClient {
+func (s *ServerInstance) CallbackClient() *ClientDispatcher {
 	if s.callbackClient == nil {
 		panic("callback client not started")
 	}
@@ -170,6 +170,25 @@ func (s *ServerInstance) StartAndDetach(reader io.Reader, writer io.WriteCloser)
 	s.server = s.server.Start(channel.LSP(reader, writer))
 
 	return s.server, nil
+}
+
+func (s *ServerInstance) StartAndDetachWithClient(opts *jrpc2.ClientOptions) (*jrpc2.Server, *ServerDispatcher, error) {
+	pr, pw := io.Pipe()
+
+	server, err := s.StartAndDetach(pr, pw)
+	if err != nil {
+		return nil, nil, errors.Errorf("starting external server: %w", err)
+	}
+
+	opts.OnCallback = func(ctx context.Context, r *jrpc2.Request) (interface{}, error) {
+		var params interface{}
+		if err := r.UnmarshalParams(&params); err != nil {
+			return nil, err
+		}
+		return s.server.Callback(ctx, r.Method(), params)
+	}
+
+	return server, NewCallbackServer(jrpc2.NewClient(channel.LSP(pr, pw), opts)), nil
 }
 
 func (s *ServerInstance) StartAndWait(reader io.Reader, writer io.WriteCloser) error {

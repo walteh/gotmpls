@@ -14,15 +14,15 @@ import (
 )
 
 var (
-	// tsclient.go has 3 sections
+	// tsclient.gen.go has 3 sections
 	cdecls = make(sortedMap[string])
 	ccases = make(sortedMap[string])
 	cfuncs = make(sortedMap[string])
-	// tsserver.go has 3 sections
+	// tsserver.gen.go has 3 sections
 	sdecls = make(sortedMap[string])
 	scases = make(sortedMap[string])
 	sfuncs = make(sortedMap[string])
-	// tsprotocol.go has 2 sections
+	// tsprotocol.gen.go has 2 sections
 	types  = make(sortedMap[string])
 	consts = make(sortedMap[string])
 	// tsjson has 1 section

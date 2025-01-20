@@ -117,7 +117,7 @@ func writeclient() {
 	for _, k := range cfuncs.keys() {
 		out.WriteString(cfuncs[k])
 	}
-	formatTo("tsclient.go", out.Bytes())
+	formatTo("tsclient.gen.go", out.Bytes())
 }
 
 func writeserver() {
@@ -148,7 +148,7 @@ func serverDispatch(ctx context.Context, server Server, conn *jrpc2.Server, r *j
 	for _, k := range sfuncs.keys() {
 		out.WriteString(sfuncs[k])
 	}
-	formatTo("tsserver.go", out.Bytes())
+	formatTo("tsserver.gen.go", out.Bytes())
 }
 
 func writeprotocol() {
@@ -181,7 +181,7 @@ func writeprotocol() {
 		out.WriteString(consts[k])
 	}
 	out.WriteString(")\n\n")
-	formatTo("tsprotocol.go", out.Bytes())
+	formatTo("tsprotocol.gen.go", out.Bytes())
 }
 
 func writejsons() {
@@ -205,7 +205,7 @@ func (e UnmarshalError) Error() string {
 	for _, k := range jsons.keys() {
 		out.WriteString(jsons[k])
 	}
-	formatTo("tsjson.go", out.Bytes())
+	formatTo("tsjson.gen.go", out.Bytes())
 }
 
 // formatTo formats the Go source and writes it to *outputdir/basename.

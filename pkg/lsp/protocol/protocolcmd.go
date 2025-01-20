@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/exec"
 
@@ -74,4 +75,35 @@ func NewCmdServerInstance(ctx context.Context, cmd *exec.Cmd, copts *jrpc2.Clien
 	instance.backgroundCmd = cmd
 
 	return instance, nil
+}
+
+func NewInMemoryClientInstance(ctx context.Context, copts *jrpc2.ClientOptions, sopts *jrpc2.ServerOptions) (*ServerInstance, io.Reader, io.WriteCloser, error) {
+	pr, pw := io.Pipe()
+
+	type handlerft struct {
+		f func(ctx context.Context, r *jrpc2.Request) (interface{}, error)
+	}
+
+	sopts.AllowPush = true
+
+	handlerf := &handlerft{
+		f: func(ctx context.Context, r *jrpc2.Request) (interface{}, error) {
+			return nil, nil
+		},
+	}
+	copts.OnCallback = handlerf.f
+
+	client := jrpc2.NewClient(channel.LSP(pr, pw), copts)
+	cbs := NewCallbackServer(client)
+	instance := NewServerInstance(ctx, cbs, sopts)
+
+	handlerf.f = func(ctx context.Context, r *jrpc2.Request) (interface{}, error) {
+		var params interface{}
+		if err := r.UnmarshalParams(&params); err != nil {
+			return nil, err
+		}
+		return instance.server.Callback(ctx, r.Method(), params)
+	}
+
+	return instance, pr, pw, nil
 }

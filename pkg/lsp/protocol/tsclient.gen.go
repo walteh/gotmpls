@@ -87,83 +87,83 @@ func buildClientDispatchMap(client Client) handler.Map {
 	}
 }
 
-func (s *CallbackClient) LogTrace(ctx context.Context, params *LogTraceParams) error {
+func (s *ClientDispatcher) LogTrace(ctx context.Context, params *LogTraceParams) error {
 	return createNotify(ctx, s, "$/logTrace", params)
 }
-func (s *CallbackClient) Progress(ctx context.Context, params *ProgressParams) error {
+func (s *ClientDispatcher) Progress(ctx context.Context, params *ProgressParams) error {
 	return createNotify(ctx, s, "$/progress", params)
 }
-func (s *CallbackClient) RegisterCapability(ctx context.Context, params *RegistrationParams) error {
+func (s *ClientDispatcher) RegisterCapability(ctx context.Context, params *RegistrationParams) error {
 	return createEmptyResultCallback(ctx, s, "client/registerCapability", params)
 }
-func (s *CallbackClient) UnregisterCapability(ctx context.Context, params *UnregistrationParams) error {
+func (s *ClientDispatcher) UnregisterCapability(ctx context.Context, params *UnregistrationParams) error {
 	return createEmptyResultCallback(ctx, s, "client/unregisterCapability", params)
 }
-func (s *CallbackClient) Event(ctx context.Context, params *any) error {
+func (s *ClientDispatcher) Event(ctx context.Context, params *any) error {
 	return createNotify(ctx, s, "telemetry/event", params)
 }
-func (s *CallbackClient) PublishDiagnostics(ctx context.Context, params *PublishDiagnosticsParams) error {
+func (s *ClientDispatcher) PublishDiagnostics(ctx context.Context, params *PublishDiagnosticsParams) error {
 	return createNotify(ctx, s, "textDocument/publishDiagnostics", params)
 }
-func (s *CallbackClient) LogMessage(ctx context.Context, params *LogMessageParams) error {
+func (s *ClientDispatcher) LogMessage(ctx context.Context, params *LogMessageParams) error {
 	return createNotify(ctx, s, "window/logMessage", params)
 }
-func (s *CallbackClient) ShowDocument(ctx context.Context, params *ShowDocumentParams) (*ShowDocumentResult, error) {
+func (s *ClientDispatcher) ShowDocument(ctx context.Context, params *ShowDocumentParams) (*ShowDocumentResult, error) {
 	var result *ShowDocumentResult
 	if err := createCallback(ctx, s, "window/showDocument", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackClient) ShowMessage(ctx context.Context, params *ShowMessageParams) error {
+func (s *ClientDispatcher) ShowMessage(ctx context.Context, params *ShowMessageParams) error {
 	return createNotify(ctx, s, "window/showMessage", params)
 }
-func (s *CallbackClient) ShowMessageRequest(ctx context.Context, params *ShowMessageRequestParams) (*MessageActionItem, error) {
+func (s *ClientDispatcher) ShowMessageRequest(ctx context.Context, params *ShowMessageRequestParams) (*MessageActionItem, error) {
 	var result *MessageActionItem
 	if err := createCallback(ctx, s, "window/showMessageRequest", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackClient) WorkDoneProgressCreate(ctx context.Context, params *WorkDoneProgressCreateParams) error {
+func (s *ClientDispatcher) WorkDoneProgressCreate(ctx context.Context, params *WorkDoneProgressCreateParams) error {
 	return createEmptyResultCallback(ctx, s, "window/workDoneProgress/create", params)
 }
-func (s *CallbackClient) ApplyEdit(ctx context.Context, params *ApplyWorkspaceEditParams) (*ApplyWorkspaceEditResult, error) {
+func (s *ClientDispatcher) ApplyEdit(ctx context.Context, params *ApplyWorkspaceEditParams) (*ApplyWorkspaceEditResult, error) {
 	var result *ApplyWorkspaceEditResult
 	if err := createCallback(ctx, s, "workspace/applyEdit", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackClient) CodeLensRefresh(ctx context.Context) error {
+func (s *ClientDispatcher) CodeLensRefresh(ctx context.Context) error {
 	return createEmptyCallback(ctx, s, "workspace/codeLens/refresh")
 }
-func (s *CallbackClient) Configuration(ctx context.Context, params *ParamConfiguration) ([]LSPAny, error) {
+func (s *ClientDispatcher) Configuration(ctx context.Context, params *ParamConfiguration) ([]LSPAny, error) {
 	var result []LSPAny
 	if err := createCallback(ctx, s, "workspace/configuration", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackClient) DiagnosticRefresh(ctx context.Context) error {
+func (s *ClientDispatcher) DiagnosticRefresh(ctx context.Context) error {
 	return createEmptyCallback(ctx, s, "workspace/diagnostic/refresh")
 }
-func (s *CallbackClient) FoldingRangeRefresh(ctx context.Context) error {
+func (s *ClientDispatcher) FoldingRangeRefresh(ctx context.Context) error {
 	return createEmptyCallback(ctx, s, "workspace/foldingRange/refresh")
 }
-func (s *CallbackClient) InlayHintRefresh(ctx context.Context) error {
+func (s *ClientDispatcher) InlayHintRefresh(ctx context.Context) error {
 	return createEmptyCallback(ctx, s, "workspace/inlayHint/refresh")
 }
-func (s *CallbackClient) InlineValueRefresh(ctx context.Context) error {
+func (s *ClientDispatcher) InlineValueRefresh(ctx context.Context) error {
 	return createEmptyCallback(ctx, s, "workspace/inlineValue/refresh")
 }
-func (s *CallbackClient) SemanticTokensRefresh(ctx context.Context) error {
+func (s *ClientDispatcher) SemanticTokensRefresh(ctx context.Context) error {
 	return createEmptyCallback(ctx, s, "workspace/semanticTokens/refresh")
 }
-func (s *CallbackClient) TextDocumentContentRefresh(ctx context.Context, params *TextDocumentContentRefreshParams) error {
+func (s *ClientDispatcher) TextDocumentContentRefresh(ctx context.Context, params *TextDocumentContentRefreshParams) error {
 	return createEmptyResultCallback(ctx, s, "workspace/textDocumentContent/refresh", params)
 }
-func (s *CallbackClient) WorkspaceFolders(ctx context.Context) ([]WorkspaceFolder, error) {
+func (s *ClientDispatcher) WorkspaceFolders(ctx context.Context) ([]WorkspaceFolder, error) {
 	var result []WorkspaceFolder
 	if err := createEmptyParamsCallback(ctx, s, "workspace/workspaceFolders", &result); err != nil {
 		return nil, err

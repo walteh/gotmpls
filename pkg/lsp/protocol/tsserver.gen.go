@@ -246,434 +246,434 @@ func buildServerDispatchMap(server Server) handler.Map {
 	}
 }
 
-func (s *CallbackServer) Progress(ctx context.Context, params *ProgressParams) error {
+func (s *ServerDispatcher) Progress(ctx context.Context, params *ProgressParams) error {
 	return createNotify(ctx, s, "$/progress", params)
 }
-func (s *CallbackServer) SetTrace(ctx context.Context, params *SetTraceParams) error {
+func (s *ServerDispatcher) SetTrace(ctx context.Context, params *SetTraceParams) error {
 	return createNotify(ctx, s, "$/setTrace", params)
 }
-func (s *CallbackServer) IncomingCalls(ctx context.Context, params *CallHierarchyIncomingCallsParams) ([]CallHierarchyIncomingCall, error) {
+func (s *ServerDispatcher) IncomingCalls(ctx context.Context, params *CallHierarchyIncomingCallsParams) ([]CallHierarchyIncomingCall, error) {
 	var result []CallHierarchyIncomingCall
 	if err := createCallback(ctx, s, "callHierarchy/incomingCalls", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) OutgoingCalls(ctx context.Context, params *CallHierarchyOutgoingCallsParams) ([]CallHierarchyOutgoingCall, error) {
+func (s *ServerDispatcher) OutgoingCalls(ctx context.Context, params *CallHierarchyOutgoingCallsParams) ([]CallHierarchyOutgoingCall, error) {
 	var result []CallHierarchyOutgoingCall
 	if err := createCallback(ctx, s, "callHierarchy/outgoingCalls", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) ResolveCodeAction(ctx context.Context, params *CodeAction) (*CodeAction, error) {
+func (s *ServerDispatcher) ResolveCodeAction(ctx context.Context, params *CodeAction) (*CodeAction, error) {
 	var result *CodeAction
 	if err := createCallback(ctx, s, "codeAction/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) ResolveCodeLens(ctx context.Context, params *CodeLens) (*CodeLens, error) {
+func (s *ServerDispatcher) ResolveCodeLens(ctx context.Context, params *CodeLens) (*CodeLens, error) {
 	var result *CodeLens
 	if err := createCallback(ctx, s, "codeLens/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) ResolveCompletionItem(ctx context.Context, params *CompletionItem) (*CompletionItem, error) {
+func (s *ServerDispatcher) ResolveCompletionItem(ctx context.Context, params *CompletionItem) (*CompletionItem, error) {
 	var result *CompletionItem
 	if err := createCallback(ctx, s, "completionItem/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) ResolveDocumentLink(ctx context.Context, params *DocumentLink) (*DocumentLink, error) {
+func (s *ServerDispatcher) ResolveDocumentLink(ctx context.Context, params *DocumentLink) (*DocumentLink, error) {
 	var result *DocumentLink
 	if err := createCallback(ctx, s, "documentLink/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) Exit(ctx context.Context) error {
+func (s *ServerDispatcher) Exit(ctx context.Context) error {
 	return createEmptyNotify(ctx, s, "exit")
 }
-func (s *CallbackServer) Initialize(ctx context.Context, params *ParamInitialize) (*InitializeResult, error) {
+func (s *ServerDispatcher) Initialize(ctx context.Context, params *ParamInitialize) (*InitializeResult, error) {
 	var result *InitializeResult
 	if err := createCallback(ctx, s, "initialize", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) Initialized(ctx context.Context, params *InitializedParams) error {
+func (s *ServerDispatcher) Initialized(ctx context.Context, params *InitializedParams) error {
 	return createNotify(ctx, s, "initialized", params)
 }
-func (s *CallbackServer) Resolve(ctx context.Context, params *InlayHint) (*InlayHint, error) {
+func (s *ServerDispatcher) Resolve(ctx context.Context, params *InlayHint) (*InlayHint, error) {
 	var result *InlayHint
 	if err := createCallback(ctx, s, "inlayHint/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) DidChangeNotebookDocument(ctx context.Context, params *DidChangeNotebookDocumentParams) error {
+func (s *ServerDispatcher) DidChangeNotebookDocument(ctx context.Context, params *DidChangeNotebookDocumentParams) error {
 	return createNotify(ctx, s, "notebookDocument/didChange", params)
 }
-func (s *CallbackServer) DidCloseNotebookDocument(ctx context.Context, params *DidCloseNotebookDocumentParams) error {
+func (s *ServerDispatcher) DidCloseNotebookDocument(ctx context.Context, params *DidCloseNotebookDocumentParams) error {
 	return createNotify(ctx, s, "notebookDocument/didClose", params)
 }
-func (s *CallbackServer) DidOpenNotebookDocument(ctx context.Context, params *DidOpenNotebookDocumentParams) error {
+func (s *ServerDispatcher) DidOpenNotebookDocument(ctx context.Context, params *DidOpenNotebookDocumentParams) error {
 	return createNotify(ctx, s, "notebookDocument/didOpen", params)
 }
-func (s *CallbackServer) DidSaveNotebookDocument(ctx context.Context, params *DidSaveNotebookDocumentParams) error {
+func (s *ServerDispatcher) DidSaveNotebookDocument(ctx context.Context, params *DidSaveNotebookDocumentParams) error {
 	return createNotify(ctx, s, "notebookDocument/didSave", params)
 }
-func (s *CallbackServer) Shutdown(ctx context.Context) error {
+func (s *ServerDispatcher) Shutdown(ctx context.Context) error {
 	return createEmptyCallback(ctx, s, "shutdown")
 }
-func (s *CallbackServer) CodeAction(ctx context.Context, params *CodeActionParams) ([]CodeAction, error) {
+func (s *ServerDispatcher) CodeAction(ctx context.Context, params *CodeActionParams) ([]CodeAction, error) {
 	var result []CodeAction
 	if err := createCallback(ctx, s, "textDocument/codeAction", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) CodeLens(ctx context.Context, params *CodeLensParams) ([]CodeLens, error) {
+func (s *ServerDispatcher) CodeLens(ctx context.Context, params *CodeLensParams) ([]CodeLens, error) {
 	var result []CodeLens
 	if err := createCallback(ctx, s, "textDocument/codeLens", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) ColorPresentation(ctx context.Context, params *ColorPresentationParams) ([]ColorPresentation, error) {
+func (s *ServerDispatcher) ColorPresentation(ctx context.Context, params *ColorPresentationParams) ([]ColorPresentation, error) {
 	var result []ColorPresentation
 	if err := createCallback(ctx, s, "textDocument/colorPresentation", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) Completion(ctx context.Context, params *CompletionParams) (*CompletionList, error) {
+func (s *ServerDispatcher) Completion(ctx context.Context, params *CompletionParams) (*CompletionList, error) {
 	var result *CompletionList
 	if err := createCallback(ctx, s, "textDocument/completion", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) Declaration(ctx context.Context, params *DeclarationParams) (*Or_textDocument_declaration, error) {
+func (s *ServerDispatcher) Declaration(ctx context.Context, params *DeclarationParams) (*Or_textDocument_declaration, error) {
 	var result *Or_textDocument_declaration
 	if err := createCallback(ctx, s, "textDocument/declaration", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) Definition(ctx context.Context, params *DefinitionParams) ([]Location, error) {
+func (s *ServerDispatcher) Definition(ctx context.Context, params *DefinitionParams) ([]Location, error) {
 	var result []Location
 	if err := createCallback(ctx, s, "textDocument/definition", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) Diagnostic(ctx context.Context, params *DocumentDiagnosticParams) (*DocumentDiagnosticReport, error) {
+func (s *ServerDispatcher) Diagnostic(ctx context.Context, params *DocumentDiagnosticParams) (*DocumentDiagnosticReport, error) {
 	var result *DocumentDiagnosticReport
 	if err := createCallback(ctx, s, "textDocument/diagnostic", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) DidChange(ctx context.Context, params *DidChangeTextDocumentParams) error {
+func (s *ServerDispatcher) DidChange(ctx context.Context, params *DidChangeTextDocumentParams) error {
 	return createNotify(ctx, s, "textDocument/didChange", params)
 }
-func (s *CallbackServer) DidClose(ctx context.Context, params *DidCloseTextDocumentParams) error {
+func (s *ServerDispatcher) DidClose(ctx context.Context, params *DidCloseTextDocumentParams) error {
 	return createNotify(ctx, s, "textDocument/didClose", params)
 }
-func (s *CallbackServer) DidOpen(ctx context.Context, params *DidOpenTextDocumentParams) error {
+func (s *ServerDispatcher) DidOpen(ctx context.Context, params *DidOpenTextDocumentParams) error {
 	return createNotify(ctx, s, "textDocument/didOpen", params)
 }
-func (s *CallbackServer) DidSave(ctx context.Context, params *DidSaveTextDocumentParams) error {
+func (s *ServerDispatcher) DidSave(ctx context.Context, params *DidSaveTextDocumentParams) error {
 	return createNotify(ctx, s, "textDocument/didSave", params)
 }
-func (s *CallbackServer) DocumentColor(ctx context.Context, params *DocumentColorParams) ([]ColorInformation, error) {
+func (s *ServerDispatcher) DocumentColor(ctx context.Context, params *DocumentColorParams) ([]ColorInformation, error) {
 	var result []ColorInformation
 	if err := createCallback(ctx, s, "textDocument/documentColor", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) DocumentHighlight(ctx context.Context, params *DocumentHighlightParams) ([]DocumentHighlight, error) {
+func (s *ServerDispatcher) DocumentHighlight(ctx context.Context, params *DocumentHighlightParams) ([]DocumentHighlight, error) {
 	var result []DocumentHighlight
 	if err := createCallback(ctx, s, "textDocument/documentHighlight", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) DocumentLink(ctx context.Context, params *DocumentLinkParams) ([]DocumentLink, error) {
+func (s *ServerDispatcher) DocumentLink(ctx context.Context, params *DocumentLinkParams) ([]DocumentLink, error) {
 	var result []DocumentLink
 	if err := createCallback(ctx, s, "textDocument/documentLink", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) DocumentSymbol(ctx context.Context, params *DocumentSymbolParams) ([]any, error) {
+func (s *ServerDispatcher) DocumentSymbol(ctx context.Context, params *DocumentSymbolParams) ([]any, error) {
 	var result []any
 	if err := createCallback(ctx, s, "textDocument/documentSymbol", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) FoldingRange(ctx context.Context, params *FoldingRangeParams) ([]FoldingRange, error) {
+func (s *ServerDispatcher) FoldingRange(ctx context.Context, params *FoldingRangeParams) ([]FoldingRange, error) {
 	var result []FoldingRange
 	if err := createCallback(ctx, s, "textDocument/foldingRange", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) Formatting(ctx context.Context, params *DocumentFormattingParams) ([]TextEdit, error) {
+func (s *ServerDispatcher) Formatting(ctx context.Context, params *DocumentFormattingParams) ([]TextEdit, error) {
 	var result []TextEdit
 	if err := createCallback(ctx, s, "textDocument/formatting", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) Hover(ctx context.Context, params *HoverParams) (*Hover, error) {
+func (s *ServerDispatcher) Hover(ctx context.Context, params *HoverParams) (*Hover, error) {
 	var result *Hover
 	if err := createCallback(ctx, s, "textDocument/hover", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) Implementation(ctx context.Context, params *ImplementationParams) ([]Location, error) {
+func (s *ServerDispatcher) Implementation(ctx context.Context, params *ImplementationParams) ([]Location, error) {
 	var result []Location
 	if err := createCallback(ctx, s, "textDocument/implementation", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) InlayHint(ctx context.Context, params *InlayHintParams) ([]InlayHint, error) {
+func (s *ServerDispatcher) InlayHint(ctx context.Context, params *InlayHintParams) ([]InlayHint, error) {
 	var result []InlayHint
 	if err := createCallback(ctx, s, "textDocument/inlayHint", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) InlineCompletion(ctx context.Context, params *InlineCompletionParams) (*Or_Result_textDocument_inlineCompletion, error) {
+func (s *ServerDispatcher) InlineCompletion(ctx context.Context, params *InlineCompletionParams) (*Or_Result_textDocument_inlineCompletion, error) {
 	var result *Or_Result_textDocument_inlineCompletion
 	if err := createCallback(ctx, s, "textDocument/inlineCompletion", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) InlineValue(ctx context.Context, params *InlineValueParams) ([]InlineValue, error) {
+func (s *ServerDispatcher) InlineValue(ctx context.Context, params *InlineValueParams) ([]InlineValue, error) {
 	var result []InlineValue
 	if err := createCallback(ctx, s, "textDocument/inlineValue", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) LinkedEditingRange(ctx context.Context, params *LinkedEditingRangeParams) (*LinkedEditingRanges, error) {
+func (s *ServerDispatcher) LinkedEditingRange(ctx context.Context, params *LinkedEditingRangeParams) (*LinkedEditingRanges, error) {
 	var result *LinkedEditingRanges
 	if err := createCallback(ctx, s, "textDocument/linkedEditingRange", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) Moniker(ctx context.Context, params *MonikerParams) ([]Moniker, error) {
+func (s *ServerDispatcher) Moniker(ctx context.Context, params *MonikerParams) ([]Moniker, error) {
 	var result []Moniker
 	if err := createCallback(ctx, s, "textDocument/moniker", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) OnTypeFormatting(ctx context.Context, params *DocumentOnTypeFormattingParams) ([]TextEdit, error) {
+func (s *ServerDispatcher) OnTypeFormatting(ctx context.Context, params *DocumentOnTypeFormattingParams) ([]TextEdit, error) {
 	var result []TextEdit
 	if err := createCallback(ctx, s, "textDocument/onTypeFormatting", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) PrepareCallHierarchy(ctx context.Context, params *CallHierarchyPrepareParams) ([]CallHierarchyItem, error) {
+func (s *ServerDispatcher) PrepareCallHierarchy(ctx context.Context, params *CallHierarchyPrepareParams) ([]CallHierarchyItem, error) {
 	var result []CallHierarchyItem
 	if err := createCallback(ctx, s, "textDocument/prepareCallHierarchy", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) PrepareRename(ctx context.Context, params *PrepareRenameParams) (*PrepareRenameResult, error) {
+func (s *ServerDispatcher) PrepareRename(ctx context.Context, params *PrepareRenameParams) (*PrepareRenameResult, error) {
 	var result *PrepareRenameResult
 	if err := createCallback(ctx, s, "textDocument/prepareRename", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) PrepareTypeHierarchy(ctx context.Context, params *TypeHierarchyPrepareParams) ([]TypeHierarchyItem, error) {
+func (s *ServerDispatcher) PrepareTypeHierarchy(ctx context.Context, params *TypeHierarchyPrepareParams) ([]TypeHierarchyItem, error) {
 	var result []TypeHierarchyItem
 	if err := createCallback(ctx, s, "textDocument/prepareTypeHierarchy", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) RangeFormatting(ctx context.Context, params *DocumentRangeFormattingParams) ([]TextEdit, error) {
+func (s *ServerDispatcher) RangeFormatting(ctx context.Context, params *DocumentRangeFormattingParams) ([]TextEdit, error) {
 	var result []TextEdit
 	if err := createCallback(ctx, s, "textDocument/rangeFormatting", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) RangesFormatting(ctx context.Context, params *DocumentRangesFormattingParams) ([]TextEdit, error) {
+func (s *ServerDispatcher) RangesFormatting(ctx context.Context, params *DocumentRangesFormattingParams) ([]TextEdit, error) {
 	var result []TextEdit
 	if err := createCallback(ctx, s, "textDocument/rangesFormatting", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) References(ctx context.Context, params *ReferenceParams) ([]Location, error) {
+func (s *ServerDispatcher) References(ctx context.Context, params *ReferenceParams) ([]Location, error) {
 	var result []Location
 	if err := createCallback(ctx, s, "textDocument/references", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) Rename(ctx context.Context, params *RenameParams) (*WorkspaceEdit, error) {
+func (s *ServerDispatcher) Rename(ctx context.Context, params *RenameParams) (*WorkspaceEdit, error) {
 	var result *WorkspaceEdit
 	if err := createCallback(ctx, s, "textDocument/rename", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) SelectionRange(ctx context.Context, params *SelectionRangeParams) ([]SelectionRange, error) {
+func (s *ServerDispatcher) SelectionRange(ctx context.Context, params *SelectionRangeParams) ([]SelectionRange, error) {
 	var result []SelectionRange
 	if err := createCallback(ctx, s, "textDocument/selectionRange", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) SemanticTokensFull(ctx context.Context, params *SemanticTokensParams) (*SemanticTokens, error) {
+func (s *ServerDispatcher) SemanticTokensFull(ctx context.Context, params *SemanticTokensParams) (*SemanticTokens, error) {
 	var result *SemanticTokens
 	if err := createCallback(ctx, s, "textDocument/semanticTokens/full", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) SemanticTokensFullDelta(ctx context.Context, params *SemanticTokensDeltaParams) (any, error) {
+func (s *ServerDispatcher) SemanticTokensFullDelta(ctx context.Context, params *SemanticTokensDeltaParams) (any, error) {
 	var result any
 	if err := createCallback(ctx, s, "textDocument/semanticTokens/full/delta", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) SemanticTokensRange(ctx context.Context, params *SemanticTokensRangeParams) (*SemanticTokens, error) {
+func (s *ServerDispatcher) SemanticTokensRange(ctx context.Context, params *SemanticTokensRangeParams) (*SemanticTokens, error) {
 	var result *SemanticTokens
 	if err := createCallback(ctx, s, "textDocument/semanticTokens/range", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) SignatureHelp(ctx context.Context, params *SignatureHelpParams) (*SignatureHelp, error) {
+func (s *ServerDispatcher) SignatureHelp(ctx context.Context, params *SignatureHelpParams) (*SignatureHelp, error) {
 	var result *SignatureHelp
 	if err := createCallback(ctx, s, "textDocument/signatureHelp", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) TypeDefinition(ctx context.Context, params *TypeDefinitionParams) ([]Location, error) {
+func (s *ServerDispatcher) TypeDefinition(ctx context.Context, params *TypeDefinitionParams) ([]Location, error) {
 	var result []Location
 	if err := createCallback(ctx, s, "textDocument/typeDefinition", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) WillSave(ctx context.Context, params *WillSaveTextDocumentParams) error {
+func (s *ServerDispatcher) WillSave(ctx context.Context, params *WillSaveTextDocumentParams) error {
 	return createNotify(ctx, s, "textDocument/willSave", params)
 }
-func (s *CallbackServer) WillSaveWaitUntil(ctx context.Context, params *WillSaveTextDocumentParams) ([]TextEdit, error) {
+func (s *ServerDispatcher) WillSaveWaitUntil(ctx context.Context, params *WillSaveTextDocumentParams) ([]TextEdit, error) {
 	var result []TextEdit
 	if err := createCallback(ctx, s, "textDocument/willSaveWaitUntil", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) Subtypes(ctx context.Context, params *TypeHierarchySubtypesParams) ([]TypeHierarchyItem, error) {
+func (s *ServerDispatcher) Subtypes(ctx context.Context, params *TypeHierarchySubtypesParams) ([]TypeHierarchyItem, error) {
 	var result []TypeHierarchyItem
 	if err := createCallback(ctx, s, "typeHierarchy/subtypes", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) Supertypes(ctx context.Context, params *TypeHierarchySupertypesParams) ([]TypeHierarchyItem, error) {
+func (s *ServerDispatcher) Supertypes(ctx context.Context, params *TypeHierarchySupertypesParams) ([]TypeHierarchyItem, error) {
 	var result []TypeHierarchyItem
 	if err := createCallback(ctx, s, "typeHierarchy/supertypes", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) WorkDoneProgressCancel(ctx context.Context, params *WorkDoneProgressCancelParams) error {
+func (s *ServerDispatcher) WorkDoneProgressCancel(ctx context.Context, params *WorkDoneProgressCancelParams) error {
 	return createNotify(ctx, s, "window/workDoneProgress/cancel", params)
 }
-func (s *CallbackServer) DiagnosticWorkspace(ctx context.Context, params *WorkspaceDiagnosticParams) (*WorkspaceDiagnosticReport, error) {
+func (s *ServerDispatcher) DiagnosticWorkspace(ctx context.Context, params *WorkspaceDiagnosticParams) (*WorkspaceDiagnosticReport, error) {
 	var result *WorkspaceDiagnosticReport
 	if err := createCallback(ctx, s, "workspace/diagnostic", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) DidChangeConfiguration(ctx context.Context, params *DidChangeConfigurationParams) error {
+func (s *ServerDispatcher) DidChangeConfiguration(ctx context.Context, params *DidChangeConfigurationParams) error {
 	return createNotify(ctx, s, "workspace/didChangeConfiguration", params)
 }
-func (s *CallbackServer) DidChangeWatchedFiles(ctx context.Context, params *DidChangeWatchedFilesParams) error {
+func (s *ServerDispatcher) DidChangeWatchedFiles(ctx context.Context, params *DidChangeWatchedFilesParams) error {
 	return createNotify(ctx, s, "workspace/didChangeWatchedFiles", params)
 }
-func (s *CallbackServer) DidChangeWorkspaceFolders(ctx context.Context, params *DidChangeWorkspaceFoldersParams) error {
+func (s *ServerDispatcher) DidChangeWorkspaceFolders(ctx context.Context, params *DidChangeWorkspaceFoldersParams) error {
 	return createNotify(ctx, s, "workspace/didChangeWorkspaceFolders", params)
 }
-func (s *CallbackServer) DidCreateFiles(ctx context.Context, params *CreateFilesParams) error {
+func (s *ServerDispatcher) DidCreateFiles(ctx context.Context, params *CreateFilesParams) error {
 	return createNotify(ctx, s, "workspace/didCreateFiles", params)
 }
-func (s *CallbackServer) DidDeleteFiles(ctx context.Context, params *DeleteFilesParams) error {
+func (s *ServerDispatcher) DidDeleteFiles(ctx context.Context, params *DeleteFilesParams) error {
 	return createNotify(ctx, s, "workspace/didDeleteFiles", params)
 }
-func (s *CallbackServer) DidRenameFiles(ctx context.Context, params *RenameFilesParams) error {
+func (s *ServerDispatcher) DidRenameFiles(ctx context.Context, params *RenameFilesParams) error {
 	return createNotify(ctx, s, "workspace/didRenameFiles", params)
 }
-func (s *CallbackServer) ExecuteCommand(ctx context.Context, params *ExecuteCommandParams) (any, error) {
+func (s *ServerDispatcher) ExecuteCommand(ctx context.Context, params *ExecuteCommandParams) (any, error) {
 	var result any
 	if err := createCallback(ctx, s, "workspace/executeCommand", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) Symbol(ctx context.Context, params *WorkspaceSymbolParams) ([]SymbolInformation, error) {
+func (s *ServerDispatcher) Symbol(ctx context.Context, params *WorkspaceSymbolParams) ([]SymbolInformation, error) {
 	var result []SymbolInformation
 	if err := createCallback(ctx, s, "workspace/symbol", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) TextDocumentContent(ctx context.Context, params *TextDocumentContentParams) (*string, error) {
+func (s *ServerDispatcher) TextDocumentContent(ctx context.Context, params *TextDocumentContentParams) (*string, error) {
 	var result *string
 	if err := createCallback(ctx, s, "workspace/textDocumentContent", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) WillCreateFiles(ctx context.Context, params *CreateFilesParams) (*WorkspaceEdit, error) {
+func (s *ServerDispatcher) WillCreateFiles(ctx context.Context, params *CreateFilesParams) (*WorkspaceEdit, error) {
 	var result *WorkspaceEdit
 	if err := createCallback(ctx, s, "workspace/willCreateFiles", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) WillDeleteFiles(ctx context.Context, params *DeleteFilesParams) (*WorkspaceEdit, error) {
+func (s *ServerDispatcher) WillDeleteFiles(ctx context.Context, params *DeleteFilesParams) (*WorkspaceEdit, error) {
 	var result *WorkspaceEdit
 	if err := createCallback(ctx, s, "workspace/willDeleteFiles", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) WillRenameFiles(ctx context.Context, params *RenameFilesParams) (*WorkspaceEdit, error) {
+func (s *ServerDispatcher) WillRenameFiles(ctx context.Context, params *RenameFilesParams) (*WorkspaceEdit, error) {
 	var result *WorkspaceEdit
 	if err := createCallback(ctx, s, "workspace/willRenameFiles", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *CallbackServer) ResolveWorkspaceSymbol(ctx context.Context, params *WorkspaceSymbol) (*WorkspaceSymbol, error) {
+func (s *ServerDispatcher) ResolveWorkspaceSymbol(ctx context.Context, params *WorkspaceSymbol) (*WorkspaceSymbol, error) {
 	var result *WorkspaceSymbol
 	if err := createCallback(ctx, s, "workspaceSymbol/resolve", params, &result); err != nil {
 		return nil, err
