@@ -163,6 +163,10 @@ func (s *Instance) StartAndDetach(chans channel.Channel) (*jrpc2.Server, error) 
 	return s.server, nil
 }
 
+func (s *Instance) ForwardingClient() Client {
+	return s.logForwardingClient
+}
+
 func NewServerInstance(ctx context.Context, server Server, opts *jrpc2.ServerOptions) *ServerDispatcher {
 	methods := buildServerDispatchMap(server)
 

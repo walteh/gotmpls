@@ -210,6 +210,24 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.ParamInitializ
 			TextDocumentSync: &protocol.Or_ServerCapabilities_textDocumentSync{
 				Value: protocol.Incremental,
 			},
+			// DiagnosticProvider: &protocol.Or_ServerCapabilities_diagnosticProvider{
+			// 	Value: &protocol.DiagnosticRegistrationOptions{
+			// 		DiagnosticOptions: protocol.DiagnosticOptions{
+			// 			WorkDoneProgressOptions: protocol.WorkDoneProgressOptions{
+			// 				WorkDoneProgress: true,
+			// 			},
+			// 			Identifier:            "gotmpls",
+			// 			InterFileDependencies: true,
+			// 		},
+			// 	},
+			// },
+
+			CompletionProvider: &protocol.CompletionOptions{
+				WorkDoneProgressOptions: protocol.WorkDoneProgressOptions{
+					WorkDoneProgress: true,
+				},
+				TriggerCharacters: []string{".", ":", " "},
+			},
 
 			SemanticTokensProvider: &protocol.SemanticTokensOptions{
 				Legend: protocol.SemanticTokensLegend{
@@ -758,10 +776,12 @@ func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentUR
 		Diagnostics: diagnostics,
 	}
 
-	zerolog.Ctx(ctx).Debug().Msgf("publishing diagnostics: %+v", params)
+	zerolog.Ctx(ctx).Debug().Msgf("found diagnostics: %+v", params)
 
 	if s.callbackClient != nil {
 		return s.callbackClient.PublishDiagnostics(ctx, params)
+	} else {
+		zerolog.Ctx(ctx).Warn().Msg("no callback client, skipping publish diagnostics")
 	}
 
 	return nil

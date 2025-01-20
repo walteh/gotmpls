@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/creachadair/jrpc2"
+	"github.com/creachadair/jrpc2/channel"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/walteh/gotmpls/pkg/lsp"
@@ -63,8 +64,14 @@ func (me *Handler) Run(ctx context.Context) error {
 
 	instance := protocol.NewServerInstance(ctx, server, opts)
 
-	// Start the server using stdin/stdout
-	if err := instance.Instance().StartAndWait(os.Stdin, os.Stdout); err != nil {
+	srv, err := instance.Instance().StartAndDetach(channel.LSP(os.Stdin, os.Stdout))
+	if err != nil {
+		return errors.Errorf("error running language server: %w", err)
+	}
+
+	server.SetCallbackClient(instance.Instance().ForwardingClient())
+
+	if err := srv.Wait(); err != nil {
 		return errors.Errorf("error running language server: %w", err)
 	}
 
