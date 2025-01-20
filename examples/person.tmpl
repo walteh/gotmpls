@@ -1,13 +1,13 @@
 {{- /*gotype: github.com/walteh/go-tmpl-types-vscode/examples/types.Person */ -}}
 
-Name: {{.Namex}}
+Name: {{.Name}}
 Age: {{.Age}}
 Address:
   Street: {{.Address.Streetsz}}
   City: {{.Address.City}}
 
 {{if .HasJob}} 
-Job: {{.GetJob | uppzer}}
+Job: {{.GetJob | upper}}
 JobZ: {{printf "%s" .GetJob | upper}}
 JobZ: {{printf "hi" | upper | printf "%s" | upper}}
 

@@ -331,18 +331,13 @@ func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 			return errors.Errorf("document not found: %s", params.TextDocument.URI)
 		}
 
-		zerolog.Ctx(ctx).Debug().Str("uri", string(params.TextDocument.URI)).Str("content", doc.Content).Msg("document changed")
-
 		// Update document
 		doc.Version = params.TextDocument.Version
 		for _, change := range params.ContentChanges {
 			if change.Range == nil {
 				doc.Content = change.Text
 			} else {
-				if change.Text != "" {
-					// zerolog.Ctx(ctx).Trace().Str("uri", string(params.TextDocument.URI)).Str("content", doc.Content).Any("change", change).Msg("document changed")
-					doc.Content = replaceContentFromRange(ctx, doc.Content, change.Range, change.Text)
-				}
+				doc.Content = replaceContentFromRange(ctx, doc.Content, change.Range, change.Text)
 			}
 		}
 
