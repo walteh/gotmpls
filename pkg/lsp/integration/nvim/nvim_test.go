@@ -65,7 +65,7 @@ func (p *Person) GetName() string {
 }
 
 func TestDiagnosticsBasic(t *testing.T) {
-	t.Skip() // it stopped working and its not worth debugging right now
+	// t.Skip() // it stopped working and its not worth debugging right now
 	// Initialize test files
 	files := map[string]string{
 		"main.go": `package main
@@ -96,7 +96,7 @@ func (p *Person) GetName() string {
 	assert.NotNil(t, diags, "diag response should not be nil")
 
 	diagsw := &protocol.FullDocumentDiagnosticReport{
-		Kind: "",
+		Kind: "full",
 		Items: []protocol.Diagnostic{
 			{
 				Message: "p.Invalid undefined (type *Person has no field or method Invalid)",

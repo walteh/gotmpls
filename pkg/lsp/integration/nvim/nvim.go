@@ -132,7 +132,7 @@ func (s *NvimIntegrationTestRunner) GetDiagnostics(t *testing.T, uri protocol.Do
 	require.Len(t, msgs, 2, "expected 2 rpcs")
 
 	// this basically will trigger right when the rpc completes, so wait for a sec
-	time.Sleep(3100 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	diags := s.loadNvimDiagnosticsFromBuffer(t, buf, severity)
 
@@ -192,7 +192,8 @@ func (s *NvimIntegrationTestRunner) triggerDiagnosticRefresh(t *testing.T, buf n
 	local client = vim.lsp.get_active_clients()[1]
 	if client then
 		-- Request diagnostics from gopls
-		client.request_sync('textDocument/diagnostic', {
+		-- not sure why but diags don't load in the next step if this is request_sync
+		client.request('textDocument/diagnostic', {
 			textDocument = {
 				uri = vim.uri_from_bufnr(%d)
 			}
@@ -243,7 +244,7 @@ func (s *NvimIntegrationTestRunner) loadNvimDiagnosticsFromBuffer(t *testing.T, 
 				table.insert(unique_diags, diag)
 			end
 		end
-		return unique_diags
+		return all_diags
 	`)
 
 	require.NotNil(t, l, "expected non-nil diagnostic response")
