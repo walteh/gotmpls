@@ -214,7 +214,12 @@ func genCase(_ *Model, method string, param, result *Type, dir string) {
 	}
 }
 
-func genFunc(_ *Model, method string, param, result *Type, dir string, isnotify bool) {
+func genFunc(m *Model, method string, param, result *Type, dir string, isnotify bool) {
+	genFuncWithArgs(m, method, param, result, dir, isnotify, "Dispatcher", "Server", "Back", ".instance.server")
+	genFuncWithArgs(m, method, param, result, dir, isnotify, "Caller", "Client", "", ".client")
+}
+
+func genFuncWithArgs(_ *Model, method string, param, result *Type, dir string, isnotify bool, name1, name2, name3, name4 string) {
 	out := new(bytes.Buffer)
 	var p, r string
 	var goResult string
@@ -240,35 +245,35 @@ func genFunc(_ *Model, method string, param, result *Type, dir string, isnotify 
 		goResult = "[]LSPAny"
 	}
 	fname := methodName(method)
-	fmt.Fprintf(out, "func (s *%%sDispatcher) %s(ctx context.Context%s) %s {\n", fname, p, r)
+	fmt.Fprintf(out, "func (s *%%s%s) %s(ctx context.Context%s) %s {\n", name1, fname, p, r)
 
 	if !notNil(result) {
 		if isnotify {
 			if notNil(param) {
-				fmt.Fprintf(out, "\treturn createNotify(ctx, s, %q, params)\n", method)
+				fmt.Fprintf(out, "\treturn create%sNotify%s(ctx, s%s, %q, params)\n", name2, name3, name4, method)
 			} else {
-				fmt.Fprintf(out, "\treturn createEmptyNotify(ctx, s, %q)\n", method)
+				fmt.Fprintf(out, "\treturn create%sEmptyNotify%s(ctx, s%s, %q)\n", name2, name3, name4, method)
 			}
 		} else {
 			if notNil(param) {
-				fmt.Fprintf(out, "\treturn createEmptyResultCallback(ctx, s, %q, params)\n", method)
+				fmt.Fprintf(out, "\treturn create%sEmptyResultCall%s(ctx, s%s, %q, params)\n", name2, name3, name4, method)
 			} else {
-				fmt.Fprintf(out, "\treturn createEmptyCallback(ctx, s, %q)\n", method)
+				fmt.Fprintf(out, "\treturn create%sEmptyCall%s(ctx, s%s, %q)\n", name2, name3, name4, method)
 			}
 		}
 	} else {
 		fmt.Fprintf(out, "\tvar result %s\n", goResult)
 		if isnotify {
 			if notNil(param) {
-				fmt.Fprintf(out, "\treturn createNotify(ctx, s, %q, params)\n", method)
+				fmt.Fprintf(out, "\treturn create%sNotify%s(ctx, s%s, %q, params)\n", name2, name3, name4, method)
 			} else {
-				fmt.Fprintf(out, "\t\tif err := createEmptyNotify(ctx, s, %q); err != nil {\n", method)
+				fmt.Fprintf(out, "\t\tif err := create%sEmptyNotify%s(ctx, s%s, %q); err != nil {\n", name2, name3, name4, method)
 			}
 		} else {
 			if notNil(param) {
-				fmt.Fprintf(out, "\t\tif err := createCallback(ctx, s, %q, params, &result); err != nil {\n", method)
+				fmt.Fprintf(out, "\t\tif err := create%sCall%s(ctx, s%s, %q, params, &result); err != nil {\n", name2, name3, name4, method)
 			} else {
-				fmt.Fprintf(out, "\t\tif err := createEmptyParamsCallback(ctx, s, %q, &result); err != nil {\n", method)
+				fmt.Fprintf(out, "\t\tif err := create%sEmptyParamsCall%s(ctx, s%s, %q, &result); err != nil {\n", name2, name3, name4, method)
 			}
 		}
 		fmt.Fprintf(out, "\t\treturn nil, err\n\t}\n\treturn result, nil\n")
@@ -277,12 +282,12 @@ func genFunc(_ *Model, method string, param, result *Type, dir string, isnotify 
 	msg := out.String()
 	switch dir {
 	case "clientToServer":
-		sfuncs[method] = fmt.Sprintf(msg, "Server")
+		sfuncs[method+"_"+name1] = fmt.Sprintf(msg, "Server")
 	case "serverToClient":
-		cfuncs[method] = fmt.Sprintf(msg, "Client")
+		cfuncs[method+"_"+name1] = fmt.Sprintf(msg, "Client")
 	case "both":
-		sfuncs[method] = fmt.Sprintf(msg, "Server")
-		cfuncs[method] = fmt.Sprintf(msg, "Client")
+		sfuncs[method+"_"+name1] = fmt.Sprintf(msg, "Server")
+		cfuncs[method+"_"+name1] = fmt.Sprintf(msg, "Client")
 	default:
 		log.Fatalf("impossible direction %q", dir)
 	}

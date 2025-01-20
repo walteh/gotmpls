@@ -10,3 +10,6 @@ packages:
     github.com/walteh/gotmpls/pkg/finder:
         interfaces:
             TemplateFinder: {}
+    github.com/walteh/gotmpls/pkg/lsp/protocol:
+        interfaces:
+            Client: {}

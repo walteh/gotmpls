@@ -66,18 +66,34 @@ type ExtendedLogMessageParams struct {
 	// Method       string                 `json:"method,omitempty"`    // JSONRPC method
 }
 
-func ApplyClientToZerolog(ctx context.Context, conn Client) context.Context {
+func ApplyServerInstanceToZerolog(ctx context.Context, server Client) context.Context {
+	// the server needs to not log to its console, instead it needs to log to the client
 	writer := &logWriter{
-		conn: conn,
-		ctx:  ctx,
+		server: server,
+		ctx:    ctx,
 	}
 
 	level := zerolog.Ctx(ctx).GetLevel()
 
 	ctx = zerolog.New(writer).With().
 		Str("id", myLoggerId).
+		Str("lsp_role", "server").
 		Logger().
 		Level(level).
+		Hook(debug.CustomTimeHook{WithColor: false}).
+		Hook(debug.CustomCallerHook{WithColor: false}).
+		WithContext(ctx)
+
+	return ctx
+}
+
+func ApplyClientsCurrentContextToZerolog(ctx context.Context) context.Context {
+	// the client needs to log to its console
+
+	ctx = zerolog.Ctx(ctx).With().
+		Str("id", myLoggerId).
+		Str("lsp_role", "client").
+		Logger().
 		Hook(debug.CustomTimeHook{WithColor: false}).
 		Hook(debug.CustomCallerHook{WithColor: false}).
 		WithContext(ctx)
@@ -91,9 +107,9 @@ func ApplyRequestToZerolog(ctx context.Context, req *jrpc2.Request) context.Cont
 }
 
 type logWriter struct {
-	conn Client
-	mu   sync.Mutex
-	ctx  context.Context
+	server Client
+	mu     sync.Mutex
+	ctx    context.Context
 }
 
 // var _ zerolog.ConsoleWriter = &logWriter{}
@@ -131,7 +147,10 @@ func (w *logWriter) Write(p []byte) (n int, err error) {
 
 	anyNotification := any(notification)
 
-	err = w.conn.Event(w.ctx, &anyNotification)
+	if w.server != nil {
+		err = w.server.Event(w.ctx, &anyNotification)
+	}
+
 	return len(p), err
 }
 

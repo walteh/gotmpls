@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/creachadair/jrpc2"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/walteh/gotmpls/pkg/ast"
@@ -116,7 +115,7 @@ type Server struct {
 	cancelFuncs *sync.Map // map[string]context.CancelFunc
 
 	// LSP client for notifications
-	instance *protocol.ServerInstance
+	callbackClient protocol.Client
 }
 
 func NewServer(ctx context.Context) *Server {
@@ -133,18 +132,26 @@ func NewServer(ctx context.Context) *Server {
 // 	return server.Wait()
 // }
 
-func (s *Server) BuildServerInstance(ctx context.Context, opts *jrpc2.ServerOptions) *protocol.ServerInstance {
-	logger := zerolog.Ctx(ctx)
-	logger.Info().Msg("starting LSP server")
+// func (s *Server) BuildServerInstance(ctx context.Context, opts *jrpc2.ServerOptions) *protocol.ServerInstance {
+// 	logger := zerolog.Ctx(ctx)
+// 	logger.Info().Msg("starting LSP server")
 
-	if s.instance != nil {
-		s.instance.ServerOpts = opts
-		return s.instance
-	}
+// 	if s.instance != nil {
+// 		s.instance.Config.ServerOpts = opts
+// 		return s.instance
+// 	}
 
-	s.instance = protocol.NewServerInstance(ctx, s, opts)
+// 	s.instance = protocol.NewServerInstance(ctx, s, opts)
 
-	return s.instance
+// 	return s.instance
+// }
+
+func (me *Server) SetCallbackClient(client protocol.Client) {
+	me.callbackClient = client
+}
+
+func (me *Server) Documents() *DocumentManager {
+	return me.documents
 }
 
 // Required interface methods
@@ -743,7 +750,11 @@ func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentUR
 
 	zerolog.Ctx(ctx).Debug().Msgf("publishing diagnostics: %+v", params)
 
-	return s.instance.CallbackClient().PublishDiagnostics(ctx, params)
+	if s.callbackClient != nil {
+		return s.callbackClient.PublishDiagnostics(ctx, params)
+	}
+
+	return nil
 }
 
 // Token type indices in the legend array

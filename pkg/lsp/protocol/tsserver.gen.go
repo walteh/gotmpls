@@ -246,436 +246,870 @@ func buildServerDispatchMap(server Server) handler.Map {
 	}
 }
 
+func (s *ServerCaller) Progress(ctx context.Context, params *ProgressParams) error {
+	return createClientNotify(ctx, s.client, "$/progress", params)
+}
 func (s *ServerDispatcher) Progress(ctx context.Context, params *ProgressParams) error {
-	return createNotify(ctx, s, "$/progress", params)
+	return createServerNotifyBack(ctx, s.instance.server, "$/progress", params)
+}
+func (s *ServerCaller) SetTrace(ctx context.Context, params *SetTraceParams) error {
+	return createClientNotify(ctx, s.client, "$/setTrace", params)
 }
 func (s *ServerDispatcher) SetTrace(ctx context.Context, params *SetTraceParams) error {
-	return createNotify(ctx, s, "$/setTrace", params)
+	return createServerNotifyBack(ctx, s.instance.server, "$/setTrace", params)
+}
+func (s *ServerCaller) IncomingCalls(ctx context.Context, params *CallHierarchyIncomingCallsParams) ([]CallHierarchyIncomingCall, error) {
+	var result []CallHierarchyIncomingCall
+	if err := createClientCall(ctx, s.client, "callHierarchy/incomingCalls", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 func (s *ServerDispatcher) IncomingCalls(ctx context.Context, params *CallHierarchyIncomingCallsParams) ([]CallHierarchyIncomingCall, error) {
 	var result []CallHierarchyIncomingCall
-	if err := createCallback(ctx, s, "callHierarchy/incomingCalls", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "callHierarchy/incomingCalls", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) OutgoingCalls(ctx context.Context, params *CallHierarchyOutgoingCallsParams) ([]CallHierarchyOutgoingCall, error) {
+	var result []CallHierarchyOutgoingCall
+	if err := createClientCall(ctx, s.client, "callHierarchy/outgoingCalls", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) OutgoingCalls(ctx context.Context, params *CallHierarchyOutgoingCallsParams) ([]CallHierarchyOutgoingCall, error) {
 	var result []CallHierarchyOutgoingCall
-	if err := createCallback(ctx, s, "callHierarchy/outgoingCalls", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "callHierarchy/outgoingCalls", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) ResolveCodeAction(ctx context.Context, params *CodeAction) (*CodeAction, error) {
+	var result *CodeAction
+	if err := createClientCall(ctx, s.client, "codeAction/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) ResolveCodeAction(ctx context.Context, params *CodeAction) (*CodeAction, error) {
 	var result *CodeAction
-	if err := createCallback(ctx, s, "codeAction/resolve", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "codeAction/resolve", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) ResolveCodeLens(ctx context.Context, params *CodeLens) (*CodeLens, error) {
+	var result *CodeLens
+	if err := createClientCall(ctx, s.client, "codeLens/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) ResolveCodeLens(ctx context.Context, params *CodeLens) (*CodeLens, error) {
 	var result *CodeLens
-	if err := createCallback(ctx, s, "codeLens/resolve", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "codeLens/resolve", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) ResolveCompletionItem(ctx context.Context, params *CompletionItem) (*CompletionItem, error) {
+	var result *CompletionItem
+	if err := createClientCall(ctx, s.client, "completionItem/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) ResolveCompletionItem(ctx context.Context, params *CompletionItem) (*CompletionItem, error) {
 	var result *CompletionItem
-	if err := createCallback(ctx, s, "completionItem/resolve", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "completionItem/resolve", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) ResolveDocumentLink(ctx context.Context, params *DocumentLink) (*DocumentLink, error) {
+	var result *DocumentLink
+	if err := createClientCall(ctx, s.client, "documentLink/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) ResolveDocumentLink(ctx context.Context, params *DocumentLink) (*DocumentLink, error) {
 	var result *DocumentLink
-	if err := createCallback(ctx, s, "documentLink/resolve", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "documentLink/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
+func (s *ServerCaller) Exit(ctx context.Context) error {
+	return createClientEmptyNotify(ctx, s.client, "exit")
+}
 func (s *ServerDispatcher) Exit(ctx context.Context) error {
-	return createEmptyNotify(ctx, s, "exit")
+	return createServerEmptyNotifyBack(ctx, s.instance.server, "exit")
+}
+func (s *ServerCaller) Initialize(ctx context.Context, params *ParamInitialize) (*InitializeResult, error) {
+	var result *InitializeResult
+	if err := createClientCall(ctx, s.client, "initialize", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 func (s *ServerDispatcher) Initialize(ctx context.Context, params *ParamInitialize) (*InitializeResult, error) {
 	var result *InitializeResult
-	if err := createCallback(ctx, s, "initialize", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "initialize", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
+func (s *ServerCaller) Initialized(ctx context.Context, params *InitializedParams) error {
+	return createClientNotify(ctx, s.client, "initialized", params)
+}
 func (s *ServerDispatcher) Initialized(ctx context.Context, params *InitializedParams) error {
-	return createNotify(ctx, s, "initialized", params)
+	return createServerNotifyBack(ctx, s.instance.server, "initialized", params)
+}
+func (s *ServerCaller) Resolve(ctx context.Context, params *InlayHint) (*InlayHint, error) {
+	var result *InlayHint
+	if err := createClientCall(ctx, s.client, "inlayHint/resolve", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 func (s *ServerDispatcher) Resolve(ctx context.Context, params *InlayHint) (*InlayHint, error) {
 	var result *InlayHint
-	if err := createCallback(ctx, s, "inlayHint/resolve", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "inlayHint/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
+func (s *ServerCaller) DidChangeNotebookDocument(ctx context.Context, params *DidChangeNotebookDocumentParams) error {
+	return createClientNotify(ctx, s.client, "notebookDocument/didChange", params)
+}
 func (s *ServerDispatcher) DidChangeNotebookDocument(ctx context.Context, params *DidChangeNotebookDocumentParams) error {
-	return createNotify(ctx, s, "notebookDocument/didChange", params)
+	return createServerNotifyBack(ctx, s.instance.server, "notebookDocument/didChange", params)
+}
+func (s *ServerCaller) DidCloseNotebookDocument(ctx context.Context, params *DidCloseNotebookDocumentParams) error {
+	return createClientNotify(ctx, s.client, "notebookDocument/didClose", params)
 }
 func (s *ServerDispatcher) DidCloseNotebookDocument(ctx context.Context, params *DidCloseNotebookDocumentParams) error {
-	return createNotify(ctx, s, "notebookDocument/didClose", params)
+	return createServerNotifyBack(ctx, s.instance.server, "notebookDocument/didClose", params)
+}
+func (s *ServerCaller) DidOpenNotebookDocument(ctx context.Context, params *DidOpenNotebookDocumentParams) error {
+	return createClientNotify(ctx, s.client, "notebookDocument/didOpen", params)
 }
 func (s *ServerDispatcher) DidOpenNotebookDocument(ctx context.Context, params *DidOpenNotebookDocumentParams) error {
-	return createNotify(ctx, s, "notebookDocument/didOpen", params)
+	return createServerNotifyBack(ctx, s.instance.server, "notebookDocument/didOpen", params)
+}
+func (s *ServerCaller) DidSaveNotebookDocument(ctx context.Context, params *DidSaveNotebookDocumentParams) error {
+	return createClientNotify(ctx, s.client, "notebookDocument/didSave", params)
 }
 func (s *ServerDispatcher) DidSaveNotebookDocument(ctx context.Context, params *DidSaveNotebookDocumentParams) error {
-	return createNotify(ctx, s, "notebookDocument/didSave", params)
+	return createServerNotifyBack(ctx, s.instance.server, "notebookDocument/didSave", params)
+}
+func (s *ServerCaller) Shutdown(ctx context.Context) error {
+	return createClientEmptyCall(ctx, s.client, "shutdown")
 }
 func (s *ServerDispatcher) Shutdown(ctx context.Context) error {
-	return createEmptyCallback(ctx, s, "shutdown")
+	return createServerEmptyCallBack(ctx, s.instance.server, "shutdown")
+}
+func (s *ServerCaller) CodeAction(ctx context.Context, params *CodeActionParams) ([]CodeAction, error) {
+	var result []CodeAction
+	if err := createClientCall(ctx, s.client, "textDocument/codeAction", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 func (s *ServerDispatcher) CodeAction(ctx context.Context, params *CodeActionParams) ([]CodeAction, error) {
 	var result []CodeAction
-	if err := createCallback(ctx, s, "textDocument/codeAction", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/codeAction", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) CodeLens(ctx context.Context, params *CodeLensParams) ([]CodeLens, error) {
+	var result []CodeLens
+	if err := createClientCall(ctx, s.client, "textDocument/codeLens", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) CodeLens(ctx context.Context, params *CodeLensParams) ([]CodeLens, error) {
 	var result []CodeLens
-	if err := createCallback(ctx, s, "textDocument/codeLens", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/codeLens", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) ColorPresentation(ctx context.Context, params *ColorPresentationParams) ([]ColorPresentation, error) {
+	var result []ColorPresentation
+	if err := createClientCall(ctx, s.client, "textDocument/colorPresentation", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) ColorPresentation(ctx context.Context, params *ColorPresentationParams) ([]ColorPresentation, error) {
 	var result []ColorPresentation
-	if err := createCallback(ctx, s, "textDocument/colorPresentation", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/colorPresentation", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) Completion(ctx context.Context, params *CompletionParams) (*CompletionList, error) {
+	var result *CompletionList
+	if err := createClientCall(ctx, s.client, "textDocument/completion", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) Completion(ctx context.Context, params *CompletionParams) (*CompletionList, error) {
 	var result *CompletionList
-	if err := createCallback(ctx, s, "textDocument/completion", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/completion", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) Declaration(ctx context.Context, params *DeclarationParams) (*Or_textDocument_declaration, error) {
+	var result *Or_textDocument_declaration
+	if err := createClientCall(ctx, s.client, "textDocument/declaration", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) Declaration(ctx context.Context, params *DeclarationParams) (*Or_textDocument_declaration, error) {
 	var result *Or_textDocument_declaration
-	if err := createCallback(ctx, s, "textDocument/declaration", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/declaration", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) Definition(ctx context.Context, params *DefinitionParams) ([]Location, error) {
+	var result []Location
+	if err := createClientCall(ctx, s.client, "textDocument/definition", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) Definition(ctx context.Context, params *DefinitionParams) ([]Location, error) {
 	var result []Location
-	if err := createCallback(ctx, s, "textDocument/definition", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/definition", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) Diagnostic(ctx context.Context, params *DocumentDiagnosticParams) (*DocumentDiagnosticReport, error) {
+	var result *DocumentDiagnosticReport
+	if err := createClientCall(ctx, s.client, "textDocument/diagnostic", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) Diagnostic(ctx context.Context, params *DocumentDiagnosticParams) (*DocumentDiagnosticReport, error) {
 	var result *DocumentDiagnosticReport
-	if err := createCallback(ctx, s, "textDocument/diagnostic", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/diagnostic", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
+func (s *ServerCaller) DidChange(ctx context.Context, params *DidChangeTextDocumentParams) error {
+	return createClientNotify(ctx, s.client, "textDocument/didChange", params)
+}
 func (s *ServerDispatcher) DidChange(ctx context.Context, params *DidChangeTextDocumentParams) error {
-	return createNotify(ctx, s, "textDocument/didChange", params)
+	return createServerNotifyBack(ctx, s.instance.server, "textDocument/didChange", params)
+}
+func (s *ServerCaller) DidClose(ctx context.Context, params *DidCloseTextDocumentParams) error {
+	return createClientNotify(ctx, s.client, "textDocument/didClose", params)
 }
 func (s *ServerDispatcher) DidClose(ctx context.Context, params *DidCloseTextDocumentParams) error {
-	return createNotify(ctx, s, "textDocument/didClose", params)
+	return createServerNotifyBack(ctx, s.instance.server, "textDocument/didClose", params)
+}
+func (s *ServerCaller) DidOpen(ctx context.Context, params *DidOpenTextDocumentParams) error {
+	return createClientNotify(ctx, s.client, "textDocument/didOpen", params)
 }
 func (s *ServerDispatcher) DidOpen(ctx context.Context, params *DidOpenTextDocumentParams) error {
-	return createNotify(ctx, s, "textDocument/didOpen", params)
+	return createServerNotifyBack(ctx, s.instance.server, "textDocument/didOpen", params)
+}
+func (s *ServerCaller) DidSave(ctx context.Context, params *DidSaveTextDocumentParams) error {
+	return createClientNotify(ctx, s.client, "textDocument/didSave", params)
 }
 func (s *ServerDispatcher) DidSave(ctx context.Context, params *DidSaveTextDocumentParams) error {
-	return createNotify(ctx, s, "textDocument/didSave", params)
+	return createServerNotifyBack(ctx, s.instance.server, "textDocument/didSave", params)
+}
+func (s *ServerCaller) DocumentColor(ctx context.Context, params *DocumentColorParams) ([]ColorInformation, error) {
+	var result []ColorInformation
+	if err := createClientCall(ctx, s.client, "textDocument/documentColor", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 func (s *ServerDispatcher) DocumentColor(ctx context.Context, params *DocumentColorParams) ([]ColorInformation, error) {
 	var result []ColorInformation
-	if err := createCallback(ctx, s, "textDocument/documentColor", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/documentColor", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) DocumentHighlight(ctx context.Context, params *DocumentHighlightParams) ([]DocumentHighlight, error) {
+	var result []DocumentHighlight
+	if err := createClientCall(ctx, s.client, "textDocument/documentHighlight", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) DocumentHighlight(ctx context.Context, params *DocumentHighlightParams) ([]DocumentHighlight, error) {
 	var result []DocumentHighlight
-	if err := createCallback(ctx, s, "textDocument/documentHighlight", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/documentHighlight", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) DocumentLink(ctx context.Context, params *DocumentLinkParams) ([]DocumentLink, error) {
+	var result []DocumentLink
+	if err := createClientCall(ctx, s.client, "textDocument/documentLink", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) DocumentLink(ctx context.Context, params *DocumentLinkParams) ([]DocumentLink, error) {
 	var result []DocumentLink
-	if err := createCallback(ctx, s, "textDocument/documentLink", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/documentLink", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) DocumentSymbol(ctx context.Context, params *DocumentSymbolParams) ([]any, error) {
+	var result []any
+	if err := createClientCall(ctx, s.client, "textDocument/documentSymbol", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) DocumentSymbol(ctx context.Context, params *DocumentSymbolParams) ([]any, error) {
 	var result []any
-	if err := createCallback(ctx, s, "textDocument/documentSymbol", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/documentSymbol", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) FoldingRange(ctx context.Context, params *FoldingRangeParams) ([]FoldingRange, error) {
+	var result []FoldingRange
+	if err := createClientCall(ctx, s.client, "textDocument/foldingRange", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) FoldingRange(ctx context.Context, params *FoldingRangeParams) ([]FoldingRange, error) {
 	var result []FoldingRange
-	if err := createCallback(ctx, s, "textDocument/foldingRange", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/foldingRange", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) Formatting(ctx context.Context, params *DocumentFormattingParams) ([]TextEdit, error) {
+	var result []TextEdit
+	if err := createClientCall(ctx, s.client, "textDocument/formatting", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) Formatting(ctx context.Context, params *DocumentFormattingParams) ([]TextEdit, error) {
 	var result []TextEdit
-	if err := createCallback(ctx, s, "textDocument/formatting", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/formatting", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) Hover(ctx context.Context, params *HoverParams) (*Hover, error) {
+	var result *Hover
+	if err := createClientCall(ctx, s.client, "textDocument/hover", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) Hover(ctx context.Context, params *HoverParams) (*Hover, error) {
 	var result *Hover
-	if err := createCallback(ctx, s, "textDocument/hover", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/hover", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) Implementation(ctx context.Context, params *ImplementationParams) ([]Location, error) {
+	var result []Location
+	if err := createClientCall(ctx, s.client, "textDocument/implementation", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) Implementation(ctx context.Context, params *ImplementationParams) ([]Location, error) {
 	var result []Location
-	if err := createCallback(ctx, s, "textDocument/implementation", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/implementation", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) InlayHint(ctx context.Context, params *InlayHintParams) ([]InlayHint, error) {
+	var result []InlayHint
+	if err := createClientCall(ctx, s.client, "textDocument/inlayHint", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) InlayHint(ctx context.Context, params *InlayHintParams) ([]InlayHint, error) {
 	var result []InlayHint
-	if err := createCallback(ctx, s, "textDocument/inlayHint", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/inlayHint", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) InlineCompletion(ctx context.Context, params *InlineCompletionParams) (*Or_Result_textDocument_inlineCompletion, error) {
+	var result *Or_Result_textDocument_inlineCompletion
+	if err := createClientCall(ctx, s.client, "textDocument/inlineCompletion", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) InlineCompletion(ctx context.Context, params *InlineCompletionParams) (*Or_Result_textDocument_inlineCompletion, error) {
 	var result *Or_Result_textDocument_inlineCompletion
-	if err := createCallback(ctx, s, "textDocument/inlineCompletion", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/inlineCompletion", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) InlineValue(ctx context.Context, params *InlineValueParams) ([]InlineValue, error) {
+	var result []InlineValue
+	if err := createClientCall(ctx, s.client, "textDocument/inlineValue", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) InlineValue(ctx context.Context, params *InlineValueParams) ([]InlineValue, error) {
 	var result []InlineValue
-	if err := createCallback(ctx, s, "textDocument/inlineValue", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/inlineValue", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) LinkedEditingRange(ctx context.Context, params *LinkedEditingRangeParams) (*LinkedEditingRanges, error) {
+	var result *LinkedEditingRanges
+	if err := createClientCall(ctx, s.client, "textDocument/linkedEditingRange", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) LinkedEditingRange(ctx context.Context, params *LinkedEditingRangeParams) (*LinkedEditingRanges, error) {
 	var result *LinkedEditingRanges
-	if err := createCallback(ctx, s, "textDocument/linkedEditingRange", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/linkedEditingRange", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) Moniker(ctx context.Context, params *MonikerParams) ([]Moniker, error) {
+	var result []Moniker
+	if err := createClientCall(ctx, s.client, "textDocument/moniker", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) Moniker(ctx context.Context, params *MonikerParams) ([]Moniker, error) {
 	var result []Moniker
-	if err := createCallback(ctx, s, "textDocument/moniker", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/moniker", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) OnTypeFormatting(ctx context.Context, params *DocumentOnTypeFormattingParams) ([]TextEdit, error) {
+	var result []TextEdit
+	if err := createClientCall(ctx, s.client, "textDocument/onTypeFormatting", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) OnTypeFormatting(ctx context.Context, params *DocumentOnTypeFormattingParams) ([]TextEdit, error) {
 	var result []TextEdit
-	if err := createCallback(ctx, s, "textDocument/onTypeFormatting", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/onTypeFormatting", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) PrepareCallHierarchy(ctx context.Context, params *CallHierarchyPrepareParams) ([]CallHierarchyItem, error) {
+	var result []CallHierarchyItem
+	if err := createClientCall(ctx, s.client, "textDocument/prepareCallHierarchy", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) PrepareCallHierarchy(ctx context.Context, params *CallHierarchyPrepareParams) ([]CallHierarchyItem, error) {
 	var result []CallHierarchyItem
-	if err := createCallback(ctx, s, "textDocument/prepareCallHierarchy", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/prepareCallHierarchy", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) PrepareRename(ctx context.Context, params *PrepareRenameParams) (*PrepareRenameResult, error) {
+	var result *PrepareRenameResult
+	if err := createClientCall(ctx, s.client, "textDocument/prepareRename", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) PrepareRename(ctx context.Context, params *PrepareRenameParams) (*PrepareRenameResult, error) {
 	var result *PrepareRenameResult
-	if err := createCallback(ctx, s, "textDocument/prepareRename", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/prepareRename", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) PrepareTypeHierarchy(ctx context.Context, params *TypeHierarchyPrepareParams) ([]TypeHierarchyItem, error) {
+	var result []TypeHierarchyItem
+	if err := createClientCall(ctx, s.client, "textDocument/prepareTypeHierarchy", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) PrepareTypeHierarchy(ctx context.Context, params *TypeHierarchyPrepareParams) ([]TypeHierarchyItem, error) {
 	var result []TypeHierarchyItem
-	if err := createCallback(ctx, s, "textDocument/prepareTypeHierarchy", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/prepareTypeHierarchy", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) RangeFormatting(ctx context.Context, params *DocumentRangeFormattingParams) ([]TextEdit, error) {
+	var result []TextEdit
+	if err := createClientCall(ctx, s.client, "textDocument/rangeFormatting", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) RangeFormatting(ctx context.Context, params *DocumentRangeFormattingParams) ([]TextEdit, error) {
 	var result []TextEdit
-	if err := createCallback(ctx, s, "textDocument/rangeFormatting", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/rangeFormatting", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) RangesFormatting(ctx context.Context, params *DocumentRangesFormattingParams) ([]TextEdit, error) {
+	var result []TextEdit
+	if err := createClientCall(ctx, s.client, "textDocument/rangesFormatting", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) RangesFormatting(ctx context.Context, params *DocumentRangesFormattingParams) ([]TextEdit, error) {
 	var result []TextEdit
-	if err := createCallback(ctx, s, "textDocument/rangesFormatting", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/rangesFormatting", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) References(ctx context.Context, params *ReferenceParams) ([]Location, error) {
+	var result []Location
+	if err := createClientCall(ctx, s.client, "textDocument/references", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) References(ctx context.Context, params *ReferenceParams) ([]Location, error) {
 	var result []Location
-	if err := createCallback(ctx, s, "textDocument/references", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/references", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) Rename(ctx context.Context, params *RenameParams) (*WorkspaceEdit, error) {
+	var result *WorkspaceEdit
+	if err := createClientCall(ctx, s.client, "textDocument/rename", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) Rename(ctx context.Context, params *RenameParams) (*WorkspaceEdit, error) {
 	var result *WorkspaceEdit
-	if err := createCallback(ctx, s, "textDocument/rename", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/rename", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) SelectionRange(ctx context.Context, params *SelectionRangeParams) ([]SelectionRange, error) {
+	var result []SelectionRange
+	if err := createClientCall(ctx, s.client, "textDocument/selectionRange", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) SelectionRange(ctx context.Context, params *SelectionRangeParams) ([]SelectionRange, error) {
 	var result []SelectionRange
-	if err := createCallback(ctx, s, "textDocument/selectionRange", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/selectionRange", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *ServerDispatcher) SemanticTokensFull(ctx context.Context, params *SemanticTokensParams) (*SemanticTokens, error) {
-	var result *SemanticTokens
-	if err := createCallback(ctx, s, "textDocument/semanticTokens/full", params, &result); err != nil {
+func (s *ServerCaller) SemanticTokensFullDelta(ctx context.Context, params *SemanticTokensDeltaParams) (any, error) {
+	var result any
+	if err := createClientCall(ctx, s.client, "textDocument/semanticTokens/full/delta", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) SemanticTokensFullDelta(ctx context.Context, params *SemanticTokensDeltaParams) (any, error) {
 	var result any
-	if err := createCallback(ctx, s, "textDocument/semanticTokens/full/delta", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/semanticTokens/full/delta", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) SemanticTokensFull(ctx context.Context, params *SemanticTokensParams) (*SemanticTokens, error) {
+	var result *SemanticTokens
+	if err := createClientCall(ctx, s.client, "textDocument/semanticTokens/full", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerDispatcher) SemanticTokensFull(ctx context.Context, params *SemanticTokensParams) (*SemanticTokens, error) {
+	var result *SemanticTokens
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/semanticTokens/full", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) SemanticTokensRange(ctx context.Context, params *SemanticTokensRangeParams) (*SemanticTokens, error) {
+	var result *SemanticTokens
+	if err := createClientCall(ctx, s.client, "textDocument/semanticTokens/range", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) SemanticTokensRange(ctx context.Context, params *SemanticTokensRangeParams) (*SemanticTokens, error) {
 	var result *SemanticTokens
-	if err := createCallback(ctx, s, "textDocument/semanticTokens/range", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/semanticTokens/range", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) SignatureHelp(ctx context.Context, params *SignatureHelpParams) (*SignatureHelp, error) {
+	var result *SignatureHelp
+	if err := createClientCall(ctx, s.client, "textDocument/signatureHelp", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) SignatureHelp(ctx context.Context, params *SignatureHelpParams) (*SignatureHelp, error) {
 	var result *SignatureHelp
-	if err := createCallback(ctx, s, "textDocument/signatureHelp", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/signatureHelp", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) TypeDefinition(ctx context.Context, params *TypeDefinitionParams) ([]Location, error) {
+	var result []Location
+	if err := createClientCall(ctx, s.client, "textDocument/typeDefinition", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) TypeDefinition(ctx context.Context, params *TypeDefinitionParams) ([]Location, error) {
 	var result []Location
-	if err := createCallback(ctx, s, "textDocument/typeDefinition", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/typeDefinition", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-func (s *ServerDispatcher) WillSave(ctx context.Context, params *WillSaveTextDocumentParams) error {
-	return createNotify(ctx, s, "textDocument/willSave", params)
+func (s *ServerCaller) WillSaveWaitUntil(ctx context.Context, params *WillSaveTextDocumentParams) ([]TextEdit, error) {
+	var result []TextEdit
+	if err := createClientCall(ctx, s.client, "textDocument/willSaveWaitUntil", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 func (s *ServerDispatcher) WillSaveWaitUntil(ctx context.Context, params *WillSaveTextDocumentParams) ([]TextEdit, error) {
 	var result []TextEdit
-	if err := createCallback(ctx, s, "textDocument/willSaveWaitUntil", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "textDocument/willSaveWaitUntil", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) WillSave(ctx context.Context, params *WillSaveTextDocumentParams) error {
+	return createClientNotify(ctx, s.client, "textDocument/willSave", params)
+}
+func (s *ServerDispatcher) WillSave(ctx context.Context, params *WillSaveTextDocumentParams) error {
+	return createServerNotifyBack(ctx, s.instance.server, "textDocument/willSave", params)
+}
+func (s *ServerCaller) Subtypes(ctx context.Context, params *TypeHierarchySubtypesParams) ([]TypeHierarchyItem, error) {
+	var result []TypeHierarchyItem
+	if err := createClientCall(ctx, s.client, "typeHierarchy/subtypes", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) Subtypes(ctx context.Context, params *TypeHierarchySubtypesParams) ([]TypeHierarchyItem, error) {
 	var result []TypeHierarchyItem
-	if err := createCallback(ctx, s, "typeHierarchy/subtypes", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "typeHierarchy/subtypes", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) Supertypes(ctx context.Context, params *TypeHierarchySupertypesParams) ([]TypeHierarchyItem, error) {
+	var result []TypeHierarchyItem
+	if err := createClientCall(ctx, s.client, "typeHierarchy/supertypes", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) Supertypes(ctx context.Context, params *TypeHierarchySupertypesParams) ([]TypeHierarchyItem, error) {
 	var result []TypeHierarchyItem
-	if err := createCallback(ctx, s, "typeHierarchy/supertypes", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "typeHierarchy/supertypes", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
+func (s *ServerCaller) WorkDoneProgressCancel(ctx context.Context, params *WorkDoneProgressCancelParams) error {
+	return createClientNotify(ctx, s.client, "window/workDoneProgress/cancel", params)
+}
 func (s *ServerDispatcher) WorkDoneProgressCancel(ctx context.Context, params *WorkDoneProgressCancelParams) error {
-	return createNotify(ctx, s, "window/workDoneProgress/cancel", params)
+	return createServerNotifyBack(ctx, s.instance.server, "window/workDoneProgress/cancel", params)
+}
+func (s *ServerCaller) DiagnosticWorkspace(ctx context.Context, params *WorkspaceDiagnosticParams) (*WorkspaceDiagnosticReport, error) {
+	var result *WorkspaceDiagnosticReport
+	if err := createClientCall(ctx, s.client, "workspace/diagnostic", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 func (s *ServerDispatcher) DiagnosticWorkspace(ctx context.Context, params *WorkspaceDiagnosticParams) (*WorkspaceDiagnosticReport, error) {
 	var result *WorkspaceDiagnosticReport
-	if err := createCallback(ctx, s, "workspace/diagnostic", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "workspace/diagnostic", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
+func (s *ServerCaller) DidChangeConfiguration(ctx context.Context, params *DidChangeConfigurationParams) error {
+	return createClientNotify(ctx, s.client, "workspace/didChangeConfiguration", params)
+}
 func (s *ServerDispatcher) DidChangeConfiguration(ctx context.Context, params *DidChangeConfigurationParams) error {
-	return createNotify(ctx, s, "workspace/didChangeConfiguration", params)
+	return createServerNotifyBack(ctx, s.instance.server, "workspace/didChangeConfiguration", params)
+}
+func (s *ServerCaller) DidChangeWatchedFiles(ctx context.Context, params *DidChangeWatchedFilesParams) error {
+	return createClientNotify(ctx, s.client, "workspace/didChangeWatchedFiles", params)
 }
 func (s *ServerDispatcher) DidChangeWatchedFiles(ctx context.Context, params *DidChangeWatchedFilesParams) error {
-	return createNotify(ctx, s, "workspace/didChangeWatchedFiles", params)
+	return createServerNotifyBack(ctx, s.instance.server, "workspace/didChangeWatchedFiles", params)
+}
+func (s *ServerCaller) DidChangeWorkspaceFolders(ctx context.Context, params *DidChangeWorkspaceFoldersParams) error {
+	return createClientNotify(ctx, s.client, "workspace/didChangeWorkspaceFolders", params)
 }
 func (s *ServerDispatcher) DidChangeWorkspaceFolders(ctx context.Context, params *DidChangeWorkspaceFoldersParams) error {
-	return createNotify(ctx, s, "workspace/didChangeWorkspaceFolders", params)
+	return createServerNotifyBack(ctx, s.instance.server, "workspace/didChangeWorkspaceFolders", params)
+}
+func (s *ServerCaller) DidCreateFiles(ctx context.Context, params *CreateFilesParams) error {
+	return createClientNotify(ctx, s.client, "workspace/didCreateFiles", params)
 }
 func (s *ServerDispatcher) DidCreateFiles(ctx context.Context, params *CreateFilesParams) error {
-	return createNotify(ctx, s, "workspace/didCreateFiles", params)
+	return createServerNotifyBack(ctx, s.instance.server, "workspace/didCreateFiles", params)
+}
+func (s *ServerCaller) DidDeleteFiles(ctx context.Context, params *DeleteFilesParams) error {
+	return createClientNotify(ctx, s.client, "workspace/didDeleteFiles", params)
 }
 func (s *ServerDispatcher) DidDeleteFiles(ctx context.Context, params *DeleteFilesParams) error {
-	return createNotify(ctx, s, "workspace/didDeleteFiles", params)
+	return createServerNotifyBack(ctx, s.instance.server, "workspace/didDeleteFiles", params)
+}
+func (s *ServerCaller) DidRenameFiles(ctx context.Context, params *RenameFilesParams) error {
+	return createClientNotify(ctx, s.client, "workspace/didRenameFiles", params)
 }
 func (s *ServerDispatcher) DidRenameFiles(ctx context.Context, params *RenameFilesParams) error {
-	return createNotify(ctx, s, "workspace/didRenameFiles", params)
+	return createServerNotifyBack(ctx, s.instance.server, "workspace/didRenameFiles", params)
+}
+func (s *ServerCaller) ExecuteCommand(ctx context.Context, params *ExecuteCommandParams) (any, error) {
+	var result any
+	if err := createClientCall(ctx, s.client, "workspace/executeCommand", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 func (s *ServerDispatcher) ExecuteCommand(ctx context.Context, params *ExecuteCommandParams) (any, error) {
 	var result any
-	if err := createCallback(ctx, s, "workspace/executeCommand", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "workspace/executeCommand", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) Symbol(ctx context.Context, params *WorkspaceSymbolParams) ([]SymbolInformation, error) {
+	var result []SymbolInformation
+	if err := createClientCall(ctx, s.client, "workspace/symbol", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) Symbol(ctx context.Context, params *WorkspaceSymbolParams) ([]SymbolInformation, error) {
 	var result []SymbolInformation
-	if err := createCallback(ctx, s, "workspace/symbol", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "workspace/symbol", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) TextDocumentContent(ctx context.Context, params *TextDocumentContentParams) (*string, error) {
+	var result *string
+	if err := createClientCall(ctx, s.client, "workspace/textDocumentContent", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) TextDocumentContent(ctx context.Context, params *TextDocumentContentParams) (*string, error) {
 	var result *string
-	if err := createCallback(ctx, s, "workspace/textDocumentContent", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "workspace/textDocumentContent", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) WillCreateFiles(ctx context.Context, params *CreateFilesParams) (*WorkspaceEdit, error) {
+	var result *WorkspaceEdit
+	if err := createClientCall(ctx, s.client, "workspace/willCreateFiles", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) WillCreateFiles(ctx context.Context, params *CreateFilesParams) (*WorkspaceEdit, error) {
 	var result *WorkspaceEdit
-	if err := createCallback(ctx, s, "workspace/willCreateFiles", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "workspace/willCreateFiles", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) WillDeleteFiles(ctx context.Context, params *DeleteFilesParams) (*WorkspaceEdit, error) {
+	var result *WorkspaceEdit
+	if err := createClientCall(ctx, s.client, "workspace/willDeleteFiles", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) WillDeleteFiles(ctx context.Context, params *DeleteFilesParams) (*WorkspaceEdit, error) {
 	var result *WorkspaceEdit
-	if err := createCallback(ctx, s, "workspace/willDeleteFiles", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "workspace/willDeleteFiles", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) WillRenameFiles(ctx context.Context, params *RenameFilesParams) (*WorkspaceEdit, error) {
+	var result *WorkspaceEdit
+	if err := createClientCall(ctx, s.client, "workspace/willRenameFiles", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) WillRenameFiles(ctx context.Context, params *RenameFilesParams) (*WorkspaceEdit, error) {
 	var result *WorkspaceEdit
-	if err := createCallback(ctx, s, "workspace/willRenameFiles", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "workspace/willRenameFiles", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *ServerCaller) ResolveWorkspaceSymbol(ctx context.Context, params *WorkspaceSymbol) (*WorkspaceSymbol, error) {
+	var result *WorkspaceSymbol
+	if err := createClientCall(ctx, s.client, "workspaceSymbol/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 func (s *ServerDispatcher) ResolveWorkspaceSymbol(ctx context.Context, params *WorkspaceSymbol) (*WorkspaceSymbol, error) {
 	var result *WorkspaceSymbol
-	if err := createCallback(ctx, s, "workspaceSymbol/resolve", params, &result); err != nil {
+	if err := createServerCallBack(ctx, s.instance.server, "workspaceSymbol/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil

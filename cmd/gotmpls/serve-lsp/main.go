@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/walteh/gotmpls/pkg/lsp"
+	"github.com/walteh/gotmpls/pkg/lsp/protocol"
 	"gitlab.com/tozd/go/errors"
 )
 
@@ -60,10 +61,10 @@ func (me *Handler) Run(ctx context.Context) error {
 		ctx = zerolog.New(os.Stderr).With().Str("name", "gotmpls").Logger().Level(zerolog.InfoLevel).WithContext(ctx)
 	}
 
-	instance := server.BuildServerInstance(ctx, opts)
+	instance := protocol.NewServerInstance(ctx, server, opts)
 
 	// Start the server using stdin/stdout
-	if err := instance.StartAndWait(os.Stdin, os.Stdout); err != nil {
+	if err := instance.Instance().StartAndWait(os.Stdin, os.Stdout); err != nil {
 		return errors.Errorf("error running language server: %w", err)
 	}
 
