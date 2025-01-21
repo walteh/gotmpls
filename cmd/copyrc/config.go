@@ -16,9 +16,6 @@ import (
 
 // 📝 Config file structure
 type CopyConfig struct {
-	// 🎯 Global settings
-	StatusFile string `json:"status_file,omitempty" hcl:"status_file,optional" yaml:"status_file,omitempty"` // Name of the status file (defaults to .copy-status)
-
 	// 🔧 Default settings block
 	Defaults *DefaultsBlock `json:"defaults,omitempty" hcl:"defaults,block" yaml:"defaults,omitempty"`
 
