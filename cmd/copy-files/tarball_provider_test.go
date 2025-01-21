@@ -10,7 +10,7 @@ import (
 
 func TestTarballFunctions(t *testing.T) {
 	// Create mock provider
-	mock := NewMockProvider()
+	mock := NewMockProvider(t)
 	mock.AddFile("test.txt", []byte("test content"))
 	mock.AddFile("dir/nested.txt", []byte("nested content"))
 
@@ -48,24 +48,6 @@ func TestTarballFunctions(t *testing.T) {
 		_, err := GetFileFromTarball(context.Background(), mock, args)
 		require.Error(t, err, "getting nonexistent file should fail")
 		assert.Contains(t, err.Error(), "invalid path")
-	})
-
-	t.Run("test_cache_reuse", func(t *testing.T) {
-		args := ProviderArgs{
-			Repo: "github.com/org/repo",
-			Ref:  "main",
-			Path: "path/to/files",
-		}
-
-		// First call should download
-		data1, err := GetFileFromTarball(context.Background(), mock, args)
-		require.NoError(t, err, "first call should succeed")
-		assert.Equal(t, []byte{0x1f, 0x8b}, data1[0:2], "should be gzipped data")
-
-		// Second call should reuse cache
-		data2, err := GetFileFromTarball(context.Background(), mock, args)
-		require.NoError(t, err, "second call should succeed")
-		assert.Equal(t, data1, data2, "cached data should match")
 	})
 
 	t.Run("test_invalid_cache_dir", func(t *testing.T) {

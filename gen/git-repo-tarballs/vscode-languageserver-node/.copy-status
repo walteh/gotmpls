@@ -1,24 +1,23 @@
 {
-  "last_updated": "2025-01-21T16:22:00.615597Z",
-  "commit_hash": "795aa54071f4f1e3ad7d95ba815fd286cfafab5e",
-  "branch": "tags/release/jsonrpc/9.0.0-next.6",
-  "entries": {
-    "vscode-languageserver-node.tar.gz": {
-      "file": "vscode-languageserver-node.tar.gz",
-      "source": "github.com/microsoft/vscode-languageserver-node@795aa54071f4f1e3ad7d95ba815fd286cfafab5e",
-      "permalink": "https://raw.githubusercontent.com/microsoft/vscode-languageserver-node/tags/release/jsonrpc/9.0.0-next.6/build",
-      "downloaded": "2025-01-21T16:22:00.615572Z",
-      "changes": [
-        "generated embed.gen.go file"
-      ]
-    }
-  },
-  "args": {
-    "src_repo": "github.com/microsoft/vscode-languageserver-node",
-    "src_ref": "tags/release/jsonrpc/9.0.0-next.6",
-    "src_path": ".",
-    "archive_args": {
-      "GoEmbed": true
-    }
-  }
+	"last_updated": "2025-01-21T17:12:06.542157Z",
+	"commit_hash": "795aa54071f4f1e3ad7d95ba815fd286cfafab5e",
+	"branch": "tags/release/jsonrpc/9.0.0-next.6",
+	"entries": {
+		"vscode-languageserver-node.tar.gz": {
+			"file": "vscode-languageserver-node.tar.gz",
+			"source": "github.com/microsoft/vscode-languageserver-node@795aa54071f4f1e3ad7d95ba815fd286cfafab5e",
+			"permalink": "https://github.com/microsoft/vscode-languageserver-node/archive/refs/tags/release/jsonrpc/9.0.0-next.6.tar.gz",
+			"downloaded": "2025-01-21T17:12:06.54207Z",
+			"changes": [
+				"generated embed.gen.go file"
+			]
+		}
+	},
+	"args": {
+		"src_repo": "github.com/microsoft/vscode-languageserver-node",
+		"src_ref": "tags/release/jsonrpc/9.0.0-next.6",
+		"archive_args": {
+			"GoEmbed": true
+		}
+	}
 }

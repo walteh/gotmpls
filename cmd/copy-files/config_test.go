@@ -100,7 +100,7 @@ copies:
 
 func TestRunAll(t *testing.T) {
 	// Setup mock provider with test files
-	mock := NewMockProvider()
+	mock := NewMockProvider(t)
 	mock.ClearFiles() // Start with a clean slate
 	mock.AddFile("test.go", []byte(`package foo
 

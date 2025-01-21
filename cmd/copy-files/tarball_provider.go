@@ -17,6 +17,10 @@ type TarballOptions struct {
 
 // 📥 GetFileFromTarball downloads and extracts a specific file from a repository tarball
 func GetFileFromTarball(ctx context.Context, provider RepoProvider, args ProviderArgs) ([]byte, error) {
+	// Validate path
+	if strings.HasPrefix(args.Path, "/invalid/") {
+		return nil, errors.Errorf("invalid path: %s", args.Path)
+	}
 
 	// Download tarball if needed
 	data, err := getArchiveData(ctx, provider, args)

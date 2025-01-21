@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"testing"
 	"time"
 
 	"gitlab.com/tozd/go/errors"
@@ -21,9 +23,10 @@ type MockProvider struct {
 	org        string
 	repo       string
 	path       string
+	t          *testing.T
 }
 
-func NewMockProvider() *MockProvider {
+func NewMockProvider(t *testing.T) *MockProvider {
 	return &MockProvider{
 		files:      make(map[string][]byte), // Create a new map for each instance
 		commitHash: "abc123",
@@ -31,6 +34,7 @@ func NewMockProvider() *MockProvider {
 		org:        "org",
 		repo:       "repo",
 		path:       "path/to/files",
+		t:          t,
 	}
 }
 
@@ -58,8 +62,21 @@ func (m *MockProvider) GetCommitHash(ctx context.Context, args ProviderArgs) (st
 }
 
 func (m *MockProvider) GetPermalink(ctx context.Context, args ProviderArgs, commitHash string, file string) (string, error) {
-	// return the path of the file with file:// prefix
-	return "file://" + filepath.Join(m.path, file), nil
+
+	if m.files[file] == nil {
+		return "", errors.Errorf("file not found: %s", file)
+	}
+
+	// Create a temporary file
+	f := m.t.TempDir()
+
+	err := os.WriteFile(filepath.Join(f, file), m.files[file], 0644)
+	if err != nil {
+		return "", errors.Errorf("writing file: %w", err)
+	}
+
+	// Return a file:// URL to the temporary file
+	return "file://" + filepath.Join(f, file), nil
 }
 
 func (m *MockProvider) GetSourceInfo(ctx context.Context, args ProviderArgs, commitHash string) (string, error) {
@@ -131,4 +148,29 @@ func (m *MockProvider) GetArchiveData() ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+// GetFile returns the content of a file from the mock provider
+func (m *MockProvider) GetFile(ctx context.Context, args ProviderArgs, file string) ([]byte, error) {
+	// Remove the path prefix if it exists
+	cleanFile := strings.TrimPrefix(file, m.path+"/")
+	content, ok := m.files[cleanFile]
+	if !ok {
+		return nil, errors.Errorf("file not found: %s", file)
+	}
+
+	// Create a temporary file
+	f, err := os.CreateTemp("", "mock-file-*.txt")
+	if err != nil {
+		return nil, errors.Errorf("creating temp file: %w", err)
+	}
+	defer f.Close()
+
+	// Write the content
+	if _, err := f.Write(content); err != nil {
+		return nil, errors.Errorf("writing file content: %w", err)
+	}
+
+	// Read back the file
+	return os.ReadFile(f.Name())
 }

@@ -47,7 +47,6 @@ archive {
 	source {
 		repo = "github.com/microsoft/vscode-languageserver-node"
 		ref  = "tags/release/jsonrpc/9.0.0-next.6"
-		path = "."
 	}
 	destination {
 		path = "./gen/git-repo-tarballs"

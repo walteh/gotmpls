@@ -1,78 +1,78 @@
 {
-	"last_updated": "2025-01-21T16:32:51.846028Z",
+	"last_updated": "2025-01-21T17:12:03.704102Z",
 	"commit_hash": "96a07bb5a10cad767e4a70c7fad8c2d09f663712",
 	"branch": "master",
 	"entries": {
 		"README.copy.md": {
 			"file": "README.copy.md",
 			"source": "github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/master/gopls/internal/protocol/generate/README.md",
-			"downloaded": "2025-01-21T16:32:51.845407Z"
+			"permalink": "https://raw.githubusercontent.com/golang/tools/96a07bb5a10cad767e4a70c7fad8c2d09f663712/gopls/internal/protocol/generate/README.md",
+			"downloaded": "2025-01-21T17:12:03.681684Z"
 		},
 		"generate.copy.go": {
 			"file": "generate.copy.go",
 			"source": "github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/master/gopls/internal/protocol/generate/generate.go",
-			"downloaded": "2025-01-21T16:32:51.791997Z"
+			"permalink": "https://raw.githubusercontent.com/golang/tools/96a07bb5a10cad767e4a70c7fad8c2d09f663712/gopls/internal/protocol/generate/generate.go",
+			"downloaded": "2025-01-21T17:12:03.683217Z"
 		},
 		"main.copy.go": {
 			"file": "main.copy.go",
 			"source": "github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/master/gopls/internal/protocol/generate/main.go",
-			"downloaded": "2025-01-21T16:32:51.835307Z",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/96a07bb5a10cad767e4a70c7fad8c2d09f663712/gopls/internal/protocol/generate/main.go",
+			"downloaded": "2025-01-21T17:12:03.703303Z",
 			"changes": [
-				"Line 57: Replaced 'func processinline()' with 'func processinline_old()'",
-				"Line 106: Replaced 'golang.org/x/tools/internal/jsonrpc2' with 'github.com/creachadair/jrpc2'",
-				"Line 135: Replaced 'golang.org/x/tools/internal/jsonrpc2' with 'github.com/creachadair/jrpc2'",
-				"Line 114: Replaced 'reply jsonrpc2.Replier, r jsonrpc2.Request' with 'conn *jrpc2.Server, r *jrpc2.Request'",
-				"Line 145: Replaced 'reply jsonrpc2.Replier, r jsonrpc2.Request' with 'conn *jrpc2.Server, r *jrpc2.Request'",
-				"Line 189: Replaced 'tsprotocol.go' with 'tsprotocol.gen.go'",
-				"Line 156: Replaced 'tsserver.go' with 'tsserver.gen.go'",
-				"Line 125: Replaced 'tsclient.go' with 'tsclient.gen.go'",
-				"Line 213: Replaced 'tsjson.go' with 'tsjson.gen.go'"
+				"Line 56: Replaced 'func processinline()' with 'func processinline_old()'",
+				"Line 105: Replaced 'golang.org/x/tools/internal/jsonrpc2' with 'github.com/creachadair/jrpc2'",
+				"Line 134: Replaced 'golang.org/x/tools/internal/jsonrpc2' with 'github.com/creachadair/jrpc2'",
+				"Line 113: Replaced 'reply jsonrpc2.Replier, r jsonrpc2.Request' with 'conn *jrpc2.Server, r *jrpc2.Request'",
+				"Line 144: Replaced 'reply jsonrpc2.Replier, r jsonrpc2.Request' with 'conn *jrpc2.Server, r *jrpc2.Request'",
+				"Line 188: Replaced 'tsprotocol.go' with 'tsprotocol.gen.go'",
+				"Line 155: Replaced 'tsserver.go' with 'tsserver.gen.go'",
+				"Line 124: Replaced 'tsclient.go' with 'tsclient.gen.go'",
+				"Line 212: Replaced 'tsjson.go' with 'tsjson.gen.go'"
 			]
 		},
 		"main_test.copy.go": {
 			"file": "main_test.copy.go",
 			"source": "github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/master/gopls/internal/protocol/generate/main_test.go",
-			"downloaded": "2025-01-21T16:32:51.796289Z"
+			"permalink": "https://raw.githubusercontent.com/golang/tools/96a07bb5a10cad767e4a70c7fad8c2d09f663712/gopls/internal/protocol/generate/main_test.go",
+			"downloaded": "2025-01-21T17:12:03.682135Z"
 		},
 		"output.copy.go": {
 			"file": "output.copy.go",
 			"source": "github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/master/gopls/internal/protocol/generate/output.go",
-			"downloaded": "2025-01-21T16:32:51.798665Z",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/96a07bb5a10cad767e4a70c7fad8c2d09f663712/gopls/internal/protocol/generate/output.go",
+			"downloaded": "2025-01-21T17:12:03.676807Z",
 			"changes": [
-				"Line 95: Replaced 'func genCase(' with 'func genCase_old('",
-				"Line 137: Replaced 'func genFunc(' with 'func genFunc_old('",
-				"Line 108: Replaced 'UnmarshalJSON(r.Params(), \u0026params)' with 'UnmarshalJSON(r, \u0026params)'",
-				"Line 115: Replaced 'reply(ctx, ' with 'reply_fwd(ctx, conn, r,'",
-				"Line 117: Replaced 'reply(ctx, ' with 'reply_fwd(ctx, conn, r,'",
-				"Line 120: Replaced 'reply(ctx, ' with 'reply_fwd(ctx, conn, r,'",
-				"Line 109: Replaced 'sendParseError(ctx, reply,' with 'sendParseError(ctx, conn, r,'",
-				"Line 30: Replaced 'tsprotocol.go' with 'tsprotocol.gen.go'",
-				"Line 26: Replaced 'tsserver.go' with 'tsserver.gen.go'",
-				"Line 22: Replaced 'tsclient.go' with 'tsclient.gen.go'"
+				"Line 94: Replaced 'func genCase(' with 'func genCase_old('",
+				"Line 136: Replaced 'func genFunc(' with 'func genFunc_old('",
+				"Line 107: Replaced 'UnmarshalJSON(r.Params(), \u0026params)' with 'UnmarshalJSON(r, \u0026params)'",
+				"Line 114: Replaced 'reply(ctx, ' with 'reply_fwd(ctx, conn, r,'",
+				"Line 116: Replaced 'reply(ctx, ' with 'reply_fwd(ctx, conn, r,'",
+				"Line 119: Replaced 'reply(ctx, ' with 'reply_fwd(ctx, conn, r,'",
+				"Line 108: Replaced 'sendParseError(ctx, reply,' with 'sendParseError(ctx, conn, r,'",
+				"Line 29: Replaced 'tsprotocol.go' with 'tsprotocol.gen.go'",
+				"Line 25: Replaced 'tsserver.go' with 'tsserver.gen.go'",
+				"Line 21: Replaced 'tsclient.go' with 'tsclient.gen.go'"
 			]
 		},
 		"tables.copy.go": {
 			"file": "tables.copy.go",
 			"source": "github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/master/gopls/internal/protocol/generate/tables.go",
-			"downloaded": "2025-01-21T16:32:51.7968Z"
+			"permalink": "https://raw.githubusercontent.com/golang/tools/96a07bb5a10cad767e4a70c7fad8c2d09f663712/gopls/internal/protocol/generate/tables.go",
+			"downloaded": "2025-01-21T17:12:03.692444Z"
 		},
 		"typenames.copy.go": {
 			"file": "typenames.copy.go",
 			"source": "github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/master/gopls/internal/protocol/generate/typenames.go",
-			"downloaded": "2025-01-21T16:32:51.790086Z"
+			"permalink": "https://raw.githubusercontent.com/golang/tools/96a07bb5a10cad767e4a70c7fad8c2d09f663712/gopls/internal/protocol/generate/typenames.go",
+			"downloaded": "2025-01-21T17:12:03.695509Z"
 		},
 		"types.copy.go": {
 			"file": "types.copy.go",
 			"source": "github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/master/gopls/internal/protocol/generate/types.go",
-			"downloaded": "2025-01-21T16:32:51.772578Z"
+			"permalink": "https://raw.githubusercontent.com/golang/tools/96a07bb5a10cad767e4a70c7fad8c2d09f663712/gopls/internal/protocol/generate/types.go",
+			"downloaded": "2025-01-21T17:12:03.685151Z"
 		}
 	},
 	"args": {
