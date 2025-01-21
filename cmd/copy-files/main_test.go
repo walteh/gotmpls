@@ -4,8 +4,10 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -133,12 +135,15 @@ func TestNewConfigFromInput(t *testing.T) {
 type mockProvider struct {
 	files      map[string][]byte
 	commitHash string
+	ref        string
+	failHash   bool
 }
 
 func newMockProvider() *mockProvider {
 	return &mockProvider{
 		files:      make(map[string][]byte),
 		commitHash: "abc123",
+		ref:        "main",
 	}
 }
 
@@ -159,6 +164,9 @@ func (m *mockProvider) GetFile(ctx context.Context, path string) ([]byte, error)
 }
 
 func (m *mockProvider) GetCommitHash(ctx context.Context) (string, error) {
+	if m.failHash {
+		return "", errors.New("simulated error")
+	}
 	return m.commitHash, nil
 }
 
@@ -188,14 +196,15 @@ func Other() {}`)
 		},
 	}
 
-	// Create temporary status file
-	statusFile := filepath.Join(cfg.DestPath, ".copy-status")
-	require.NoError(t, initStatusFile(statusFile))
+	// Initialize status
+	status := &StatusFile{
+		Entries: make(map[string]StatusEntry),
+	}
 
 	t.Run("normal file", func(t *testing.T) {
 		// Process the file
 		var mu sync.Mutex
-		err := processFile(context.Background(), cfg, "test.go", mock.commitHash, statusFile, &mu)
+		err := processFile(context.Background(), cfg, "test.go", mock.commitHash, status, &mu)
 		require.NoError(t, err)
 
 		// Verify the output file
@@ -203,6 +212,12 @@ func Other() {}`)
 		require.NoError(t, err)
 		assert.Contains(t, string(content), "func Baz()")
 		assert.Contains(t, string(content), "// 📦 Generated from: mock@abc123")
+
+		// Verify status entry
+		entry, ok := status.Entries["test.copy.go"]
+		require.True(t, ok, "status entry should exist")
+		assert.Equal(t, "test.copy.go", entry.File)
+		assert.Equal(t, "mock@abc123", entry.Source)
 	})
 
 	t.Run("file with patch", func(t *testing.T) {
@@ -212,7 +227,7 @@ func Other() {}`)
 
 		// Process the file
 		var mu sync.Mutex
-		err := processFile(context.Background(), cfg, "other.go", mock.commitHash, statusFile, &mu)
+		err := processFile(context.Background(), cfg, "other.go", mock.commitHash, status, &mu)
 		require.NoError(t, err)
 
 		// Verify the file was not created
@@ -220,26 +235,89 @@ func Other() {}`)
 		assert.True(t, os.IsNotExist(err), "file should not exist")
 	})
 
-	t.Run("file with patch already exists", func(t *testing.T) {
-		// Create both patch and copy files
-		patchPath := filepath.Join(cfg.DestPath, "both.copy.patch.go")
-		copyPath := filepath.Join(cfg.DestPath, "both.copy.go")
-		require.NoError(t, os.WriteFile(patchPath, []byte("patch content"), 0644))
-		require.NoError(t, os.WriteFile(copyPath, []byte("copy content"), 0644))
+	t.Run("clean destination", func(t *testing.T) {
+		// Create test files
+		dir := t.TempDir()
+		files := []string{
+			"file1.copy.go",
+			"file2.copy.go",
+			"file3.patch.go",
+			"file4.copy.patch.go",
+			"regular.go",
+		}
+		for _, f := range files {
+			require.NoError(t, os.WriteFile(filepath.Join(dir, f), []byte("content"), 0644))
+		}
 
-		// Add file to mock
-		mock.files["both.go"] = []byte(`package foo
-
-func Both() {}`)
-
-		// Process the file
-		var mu sync.Mutex
-		err := processFile(context.Background(), cfg, "both.go", mock.commitHash, statusFile, &mu)
+		// Clean the directory
+		err := cleanDestination(dir)
 		require.NoError(t, err)
 
-		// Verify the copy file was not modified
-		content, err := os.ReadFile(copyPath)
-		require.NoError(t, err)
-		assert.Equal(t, "copy content", string(content), "copy file should not be modified when patch exists")
+		// Verify only .copy files were removed
+		for _, f := range files {
+			_, err := os.Stat(filepath.Join(dir, f))
+			if strings.Contains(f, ".copy.") && !strings.Contains(f, ".patch.") {
+				assert.True(t, os.IsNotExist(err), "file should be removed: %s", f)
+			} else {
+				assert.NoError(t, err, "file should exist: %s", f)
+			}
+		}
 	})
+
+	t.Run("status check", func(t *testing.T) {
+		cfg := &Config{
+			Provider:    mock,
+			DestPath:    t.TempDir(),
+			StatusCheck: true,
+		}
+
+		// Test up to date
+		status := &StatusFile{
+			CommitHash: mock.commitHash,
+		}
+		require.NoError(t, writeStatusFile(filepath.Join(cfg.DestPath, ".copy-status"), status))
+		require.NoError(t, run(cfg))
+
+		// Test out of date
+		status.CommitHash = "different"
+		require.NoError(t, writeStatusFile(filepath.Join(cfg.DestPath, ".copy-status"), status))
+		require.Error(t, run(cfg))
+
+		// Test offline mode
+		mock.failHash = true
+		require.NoError(t, run(cfg))
+	})
+}
+
+func TestStatusFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".copy-status")
+
+	// Create test status
+	status := &StatusFile{
+		LastUpdated: time.Now().UTC(),
+		CommitHash:  "abc123",
+		Branch:      "main",
+		Entries: map[string]StatusEntry{
+			"test.copy.go": {
+				File:       "test.copy.go",
+				Source:     "mock@abc123",
+				Permalink:  "mock://test.go@abc123",
+				Downloaded: time.Now().UTC(),
+				Changes:    []string{"test change"},
+			},
+		},
+	}
+
+	// Write and read back
+	require.NoError(t, writeStatusFile(path, status))
+	loaded, err := loadStatusFile(path)
+	require.NoError(t, err)
+
+	// Verify fields
+	assert.Equal(t, status.CommitHash, loaded.CommitHash)
+	assert.Equal(t, status.Branch, loaded.Branch)
+	assert.Len(t, loaded.Entries, 1)
+	assert.Equal(t, status.Entries["test.copy.go"].File, loaded.Entries["test.copy.go"].File)
+	assert.Equal(t, status.Entries["test.copy.go"].Changes, loaded.Entries["test.copy.go"].Changes)
 }

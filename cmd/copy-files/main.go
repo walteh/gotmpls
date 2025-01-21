@@ -35,7 +35,16 @@ type StatusEntry struct {
 	Source     string    `json:"source"`
 	Permalink  string    `json:"permalink"`
 	Downloaded time.Time `json:"downloaded"`
-	Changes    []string  `json:"changes"`
+	Changes    []string  `json:"changes,omitempty"`
+}
+
+// 📦 Status file structure
+type StatusFile struct {
+	LastUpdated time.Time              `json:"last_updated"`
+	CommitHash  string                 `json:"commit_hash"`
+	Branch      string                 `json:"branch"`
+	Entries     map[string]StatusEntry `json:"entries"`
+	Warnings    []string               `json:"warnings,omitempty"`
 }
 
 // 🔄 Replacement represents a string replacement
@@ -52,6 +61,8 @@ type Input struct {
 	DestPath     string     // Local destination path
 	Replacements arrayFlags // String replacements
 	IgnoreFiles  arrayFlags // Files to ignore
+	Clean        bool       // Whether to clean destination directory
+	StatusCheck  bool       // Whether to only check status
 }
 
 // 🌐 RepoProvider interface for different Git providers
@@ -82,6 +93,9 @@ type Config struct {
 	DestPath     string
 	Replacements []Replacement
 	IgnoreFiles  []string
+	Clean        bool   // Whether to clean destination directory
+	StatusCheck  bool   // Whether to only check status
+	SrcRef       string // Source branch/ref
 }
 
 func NewConfigFromInput(input Input) (*Config, error) {
@@ -103,6 +117,9 @@ func NewConfigFromInput(input Input) (*Config, error) {
 		DestPath:     input.DestPath,
 		Replacements: replacements,
 		IgnoreFiles:  []string(input.IgnoreFiles),
+		Clean:        input.Clean,
+		StatusCheck:  input.StatusCheck,
+		SrcRef:       input.SrcRef,
 	}, nil
 }
 
@@ -178,9 +195,28 @@ func (g *GithubProvider) GetFile(ctx context.Context, path string) ([]byte, erro
 }
 
 func (g *GithubProvider) GetCommitHash(ctx context.Context) (string, error) {
+	// Try the specified ref first
+	hash, err := g.tryGetCommitHash(ctx, g.ref)
+	if err == nil {
+		return hash, nil
+	}
+
+	// If ref is "main", try "master" as fallback
+	if g.ref == "main" {
+		hash, err = g.tryGetCommitHash(ctx, "master")
+		if err == nil {
+			g.ref = "master" // Update ref to the working one
+			return hash, nil
+		}
+	}
+
+	return "", errors.Errorf("getting commit hash: %w", err)
+}
+
+func (g *GithubProvider) tryGetCommitHash(ctx context.Context, ref string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "ls-remote",
 		fmt.Sprintf("https://github.com/%s/%s.git", g.org, g.repo),
-		g.ref)
+		ref)
 
 	out, err := cmd.Output()
 	if err != nil {
@@ -208,11 +244,13 @@ func main() {
 	// 🎯 Parse command line flags
 	var input Input
 	flag.StringVar(&input.SrcRepo, "src-repo", "", "Source repository (e.g. github.com/org/repo)")
-	flag.StringVar(&input.SrcRef, "ref", "master", "Source branch/ref")
+	flag.StringVar(&input.SrcRef, "ref", "main", "Source branch/ref")
 	flag.StringVar(&input.SrcPath, "src-path", "", "Source path within repository")
 	flag.StringVar(&input.DestPath, "dest-path", "", "Destination path")
 	flag.Var(&input.Replacements, "replacements", "JSON array or comma-separated list of replacements in old:new format")
 	flag.Var(&input.IgnoreFiles, "ignore", "JSON array or comma-separated list of files to ignore")
+	flag.BoolVar(&input.Clean, "clean", false, "Clean destination directory before copying")
+	flag.BoolVar(&input.StatusCheck, "status", false, "Check if files are up to date")
 	flag.Parse()
 
 	// 🔍 Validate required flags
@@ -249,27 +287,48 @@ func main() {
 func run(cfg *Config) error {
 	ctx := context.Background()
 
-	// 📁 Create destination directory
-	if err := os.MkdirAll(cfg.DestPath, 0755); err != nil {
-		return errors.Errorf("creating destination directory: %w", err)
+	// 📝 Load or initialize status file
+	statusFile := filepath.Join(cfg.DestPath, ".copy-status")
+	status, err := loadStatusFile(statusFile)
+	if err != nil {
+		status = &StatusFile{
+			Entries: make(map[string]StatusEntry),
+		}
 	}
 
-	// 📝 Initialize status file
-	statusFile := filepath.Join(cfg.DestPath, ".copy-status")
-	if err := initStatusFile(statusFile); err != nil {
-		return errors.Errorf("initializing status file: %w", err)
+	// 🧹 Clean if requested
+	if cfg.Clean {
+		if err := cleanDestination(cfg.DestPath); err != nil {
+			return errors.Errorf("cleaning destination: %w", err)
+		}
 	}
 
 	// 🔍 Get commit hash
 	commitHash, err := cfg.Provider.GetCommitHash(ctx)
 	if err != nil {
+		if cfg.StatusCheck {
+			fmt.Fprintf(os.Stderr, "%s Unable to check remote status: %v\n", warn("⚠️"), err)
+			return nil // Not an error for status check
+		}
 		return errors.Errorf("getting commit hash: %w", err)
 	}
 
 	// 📋 List files
 	files, err := cfg.Provider.ListFiles(ctx)
 	if err != nil {
+		if cfg.StatusCheck {
+			fmt.Fprintf(os.Stderr, "%s Unable to list remote files: %v\n", warn("⚠️"), err)
+			return nil // Not an error for status check
+		}
 		return errors.Errorf("listing files: %w", err)
+	}
+
+	// Status check only
+	if cfg.StatusCheck {
+		if status.CommitHash != commitHash {
+			return errors.New("files are out of date")
+		}
+		return nil
 	}
 
 	// 🔄 Process each file
@@ -278,7 +337,7 @@ func run(cfg *Config) error {
 	for _, file := range files {
 		file := file // capture for goroutine
 		g.Go(func() error {
-			return processFile(ctx, cfg, file, commitHash, statusFile, &mu)
+			return processFile(ctx, cfg, file, commitHash, status, &mu)
 		})
 	}
 
@@ -286,12 +345,72 @@ func run(cfg *Config) error {
 		return err
 	}
 
+	// Update status file metadata
+	status.LastUpdated = time.Now().UTC()
+	status.CommitHash = commitHash
+	status.Branch = cfg.SrcRef
+
+	// Write final status
+	if err := writeStatusFile(statusFile, status); err != nil {
+		return errors.Errorf("writing status file: %w", err)
+	}
+
 	fmt.Printf("\n%s Successfully processed %d files\n", emoji("✨"), len(files))
 	fmt.Printf("%s See %s for detailed information\n", emoji("📝"), info(statusFile))
 	return nil
 }
 
-func processFile(ctx context.Context, cfg *Config, file, commitHash, statusFile string, mu *sync.Mutex) error {
+// 🧹 Clean destination directory
+func cleanDestination(destPath string) error {
+	entries, err := os.ReadDir(destPath)
+	if err != nil {
+		return errors.Errorf("reading directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.Contains(name, ".copy.") && !strings.Contains(name, ".patch.") {
+			if err := os.Remove(filepath.Join(destPath, name)); err != nil {
+				return errors.Errorf("removing file: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+// 📝 Load status file
+func loadStatusFile(path string) (*StatusFile, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var status StatusFile
+	if err := json.Unmarshal(data, &status); err != nil {
+		return nil, errors.Errorf("parsing status file: %w", err)
+	}
+
+	return &status, nil
+}
+
+// 📝 Write status file
+func writeStatusFile(path string, status *StatusFile) error {
+	data, err := json.MarshalIndent(status, "", "  ")
+	if err != nil {
+		return errors.Errorf("marshaling status: %w", err)
+	}
+
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return errors.Errorf("writing status file: %w", err)
+	}
+
+	return nil
+}
+
+func processFile(ctx context.Context, cfg *Config, file, commitHash string, status *StatusFile, mu *sync.Mutex) error {
 	fmt.Printf("%s Processing %s\n", emoji("📥"), info(file))
 
 	// 📥 Download file
@@ -383,46 +502,10 @@ func processFile(ctx context.Context, cfg *Config, file, commitHash, statusFile 
 
 	// Update status file (with mutex for concurrent access)
 	mu.Lock()
-	err = updateStatusFile(statusFile, entry)
+	status.Entries[entry.File] = entry
 	mu.Unlock()
-	if err != nil {
-		return errors.Errorf("updating status file: %w", err)
-	}
 
 	fmt.Printf("%s Processed %s\n", emoji("✅"), success(entry.File))
-	return nil
-}
-
-func initStatusFile(path string) error {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		return errors.Errorf("opening status file: %w", err)
-	}
-	defer f.Close()
-
-	fmt.Fprintf(f, "# 📦 Copy Status File\n")
-	fmt.Fprintf(f, "# 📝 Tracks changes made to copied files\n")
-	fmt.Fprintf(f, "# ⚠️  Do not edit this file manually\n\n")
-	return nil
-}
-
-func updateStatusFile(path string, entry StatusEntry) error {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		return errors.Errorf("opening status file: %w", err)
-	}
-	defer f.Close()
-
-	fmt.Fprintf(f, "## File: %s\n", entry.File)
-	fmt.Fprintf(f, "- 📦 Source: %s\n", entry.Source)
-	fmt.Fprintf(f, "- 🔗 Permalink: %s\n", entry.Permalink)
-	fmt.Fprintf(f, "- ⏰ Downloaded: %s\n", entry.Downloaded.Format(time.RFC3339))
-	fmt.Fprintf(f, "- 📝 Changes:\n")
-	for _, change := range entry.Changes {
-		fmt.Fprintf(f, "  - %s\n", change)
-	}
-	fmt.Fprintf(f, "---\n")
-
 	return nil
 }
 

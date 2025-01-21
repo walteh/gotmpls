@@ -136,6 +136,8 @@ tasks:
             - |
                 go run ./cmd/copy-files --src-repo "{{.SRC_REPO}}" --ref "{{.SRC_REF}}" --src-path "{{.SRC_PATH}}" --dest-path "{{.DEST}}" \
                      --replacements '{{toJson .STRINGS_TO_REPLACE}}' --ignore '{{toJson .FILES_TO_IGNORE}}'
+        status:
+            - go run ./cmd/copy-files --src-repo "{{.SRC_REPO}}" --ref "{{.SRC_REF}}" --src-path "{{.SRC_PATH}}" --dest-path "{{.DEST}}" --status
 
     copy-lsp-generator:
         desc: copy LSP protocol generator files from golang/tools
