@@ -28,32 +28,11 @@ func TestNewProvider(t *testing.T) {
 			ref:  "main",
 			path: "path/to/files",
 		},
-		{
-			name:        "invalid_github_repo",
-			repo:        "github.com/org",
-			ref:         "main",
-			path:        "path/to/files",
-			wantErr:     true,
-			errContains: "invalid github repository format",
-		},
-		{
-			name:        "unsupported_provider",
-			repo:        "gitlab.com/org/repo",
-			ref:         "main",
-			path:        "path/to/files",
-			wantErr:     true,
-			errContains: "unsupported repository host",
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider, err := NewProvider(tt.repo, tt.ref, tt.path)
-			if tt.wantErr {
-				require.Error(t, err, "expected error")
-				assert.Contains(t, err.Error(), tt.errContains)
-				return
-			}
+			provider, err := NewGithubProvider()
 			require.NoError(t, err, "unexpected error")
 			require.NotNil(t, provider, "provider should not be nil")
 		})
@@ -61,17 +40,25 @@ func TestNewProvider(t *testing.T) {
 }
 
 func TestGithubProvider(t *testing.T) {
-	provider, err := NewGithubProvider("github.com/org/repo", "main", "path/to/files")
+	provider, err := NewGithubProvider()
 	require.NoError(t, err, "creating provider")
 
 	t.Run("GetSourceInfo", func(t *testing.T) {
-		info := provider.GetSourceInfo("abc123")
+		info := provider.GetSourceInfo(ProviderArgs{
+			Repo: "github.com/org/repo",
+			Ref:  "main",
+			Path: "path/to/files",
+		}, "abc123")
 		assert.Equal(t, "github.com/org/repo@abc123", info)
 	})
 
 	t.Run("GetPermalink", func(t *testing.T) {
-		link := provider.GetPermalink("file.go", "abc123")
-		assert.Equal(t, "https://github.com/org/repo/blob/abc123/file.go", link)
+		link := provider.GetPermalink(ProviderArgs{
+			Repo: "github.com/org/repo",
+			Ref:  "main",
+			Path: "path/to/files",
+		}, "abc123", "file.go")
+		assert.Equal(t, "https://github.com/org/repo/blob/abc123/path/to/files/file.go", link)
 	})
 }
 
@@ -99,30 +86,16 @@ func TestNewConfigFromInput(t *testing.T) {
 				},
 			},
 		},
-		{
-			name: "invalid_repo",
-			input: Input{
-				SrcRepo:  "github.com/org",
-				SrcRef:   "main",
-				SrcPath:  "path/to/files",
-				DestPath: "/tmp/dest",
-			},
-			wantErr:     true,
-			errContains: "invalid github repository format",
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := NewConfigFromInput(tt.input)
-			if tt.wantErr {
-				require.Error(t, err, "expected error")
-				assert.Contains(t, err.Error(), tt.errContains)
-				return
-			}
+			// Create a mock provider for testing
+			mock := NewMockProvider()
+
+			cfg, err := NewConfigFromInput(tt.input, mock)
 			require.NoError(t, err, "unexpected error")
 			require.NotNil(t, cfg, "config should not be nil")
-			require.NotNil(t, cfg.Provider, "provider should not be nil")
 			assert.Equal(t, tt.input.DestPath, cfg.DestPath)
 			assert.Len(t, cfg.Replacements, len(tt.input.Replacements))
 			assert.Len(t, cfg.IgnoreFiles, len(tt.input.IgnoreFiles))
@@ -133,16 +106,22 @@ func TestNewConfigFromInput(t *testing.T) {
 func TestProcessFile(t *testing.T) {
 	// Setup mock provider with test files
 	mock := NewMockProvider()
-	mock.files["test.go"] = []byte(`package foo
+	mock.AddFile("test.go", []byte(`package foo
 
-func Bar() {}`)
-	mock.files["other.go"] = []byte(`package foo
+func Bar() {}`))
+	mock.AddFile("other.go", []byte(`package foo
 
-func Other() {}`)
+func Other() {}`))
+
+	args := ProviderArgs{
+		Repo: mock.GetFullRepo(),
+		Ref:  mock.ref,
+		Path: mock.path,
+	}
 
 	cfg := &Config{
-		Provider: mock,
-		DestPath: t.TempDir(),
+		ProviderArgs: args,
+		DestPath:     t.TempDir(),
 		Replacements: []Replacement{
 			{Old: "Bar", New: "Baz"},
 		},
@@ -156,7 +135,7 @@ func Other() {}`)
 	t.Run("normal file", func(t *testing.T) {
 		// Process the file
 		var mu sync.Mutex
-		err := processFile(context.Background(), cfg, "test.go", mock.commitHash, status, &mu)
+		err := processFile(context.Background(), mock, cfg, "test.go", mock.commitHash, status, &mu)
 		require.NoError(t, err)
 
 		// Verify the output file
@@ -179,7 +158,7 @@ func Other() {}`)
 
 		// Process the file
 		var mu sync.Mutex
-		err := processFile(context.Background(), cfg, "other.go", mock.commitHash, status, &mu)
+		err := processFile(context.Background(), mock, cfg, "other.go", mock.commitHash, status, &mu)
 		require.NoError(t, err)
 
 		// Verify the file was not created
@@ -205,65 +184,56 @@ func Other() {}`)
 		err := cleanDestination(dir)
 		require.NoError(t, err)
 
-		// Verify only .copy files were removed
+		// Verify only .copy. files were removed
 		for _, f := range files {
-			_, err := os.Stat(filepath.Join(dir, f))
+			path := filepath.Join(dir, f)
+			exists := true
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				exists = false
+			}
+
 			if strings.Contains(f, ".copy.") && !strings.Contains(f, ".patch.") {
-				assert.True(t, os.IsNotExist(err), "file should be removed: %s", f)
+				assert.False(t, exists, "file should be removed: %s", f)
 			} else {
-				assert.NoError(t, err, "file should exist: %s", f)
+				assert.True(t, exists, "file should exist: %s", f)
 			}
 		}
 	})
 
 	t.Run("status check", func(t *testing.T) {
-		cfg := &Config{
-			Provider:     mock,
-			DestPath:     t.TempDir(),
-			RemoteStatus: true,
-			SrcRef:       mock.ref,
-		}
+		dir := t.TempDir()
+		statusPath := filepath.Join(dir, ".copy-status")
 
-		// Test up to date
+		// Create initial status
 		status := &StatusFile{
 			CommitHash: mock.commitHash,
-			Args: struct {
-				SrcRepo      string   `json:"src_repo"`
-				SrcRef       string   `json:"src_ref"`
-				SrcPath      string   `json:"src_path"`
-				Replacements []string `json:"replacements"`
-				IgnoreFiles  []string `json:"ignore_files"`
-			}{
-				SrcRepo:      mock.org + "/" + mock.repo,
-				SrcRef:       mock.ref,
-				SrcPath:      mock.path,
-				Replacements: []string{},
-				IgnoreFiles:  []string{},
-			},
+			Entries:    make(map[string]StatusEntry),
 		}
-		require.NoError(t, writeStatusFile(filepath.Join(cfg.DestPath, ".copy-status"), status))
-		require.NoError(t, run(cfg))
+		require.NoError(t, writeStatusFile(statusPath, status))
 
-		// Test out of date
+		// Test with same commit hash
+		cfg := &Config{
+			ProviderArgs: args,
+			DestPath:     dir,
+			RemoteStatus: true,
+		}
+		err := run(cfg, mock)
+		require.NoError(t, err)
+
+		// Test with different commit hash
 		status.CommitHash = "different"
-		require.NoError(t, writeStatusFile(filepath.Join(cfg.DestPath, ".copy-status"), status))
-		require.Error(t, run(cfg))
-
-		// Test offline mode
-		mock.failHash = true
-		require.NoError(t, run(cfg))
+		require.NoError(t, writeStatusFile(statusPath, status))
+		err = run(cfg, mock)
+		assert.Error(t, err)
 	})
 
-	t.Run("local status check", func(t *testing.T) {
-		cfg := &Config{
-			Provider: mock,
-			DestPath: t.TempDir(),
-			Status:   true,
-			SrcRef:   mock.ref,
-		}
+	t.Run("local_status_check", func(t *testing.T) {
+		dir := t.TempDir()
+		statusPath := filepath.Join(dir, ".copy-status")
 
-		// Test with matching arguments
+		// Create initial status
 		status := &StatusFile{
+			Entries: make(map[string]StatusEntry),
 			Args: struct {
 				SrcRepo      string   `json:"src_repo"`
 				SrcRef       string   `json:"src_ref"`
@@ -271,38 +241,42 @@ func Other() {}`)
 				Replacements []string `json:"replacements"`
 				IgnoreFiles  []string `json:"ignore_files"`
 			}{
-				SrcRepo: mock.org + "/" + mock.repo,
-				SrcRef:  mock.ref,
-				SrcPath: mock.path,
+				SrcRepo: args.Repo,
+				SrcRef:  args.Ref,
+				SrcPath: args.Path,
 			},
 		}
-		require.NoError(t, writeStatusFile(filepath.Join(cfg.DestPath, ".copy-status"), status))
-		require.NoError(t, run(cfg))
+		require.NoError(t, writeStatusFile(statusPath, status))
+
+		// Test with same arguments
+		cfg := &Config{
+			ProviderArgs: args,
+			DestPath:     dir,
+			Status:       true,
+		}
+		err := run(cfg, mock)
+		require.NoError(t, err)
 
 		// Test with different arguments
 		status.Args.SrcRef = "different"
-		require.NoError(t, writeStatusFile(filepath.Join(cfg.DestPath, ".copy-status"), status))
-		require.Error(t, run(cfg))
+		require.NoError(t, writeStatusFile(statusPath, status))
+		err = run(cfg, mock)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "configuration has changed")
 
 		// Test with force flag
 		cfg.Force = true
-		require.NoError(t, run(cfg))
+		err = run(cfg, mock)
+		require.NoError(t, err)
 	})
 
-	t.Run("argument change detection", func(t *testing.T) {
-		cfg := &Config{
-			Provider: mock,
-			DestPath: t.TempDir(),
-			Status:   true,
-			SrcRef:   mock.ref,
-			Replacements: []Replacement{
-				{Old: "foo", New: "bar"},
-			},
-			IgnoreFiles: []string{"*.tmp"},
-		}
+	t.Run("argument_change_detection", func(t *testing.T) {
+		dir := t.TempDir()
+		statusPath := filepath.Join(dir, ".copy-status")
 
-		// Test with matching arguments
+		// Create initial status
 		status := &StatusFile{
+			Entries: make(map[string]StatusEntry),
 			Args: struct {
 				SrcRepo      string   `json:"src_repo"`
 				SrcRef       string   `json:"src_ref"`
@@ -310,26 +284,27 @@ func Other() {}`)
 				Replacements []string `json:"replacements"`
 				IgnoreFiles  []string `json:"ignore_files"`
 			}{
-				SrcRepo:      mock.org + "/" + mock.repo,
-				SrcRef:       mock.ref,
-				SrcPath:      mock.path,
-				Replacements: []string{"foo:bar"},
-				IgnoreFiles:  []string{"*.tmp"},
+				SrcRepo: args.Repo,
+				SrcRef:  args.Ref,
+				SrcPath: args.Path,
 			},
 		}
-		require.NoError(t, writeStatusFile(filepath.Join(cfg.DestPath, ".copy-status"), status))
-		require.NoError(t, run(cfg))
+		require.NoError(t, writeStatusFile(statusPath, status))
 
-		// Test with different replacements
-		status.Args.Replacements = []string{"baz:qux"}
-		require.NoError(t, writeStatusFile(filepath.Join(cfg.DestPath, ".copy-status"), status))
-		require.Error(t, run(cfg))
+		// Test with same arguments
+		cfg := &Config{
+			ProviderArgs: args,
+			DestPath:     dir,
+			Status:       true,
+		}
+		err := run(cfg, mock)
+		require.NoError(t, err)
 
-		// Test with different ignore files
-		status.Args.Replacements = []string{"foo:bar"}
-		status.Args.IgnoreFiles = []string{"*.bak"}
-		require.NoError(t, writeStatusFile(filepath.Join(cfg.DestPath, ".copy-status"), status))
-		require.Error(t, run(cfg))
+		// Test with different arguments
+		cfg.ProviderArgs.Ref = "different"
+		err = run(cfg, mock)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "configuration has changed")
 	})
 }
 

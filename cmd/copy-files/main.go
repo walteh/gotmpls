@@ -78,36 +78,22 @@ type Input struct {
 // 🌐 RepoProvider interface for different Git providers
 type RepoProvider interface {
 	// ListFiles returns a list of files in the given path
-	ListFiles(ctx context.Context) ([]string, error)
+	ListFiles(ctx context.Context, args ProviderArgs) ([]string, error)
 	// GetFile downloads a specific file
-	GetFile(ctx context.Context, path string) ([]byte, error)
+	GetFile(ctx context.Context, args ProviderArgs, path string) ([]byte, error)
 	// GetCommitHash returns the commit hash for the current ref
-	GetCommitHash(ctx context.Context) (string, error)
+	GetCommitHash(ctx context.Context, args ProviderArgs) (string, error)
 	// GetPermalink returns a permanent link to the file
-	GetPermalink(path, commitHash string) string
+	GetPermalink(args ProviderArgs, commitHash string, file string) string
 	// GetSourceInfo returns a string describing the source (e.g. "github.com/org/repo@hash")
-	GetSourceInfo(commitHash string) string
-}
-
-// 🏭 Provider factory
-func NewProvider(repo, ref, path string) (RepoProvider, error) {
-	// Support mock provider in tests
-	if strings.HasPrefix(repo, "github.com/org/repo") {
-		mock := NewMockProvider()
-		mock.ref = ref
-		mock.path = path
-		return mock, nil
-	}
-
-	if strings.HasPrefix(repo, "github.com/") {
-		return NewGithubProvider(repo, ref, path)
-	}
-	return nil, errors.Errorf("unsupported repository host: %s", repo)
+	GetSourceInfo(args ProviderArgs, commitHash string) string
+	// GetArchiveUrl returns the URL to download the repository archive
+	GetArchiveUrl(ctx context.Context, args ProviderArgs) (string, error)
 }
 
 // 📦 Config holds the processed configuration
 type Config struct {
-	Provider     RepoProvider
+	ProviderArgs ProviderArgs
 	DestPath     string
 	Replacements []Replacement
 	IgnoreFiles  []string
@@ -116,18 +102,14 @@ type Config struct {
 	RemoteStatus bool   // Whether to check remote status
 	Force        bool   // Whether to force update even if status is ok
 	SrcRef       string // Source branch/ref
+	UseTarball   bool   // Whether to use tarball-based file access
+	CacheDir     string // Directory for caching tarballs (only used if UseTarball is true)
 }
 
-func NewConfigFromInput(input Input) (*Config, error) {
-	provider, err := NewProvider(input.SrcRepo, input.SrcRef, input.SrcPath)
-	if err != nil {
-		return nil, errors.Errorf("creating provider: %w", err)
-	}
+// 🏭 Provider factory
 
-	// Set fallback branch if using GithubProvider
-	if gh, ok := provider.(*GithubProvider); ok {
-		gh.fallbackBranch = "master" // Default fallback
-	}
+// 🏭 Create config from input (backward compatibility)
+func NewConfigFromInput(input Input, provider RepoProvider) (*Config, error) {
 
 	replacements := make([]Replacement, 0, len(input.Replacements))
 	for _, r := range input.Replacements {
@@ -137,8 +119,19 @@ func NewConfigFromInput(input Input) (*Config, error) {
 		}
 	}
 
+	// Get cache directory for tarball mode
+	execPath, err := os.Executable()
+	if err != nil {
+		return nil, errors.Errorf("getting executable path: %w", err)
+	}
+	cacheDir := filepath.Join(filepath.Dir(execPath), "..", "gen", "git-repo-tarballs")
+
 	return &Config{
-		Provider:     provider,
+		ProviderArgs: ProviderArgs{
+			Repo: input.SrcRepo,
+			Ref:  input.SrcRef,
+			Path: input.SrcPath,
+		},
 		DestPath:     input.DestPath,
 		Replacements: replacements,
 		IgnoreFiles:  []string(input.IgnoreFiles),
@@ -147,38 +140,42 @@ func NewConfigFromInput(input Input) (*Config, error) {
 		RemoteStatus: input.RemoteStatus,
 		Force:        input.Force,
 		SrcRef:       input.SrcRef,
+		UseTarball:   false, // Default to false for backward compatibility
+		CacheDir:     cacheDir,
 	}, nil
+}
+
+type ProviderArgs struct {
+	Repo string
+	Ref  string
+	Path string
 }
 
 // 🏗️ Github implementation
 type GithubProvider struct {
-	org            string // Parsed from repo URL
-	repo           string // Parsed from repo URL
-	ref            string
-	path           string
-	fallbackBranch string // Fallback branch if ref doesn't exist
 }
 
-func NewGithubProvider(repo, ref, path string) (*GithubProvider, error) {
-	// Remove github.com/ prefix
-	repoPath := strings.TrimPrefix(repo, "github.com/")
-	parts := strings.Split(repoPath, "/")
-	if len(parts) != 2 {
-		return nil, errors.Errorf("invalid github repository format: %s", repo)
+func NewGithubProvider() (*GithubProvider, error) {
+
+	return &GithubProvider{}, nil
+}
+
+func parseGithubRepo(repo string) (org string, name string, err error) {
+	parts := strings.Split(repo, "/")
+	if len(parts) != 3 {
+		return "", "", errors.Errorf("invalid github repository format: %s", repo)
+	}
+	return parts[1], parts[2], nil
+}
+
+func (g *GithubProvider) ListFiles(ctx context.Context, args ProviderArgs) ([]string, error) {
+	org, repo, err := parseGithubRepo(args.Repo)
+	if err != nil {
+		return nil, errors.Errorf("parsing github repository: %w", err)
 	}
 
-	return &GithubProvider{
-		org:            parts[0],
-		repo:           parts[1],
-		ref:            ref,
-		path:           path,
-		fallbackBranch: "master", // Default fallback
-	}, nil
-}
-
-func (g *GithubProvider) ListFiles(ctx context.Context) ([]string, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s?ref=%s",
-		g.org, g.repo, g.path, g.ref)
+		org, repo, args.Path, args.Ref)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -205,9 +202,14 @@ func (g *GithubProvider) ListFiles(ctx context.Context) ([]string, error) {
 	return result, nil
 }
 
-func (g *GithubProvider) GetFile(ctx context.Context, path string) ([]byte, error) {
-	url := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/%s",
-		g.org, g.repo, g.ref, path)
+func (g *GithubProvider) GetFile(ctx context.Context, args ProviderArgs, file string) ([]byte, error) {
+	org, repo, err := parseGithubRepo(args.Repo)
+	if err != nil {
+		return nil, errors.Errorf("parsing github repository: %w", err)
+	}
+
+	url := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/%s/%s",
+		org, repo, args.Ref, args.Path, file)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -223,29 +225,25 @@ func (g *GithubProvider) GetFile(ctx context.Context, path string) ([]byte, erro
 	return io.ReadAll(resp.Body)
 }
 
-func (g *GithubProvider) GetCommitHash(ctx context.Context) (string, error) {
+func (g *GithubProvider) GetCommitHash(ctx context.Context, args ProviderArgs) (string, error) {
 	// Try the specified ref first
-	hash, err := g.tryGetCommitHash(ctx, g.ref)
+	hash, err := g.tryGetCommitHash(ctx, args)
 	if err == nil {
 		return hash, nil
-	}
-
-	// If ref is the default branch, try fallback
-	if g.ref == "main" || g.ref == "master" {
-		hash, err = g.tryGetCommitHash(ctx, g.fallbackBranch)
-		if err == nil {
-			g.ref = g.fallbackBranch // Update ref to the working one
-			return hash, nil
-		}
 	}
 
 	return "", errors.Errorf("getting commit hash: %w", err)
 }
 
-func (g *GithubProvider) tryGetCommitHash(ctx context.Context, ref string) (string, error) {
+func (g *GithubProvider) tryGetCommitHash(ctx context.Context, args ProviderArgs) (string, error) {
+	org, repo, err := parseGithubRepo(args.Repo)
+	if err != nil {
+		return "", errors.Errorf("parsing github repository: %w", err)
+	}
+
 	cmd := exec.CommandContext(ctx, "git", "ls-remote",
-		fmt.Sprintf("https://github.com/%s/%s.git", g.org, g.repo),
-		ref)
+		fmt.Sprintf("https://github.com/%s/%s.git", org, repo),
+		args.Ref)
 
 	out, err := cmd.Output()
 	if err != nil {
@@ -260,13 +258,31 @@ func (g *GithubProvider) tryGetCommitHash(ctx context.Context, ref string) (stri
 	return parts[0], nil
 }
 
-func (g *GithubProvider) GetPermalink(path, commitHash string) string {
-	return fmt.Sprintf("https://github.com/%s/%s/blob/%s/%s",
-		g.org, g.repo, commitHash, path)
+func (g *GithubProvider) GetPermalink(args ProviderArgs, commitHash string, file string) string {
+	org, repo, err := parseGithubRepo(args.Repo)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("https://github.com/%s/%s/blob/%s/%s/%s",
+		org, repo, commitHash, args.Path, file)
 }
 
-func (g *GithubProvider) GetSourceInfo(commitHash string) string {
-	return fmt.Sprintf("github.com/%s/%s@%s", g.org, g.repo, commitHash)
+func (g *GithubProvider) GetSourceInfo(args ProviderArgs, commitHash string) string {
+	org, repo, err := parseGithubRepo(args.Repo)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("github.com/%s/%s@%s", org, repo, commitHash)
+}
+
+// GetArchiveUrl returns the URL to download the repository archive
+func (g *GithubProvider) GetArchiveUrl(ctx context.Context, args ProviderArgs) (string, error) {
+	org, repo, err := parseGithubRepo(args.Repo)
+	if err != nil {
+		return "", errors.Errorf("parsing github repository: %w", err)
+	}
+	return fmt.Sprintf("https://github.com/%s/%s/archive/refs/%s.tar.gz",
+		org, repo, args.Ref), nil
 }
 
 func main() {
@@ -286,6 +302,12 @@ func main() {
 	flag.BoolVar(&input.Force, "force", false, "Force update even if status is ok")
 	flag.Parse()
 
+	gh, err := NewGithubProvider()
+	if err != nil {
+		fmt.Printf("%s %v\n", errfmt("❌"), err)
+		os.Exit(1)
+	}
+
 	// 🔍 Check if using config file
 	if configFile != "" {
 		cfg, err := LoadConfig(configFile)
@@ -294,7 +316,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		if err := cfg.RunAll(input.Clean, input.Status, input.RemoteStatus, input.Force); err != nil {
+		if err := cfg.RunAll(input.Clean, input.Status, input.RemoteStatus, input.Force, gh); err != nil {
 			fmt.Printf("%s %v\n", errfmt("❌"), err)
 			os.Exit(1)
 		}
@@ -320,25 +342,27 @@ func main() {
 	}
 
 	// 🚀 Run the copy operation
-	cfg, err := NewConfigFromInput(input)
+	cfg, err := NewConfigFromInput(input, gh)
 	if err != nil {
 		fmt.Printf("%s %v\n", errfmt("❌"), err)
 		os.Exit(1)
 	}
 
-	if err := run(cfg); err != nil {
+	if err := run(cfg, gh); err != nil {
 		fmt.Printf("%s %v\n", errfmt("❌"), err)
 		os.Exit(1)
 	}
 }
 
-func run(cfg *Config) error {
+func run(cfg *Config, provider RepoProvider) error {
 	ctx := context.Background()
 
 	// 📝 Load or initialize status file
 	statusFile := filepath.Join(cfg.DestPath, ".copy-status")
+	fmt.Printf("🔍 Loading status file from: %s\n", info(statusFile))
 	status, err := loadStatusFile(statusFile)
 	if err != nil {
+		fmt.Printf("📝 Creating new status file (error loading: %v)\n", warn(err))
 		status = &StatusFile{
 			Entries: make(map[string]StatusEntry),
 		}
@@ -346,24 +370,18 @@ func run(cfg *Config) error {
 
 	// 🔍 Check if arguments have changed
 	if cfg.Status || cfg.RemoteStatus {
+		fmt.Printf("🔍 Checking arguments (status: %v, remote: %v, force: %v)\n",
+			cfg.Status, cfg.RemoteStatus, cfg.Force)
 		if !cfg.Force && status.Args.SrcRepo != "" {
-			// Get provider info
-			var srcRepo, srcPath string
-			switch p := cfg.Provider.(type) {
-			case *GithubProvider:
-				srcRepo = p.org + "/" + p.repo
-				srcPath = p.path
-			case *MockProvider:
-				srcRepo = p.org + "/" + p.repo
-				srcPath = p.path
-			default:
-				return errors.New("unsupported provider type")
-			}
 
 			// Check if any arguments have changed
-			if status.Args.SrcRepo != srcRepo ||
-				status.Args.SrcRef != cfg.SrcRef ||
-				status.Args.SrcPath != srcPath ||
+			fmt.Printf("🔍 Comparing arguments:\n")
+			fmt.Printf("  - Repo: %s vs %s\n", info(status.Args.SrcRepo), info(cfg.ProviderArgs.Repo))
+			fmt.Printf("  - Ref: %s vs %s\n", info(status.Args.SrcRef), info(cfg.ProviderArgs.Ref))
+			fmt.Printf("  - Path: %s vs %s\n", info(status.Args.SrcPath), info(cfg.ProviderArgs.Path))
+			if status.Args.SrcRepo != cfg.ProviderArgs.Repo ||
+				status.Args.SrcRef != cfg.ProviderArgs.Ref ||
+				status.Args.SrcPath != cfg.ProviderArgs.Path ||
 				!stringSlicesEqual(status.Args.Replacements, cfg.Replacements) ||
 				!stringSlicesEqual(status.Args.IgnoreFiles, cfg.IgnoreFiles) {
 				return errors.New("configuration has changed")
@@ -378,6 +396,7 @@ func run(cfg *Config) error {
 
 	// 🧹 Clean if requested
 	if cfg.Clean {
+		fmt.Printf("🧹 Cleaning destination directory: %s\n", info(cfg.DestPath))
 		if err := cleanDestination(cfg.DestPath); err != nil {
 			return errors.Errorf("cleaning destination: %w", err)
 		}
@@ -385,7 +404,8 @@ func run(cfg *Config) error {
 
 	// 🔍 Get commit hash (only for remote status or actual sync)
 	if !cfg.Status || cfg.RemoteStatus {
-		commitHash, err := cfg.Provider.GetCommitHash(ctx)
+		fmt.Printf("🔍 Getting commit hash...\n")
+		commitHash, err := provider.GetCommitHash(ctx, cfg.ProviderArgs)
 		if err != nil {
 			if cfg.RemoteStatus {
 				fmt.Fprintf(os.Stderr, "%s Unable to check remote status: %v\n", warn("⚠️"), err)
@@ -393,23 +413,24 @@ func run(cfg *Config) error {
 			}
 			return errors.Errorf("getting commit hash: %w", err)
 		}
+		fmt.Printf("📌 Commit hash: %s\n", info(commitHash))
 
 		// Check if files are up to date
 		if (cfg.Status || cfg.RemoteStatus) && !cfg.Force {
+			fmt.Printf("🔍 Comparing commit hashes: %s vs %s\n", info(status.CommitHash), info(commitHash))
 			if status.CommitHash == commitHash {
 				return nil
 			}
 			return errors.New("files are out of date")
 		}
 
-		// 📋 List files
-		files, err := cfg.Provider.ListFiles(ctx)
+		files, err := provider.ListFiles(ctx, cfg.ProviderArgs)
 		if err != nil {
-			if cfg.RemoteStatus {
-				fmt.Fprintf(os.Stderr, "%s Unable to list remote files: %v\n", warn("⚠️"), err)
-				return nil // Not an error for status check
-			}
 			return errors.Errorf("listing files: %w", err)
+		}
+		fmt.Printf("📋 Found %d files:\n", len(files))
+		for _, f := range files {
+			fmt.Printf("  - %s\n", info(f))
 		}
 
 		// 🔄 Process each file
@@ -418,7 +439,14 @@ func run(cfg *Config) error {
 		for _, file := range files {
 			file := file // capture for goroutine
 			g.Go(func() error {
-				return processFile(ctx, cfg, file, commitHash, status, &mu)
+				fmt.Printf("🔄 Starting to process file: %s\n", info(file))
+				err := processFile(ctx, provider, cfg, file, commitHash, status, &mu)
+				if err != nil {
+					fmt.Printf("❌ Error processing %s: %v\n", errfmt(file), err)
+				} else {
+					fmt.Printf("✅ Successfully processed %s\n", success(file))
+				}
+				return err
 			})
 		}
 
@@ -430,20 +458,15 @@ func run(cfg *Config) error {
 		status.LastUpdated = time.Now().UTC()
 		status.CommitHash = commitHash
 		status.Branch = cfg.SrcRef
+		fmt.Printf("📝 Updated status file metadata:\n")
+		fmt.Printf("  - Last Updated: %s\n", info(status.LastUpdated))
+		fmt.Printf("  - Commit Hash: %s\n", info(status.CommitHash))
+		fmt.Printf("  - Branch: %s\n", info(status.Branch))
 	}
 
-	// Update status file arguments
-	switch p := cfg.Provider.(type) {
-	case *GithubProvider:
-		status.Args.SrcRepo = p.org + "/" + p.repo
-		status.Args.SrcPath = p.path
-	case *MockProvider:
-		status.Args.SrcRepo = p.org + "/" + p.repo
-		status.Args.SrcPath = p.path
-	default:
-		return errors.New("unsupported provider type")
-	}
-	status.Args.SrcRef = cfg.SrcRef
+	status.Args.SrcRepo = cfg.ProviderArgs.Repo
+	status.Args.SrcPath = cfg.ProviderArgs.Path
+	status.Args.SrcRef = cfg.ProviderArgs.Ref
 	status.Args.Replacements = make([]string, len(cfg.Replacements))
 	for i, r := range cfg.Replacements {
 		status.Args.Replacements[i] = r.Old + ":" + r.New
@@ -451,6 +474,7 @@ func run(cfg *Config) error {
 	status.Args.IgnoreFiles = cfg.IgnoreFiles
 
 	// Write final status
+	fmt.Printf("💾 Writing status file to: %s\n", info(statusFile))
 	if err := writeStatusFile(statusFile, status); err != nil {
 		return errors.Errorf("writing status file: %w", err)
 	}
@@ -512,26 +536,48 @@ func writeStatusFile(path string, status *StatusFile) error {
 	return nil
 }
 
-func processFile(ctx context.Context, cfg *Config, file, commitHash string, status *StatusFile, mu *sync.Mutex) error {
+func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, commitHash string, status *StatusFile, mu *sync.Mutex) error {
 	fmt.Printf("%s Processing %s\n", emoji("📥"), info(file))
 
-	// 📥 Download file
-	content, err := cfg.Provider.GetFile(ctx, file)
+	if cfg.UseTarball {
+		// Ensure cache directory exists
+		fmt.Printf("📁 Using tarball mode with cache directory: %s\n", info(cfg.CacheDir))
+		if err := os.MkdirAll(cfg.CacheDir, 0755); err != nil {
+			return errors.Errorf("creating cache directory: %w", err)
+		}
+		content, err := GetFileFromTarball(ctx, provider, cfg.ProviderArgs)
+		if err != nil {
+			return errors.Errorf("getting file from tarball: %w", err)
+		}
+		fmt.Printf("📥 Downloaded %d bytes\n", len(content))
+
+		// save file to the
+		return nil
+	}
+
+	fmt.Printf("📥 Downloading file directly from provider\n")
+	content, err := provider.GetFile(ctx, cfg.ProviderArgs, file)
 	if err != nil {
 		return errors.Errorf("downloading file: %w", err)
 	}
+	fmt.Printf("📥 Downloaded %d bytes\n", len(content))
 
 	// Get base name and extension
 	ext := filepath.Ext(file)
 	base := strings.TrimSuffix(filepath.Base(file), ext)
+	fmt.Printf("📝 Base: %s, Extension: %s\n", info(base), info(ext))
 
 	// 📝 Create status entry
 	entry := StatusEntry{
 		File:       base + ".copy" + ext,
-		Source:     cfg.Provider.GetSourceInfo(commitHash),
-		Permalink:  cfg.Provider.GetPermalink(file, commitHash),
+		Source:     provider.GetSourceInfo(cfg.ProviderArgs, commitHash),
+		Permalink:  provider.GetPermalink(cfg.ProviderArgs, commitHash, file),
 		Downloaded: time.Now().UTC(),
 	}
+	fmt.Printf("📝 Created status entry:\n")
+	fmt.Printf("  - Output file: %s\n", info(entry.File))
+	fmt.Printf("  - Source: %s\n", info(entry.Source))
+	fmt.Printf("  - Permalink: %s\n", info(entry.Permalink))
 
 	// 📦 Process content
 	var buf bytes.Buffer
@@ -539,16 +585,19 @@ func processFile(ctx context.Context, cfg *Config, file, commitHash string, stat
 	// Add file header based on extension
 	switch ext {
 	case ".go", ".js", ".ts", ".jsx", ".tsx", ".cpp", ".c", ".h", ".hpp", ".java", ".scala", ".rs", ".php":
+		fmt.Printf("📝 Adding header for %s file\n", info(ext))
 		fmt.Fprintf(&buf, "// 📦 Generated from: %s\n", entry.Source)
 		fmt.Fprintf(&buf, "// 🔗 Source: %s\n", entry.Permalink)
 		fmt.Fprintf(&buf, "// ⏰ Downloaded at: %s\n", entry.Downloaded.Format(time.RFC3339))
 		fmt.Fprintf(&buf, "// ⚠️  This file is auto-generated. See .copy-status for details.\n\n")
 	case ".py", ".rb", ".pl", ".sh":
+		fmt.Printf("📝 Adding header for %s file\n", info(ext))
 		fmt.Fprintf(&buf, "# 📦 Generated from: %s\n", entry.Source)
 		fmt.Fprintf(&buf, "# 🔗 Source: %s\n", entry.Permalink)
 		fmt.Fprintf(&buf, "# ⏰ Downloaded at: %s\n", entry.Downloaded.Format(time.RFC3339))
 		fmt.Fprintf(&buf, "# ⚠️  This file is auto-generated. See .copy-status for details.\n\n")
 	case ".md", ".txt", ".json", ".yaml", ".yml":
+		fmt.Printf("📝 Adding header for %s file\n", info(ext))
 		fmt.Fprintf(&buf, "<!--\n")
 		fmt.Fprintf(&buf, "📦 Generated from: %s\n", entry.Source)
 		fmt.Fprintf(&buf, "🔗 Source: %s\n", entry.Permalink)
@@ -560,6 +609,7 @@ func processFile(ctx context.Context, cfg *Config, file, commitHash string, stat
 	// Add package declaration for Go files
 	if ext == ".go" && !bytes.Contains(content, []byte("package ")) {
 		pkgName := filepath.Base(cfg.DestPath)
+		fmt.Printf("📦 Adding package declaration: %s\n", info(pkgName))
 		fmt.Fprintf(&buf, "package %s\n\n", pkgName)
 		entry.Changes = append(entry.Changes, fmt.Sprintf("Added package declaration: %s", pkgName))
 	}
@@ -569,14 +619,16 @@ func processFile(ctx context.Context, cfg *Config, file, commitHash string, stat
 
 	// Apply replacements for Go files
 	if ext == ".go" {
+		fmt.Printf("🔄 Applying %d replacements\n", len(cfg.Replacements))
 		for _, r := range cfg.Replacements {
 			if bytes.Contains(buf.Bytes(), []byte(r.Old)) {
 				// Find line numbers for the changes
 				lines := bytes.Split(buf.Bytes(), []byte("\n"))
 				for i, line := range lines {
 					if bytes.Contains(line, []byte(r.Old)) {
-						entry.Changes = append(entry.Changes,
-							fmt.Sprintf("Line %d: Replaced '%s' with '%s'", i+1, r.Old, r.New))
+						change := fmt.Sprintf("Line %d: Replaced '%s' with '%s'", i+1, r.Old, r.New)
+						fmt.Printf("  - %s\n", info(change))
+						entry.Changes = append(entry.Changes, change)
 					}
 				}
 
@@ -591,6 +643,7 @@ func processFile(ctx context.Context, cfg *Config, file, commitHash string, stat
 	// Check if file exists and has .patch suffix
 	outPath := filepath.Join(cfg.DestPath, entry.File)
 	patchPath := filepath.Join(cfg.DestPath, base+".copy.patch"+ext)
+	fmt.Printf("📝 Output path: %s\n", info(outPath))
 	if _, err := os.Stat(patchPath); err == nil {
 		// Skip files that have a .patch version
 		fmt.Printf("%s Skipping %s (has .patch file)\n", emoji("⚠️"), warn(entry.File))
@@ -598,6 +651,7 @@ func processFile(ctx context.Context, cfg *Config, file, commitHash string, stat
 	}
 
 	// Write the file
+	fmt.Printf("💾 Writing %d bytes to %s\n", buf.Len(), info(outPath))
 	if err := os.WriteFile(outPath, buf.Bytes(), 0644); err != nil {
 		return errors.Errorf("writing file: %w", err)
 	}
@@ -606,6 +660,7 @@ func processFile(ctx context.Context, cfg *Config, file, commitHash string, stat
 	mu.Lock()
 	status.Entries[entry.File] = entry
 	mu.Unlock()
+	fmt.Printf("📝 Updated status entry for %s\n", info(entry.File))
 
 	fmt.Printf("%s Processed %s\n", emoji("✅"), success(entry.File))
 	return nil

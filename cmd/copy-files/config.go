@@ -33,6 +33,7 @@ type DefaultsBlock struct {
 	Source      *CopyEntry_Source      `json:"source,omitempty" yaml:"source,omitempty" hcl:"source,block"`
 	Destination *CopyEntry_Destination `json:"destination,omitempty" yaml:"destination,omitempty" hcl:"destination,block"`
 	Options     *CopyEntry_Options     `json:"options,omitempty" yaml:"options,omitempty" hcl:"options,block"`
+	UseTarball  bool                   `json:"use_tarball,omitempty" yaml:"use_tarball,omitempty" hcl:"use_tarball,optional"`
 }
 
 // 🎯 Source configuration
@@ -41,6 +42,7 @@ type CopyEntry_Source struct {
 	Ref            string `json:"ref,omitempty" yaml:"ref,omitempty" hcl:"ref,optional"`
 	Path           string `json:"path" yaml:"path" hcl:"path,attr"`
 	FallbackBranch string `json:"fallback_branch,omitempty" yaml:"fallback_branch,omitempty" hcl:"fallback_branch,optional"`
+	Mode           string `json:"mode,omitempty" yaml:"mode,omitempty" hcl:"mode,optional"` // 📦 Mode: "git" or "tarball"
 }
 
 // 📦 Destination configuration
@@ -59,6 +61,7 @@ type CopyEntry struct {
 	Source      CopyEntry_Source      `json:"source" yaml:"source" hcl:"source,block"`
 	Destination CopyEntry_Destination `json:"destination" yaml:"destination" hcl:"destination,block"`
 	Options     *CopyEntry_Options    `json:"options,omitempty" yaml:"options,omitempty" hcl:"options,block"`
+	UseTarball  bool                  `json:"use_tarball,omitempty" yaml:"use_tarball,omitempty" hcl:"use_tarball,optional"`
 }
 
 // 🔧 Processing options for YAML/HCL
@@ -394,7 +397,7 @@ func validateConfig(cfg *CopyConfig) error {
 }
 
 // 🏃 Run all copy operations
-func (cfg *CopyConfig) RunAll(clean, status, remoteStatus, force bool) error {
+func (cfg *CopyConfig) RunAll(clean, status, remoteStatus, force bool, provider RepoProvider) error {
 	for _, copyEntry := range cfg.Copies {
 		input := Input{
 			SrcRepo:      copyEntry.Source.Repo,
@@ -418,23 +421,18 @@ func (cfg *CopyConfig) RunAll(clean, status, remoteStatus, force bool) error {
 		}
 
 		// Create config
-		copyConfig, err := NewConfigFromInput(input)
+		copyConfig, err := NewConfigFromInput(input, provider)
 		if err != nil {
 			return errors.Errorf("creating config for %s: %w", copyEntry.Source.Repo, err)
 		}
 
-		// Set fallback branch if configured
-		if gh, ok := copyConfig.Provider.(*GithubProvider); ok {
-			// Use entry-specific fallback if set, otherwise use global
-			if copyEntry.Source.FallbackBranch != "" {
-				gh.fallbackBranch = copyEntry.Source.FallbackBranch
-			} else {
-				gh.fallbackBranch = cfg.FallbackBranch
-			}
+		// Set tarball option if configured
+		if copyEntry.UseTarball || (cfg.Defaults != nil && cfg.Defaults.UseTarball) {
+			copyConfig.UseTarball = true
 		}
 
 		// Run copy operation
-		if err := run(copyConfig); err != nil {
+		if err := run(copyConfig, provider); err != nil {
 			return errors.Errorf("copying %s: %w", copyEntry.Source.Repo, err)
 		}
 	}

@@ -146,11 +146,16 @@ func Other() {}`))
 	require.NoError(t, os.MkdirAll(dest1, 0755))
 	require.NoError(t, os.MkdirAll(dest2, 0755))
 
+	// Create cache directory
+	cacheDir := filepath.Join(dir, "cache")
+	require.NoError(t, os.MkdirAll(cacheDir, 0755))
+
 	// Create config
 	cfg := &CopyConfig{
 		DefaultBranch:  "main",
 		FallbackBranch: "master",
 		StatusFile:     ".copy-status",
+		Defaults:       &DefaultsBlock{},
 		Copies: []*CopyEntry{
 			{
 				Source: CopyEntry_Source{
@@ -181,7 +186,7 @@ func Other() {}`))
 	}
 
 	// Run all copies
-	require.NoError(t, cfg.RunAll(false, false, false, false))
+	require.NoError(t, cfg.RunAll(false, false, false, false, mock))
 
 	// Verify first copy
 	content, err := os.ReadFile(filepath.Join(dest1, "test.copy.go"))
@@ -194,24 +199,21 @@ func Other() {}`))
 	assert.Contains(t, string(content), "func Bar()")
 
 	// Test status check
-	require.NoError(t, cfg.RunAll(false, true, false, false))
+	require.NoError(t, cfg.RunAll(false, true, false, false, mock))
 
 	// Test remote status check
-	require.NoError(t, cfg.RunAll(false, false, true, false))
+	require.NoError(t, cfg.RunAll(false, false, true, false, mock))
 
 	// Create a patch file to test clean behavior
 	patchPath := filepath.Join(dest1, "test.copy.patch.go")
 	require.NoError(t, os.WriteFile(patchPath, []byte("patch content"), 0644))
 
 	// Test clean
-	require.NoError(t, cfg.RunAll(true, false, false, false))
+	require.NoError(t, cfg.RunAll(true, false, false, false, mock))
 	_, err = os.Stat(filepath.Join(dest1, "test.copy.go"))
 	assert.True(t, os.IsNotExist(err), "file should be removed by clean")
 	_, err = os.Stat(patchPath)
 	assert.NoError(t, err, "patch file should still exist")
-
-	// Clean up
-	mock.ClearFiles()
 }
 
 func TestLoadHCLConfig(t *testing.T) {
