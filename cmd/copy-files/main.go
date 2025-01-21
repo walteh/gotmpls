@@ -545,13 +545,68 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 		if err := os.MkdirAll(cfg.CacheDir, 0755); err != nil {
 			return errors.Errorf("creating cache directory: %w", err)
 		}
-		content, err := GetFileFromTarball(ctx, provider, cfg.ProviderArgs)
+
+		// Create repo-specific directory
+		repoName := filepath.Base(cfg.ProviderArgs.Repo)
+		repoDir := filepath.Join(cfg.CacheDir, repoName)
+		if err := os.MkdirAll(repoDir, 0755); err != nil {
+			return errors.Errorf("creating repo directory: %w", err)
+		}
+
+		// Download tarball
+		data, err := GetFileFromTarball(ctx, provider, cfg.ProviderArgs)
 		if err != nil {
 			return errors.Errorf("getting file from tarball: %w", err)
 		}
-		fmt.Printf("📥 Downloaded %d bytes\n", len(content))
+		fmt.Printf("📥 Downloaded %d bytes\n", len(data))
 
-		// save file to the
+		// Save tarball
+		tarballPath := filepath.Join(repoDir, repoName+".tar.gz")
+		if err := os.WriteFile(tarballPath, data, 0644); err != nil {
+			return errors.Errorf("writing tarball: %w", err)
+		}
+
+		// Create embed.go file
+		pkgName := strings.ReplaceAll(repoName, "-", "")
+		embedPath := filepath.Join(repoDir, "embed.go")
+		var buf bytes.Buffer
+
+		fmt.Fprintf(&buf, "// 📦 Generated from: %s\n", provider.GetSourceInfo(cfg.ProviderArgs, commitHash))
+		fmt.Fprintf(&buf, "// 🔗 Source: %s\n", provider.GetPermalink(cfg.ProviderArgs, commitHash, file))
+		fmt.Fprintf(&buf, "// ⏰ Downloaded at: %s\n", time.Now().UTC().Format(time.RFC3339))
+		fmt.Fprintf(&buf, "// ⚠️  This file is auto-generated. See .copy-status for details.\n")
+		fmt.Fprintf(&buf, "package %s\n\n", pkgName)
+		fmt.Fprintf(&buf, "import _ \"embed\"\n\n")
+		fmt.Fprintf(&buf, "//go:embed %s.tar.gz\n", repoName)
+		fmt.Fprintf(&buf, "var Data []byte\n\n")
+		fmt.Fprintf(&buf, "// Metadata about the downloaded repository\n")
+		fmt.Fprintf(&buf, "var (\n")
+		fmt.Fprintf(&buf, "\tRef        = %q\n", cfg.ProviderArgs.Ref)
+		fmt.Fprintf(&buf, "\tCommit     = %q\n", commitHash)
+		fmt.Fprintf(&buf, "\tRepository = %q\n", cfg.ProviderArgs.Repo)
+		fmt.Fprintf(&buf, "\tPermalink  = %q\n", provider.GetPermalink(cfg.ProviderArgs, commitHash, ""))
+		fmt.Fprintf(&buf, "\tDownloaded = %q\n", time.Now().UTC().Format(time.RFC3339))
+		fmt.Fprintf(&buf, ")\n")
+
+		if err := os.WriteFile(embedPath, buf.Bytes(), 0644); err != nil {
+			return errors.Errorf("writing embed.go: %w", err)
+		}
+
+		// Create status entry
+		entry := StatusEntry{
+			File:       repoName + ".tar.gz",
+			Source:     provider.GetSourceInfo(cfg.ProviderArgs, commitHash),
+			Permalink:  provider.GetPermalink(cfg.ProviderArgs, commitHash, ""),
+			Downloaded: time.Now().UTC(),
+			Changes:    []string{"Generated embed.go file"},
+		}
+
+		// Update status file (with mutex for concurrent access)
+		mu.Lock()
+		status.Entries[entry.File] = entry
+		mu.Unlock()
+		fmt.Printf("📝 Updated status entry for %s\n", info(entry.File))
+
 		return nil
 	}
 

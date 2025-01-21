@@ -340,3 +340,81 @@ func TestStatusFile(t *testing.T) {
 	assert.Equal(t, status.Entries["test.copy.go"].File, loaded.Entries["test.copy.go"].File)
 	assert.Equal(t, status.Entries["test.copy.go"].Changes, loaded.Entries["test.copy.go"].Changes)
 }
+
+func TestTarballMode(t *testing.T) {
+	// Create mock provider
+	mock := NewMockProvider()
+	mock.AddFile("test.txt", []byte("test content"))
+	mock.AddFile("dir/nested.txt", []byte("nested content"))
+
+	// Create temp directory for cache
+	cacheDir := t.TempDir()
+
+	// Create config with tarball mode enabled
+	cfg := &Config{
+		ProviderArgs: ProviderArgs{
+			Repo: "github.com/org/repo",
+			Ref:  "main",
+			Path: "path/to/files",
+		},
+		DestPath:   t.TempDir(),
+		UseTarball: true,
+		CacheDir:   cacheDir,
+	}
+
+	// Run the copy operation
+	err := run(cfg, mock)
+	require.NoError(t, err, "run should succeed")
+
+	// Verify the directory structure
+	repoDir := filepath.Join(cacheDir, "repo")
+	require.DirExists(t, repoDir, "repo directory should exist")
+
+	// Verify tarball file
+	tarballPath := filepath.Join(repoDir, "repo.tar.gz")
+	require.FileExists(t, tarballPath, "tarball file should exist")
+
+	// Verify embed.go file
+	embedPath := filepath.Join(repoDir, "embed.go")
+	require.FileExists(t, embedPath, "embed.go file should exist")
+
+	// Read and verify embed.go contents
+	content, err := os.ReadFile(embedPath)
+	require.NoError(t, err, "reading embed.go should succeed")
+	contentStr := string(content)
+
+	// Check required elements in embed.go
+	assert.Contains(t, contentStr, "package repo\n", "should have correct package name")
+	assert.Contains(t, contentStr, "import _ \"embed\"\n", "should have embed import")
+	assert.Contains(t, contentStr, "//go:embed repo.tar.gz", "should have embed directive")
+	assert.Contains(t, contentStr, "var Data []byte", "should have Data variable")
+	assert.Contains(t, contentStr, "var (", "should have metadata variables")
+	assert.Contains(t, contentStr, "Ref        = \"main\"", "should have correct ref")
+	assert.Contains(t, contentStr, "Repository = \"github.com/org/repo\"", "should have correct repository")
+
+	// Verify status file
+	statusPath := filepath.Join(cfg.DestPath, ".copy-status")
+	require.FileExists(t, statusPath, "status file should exist")
+
+	// Read and verify status file
+	status, err := loadStatusFile(statusPath)
+	require.NoError(t, err, "reading status file should succeed")
+
+	// Check status file entries - should only have one entry for the tarball
+	require.Len(t, status.Entries, 1, "should only have one entry in status file")
+	entry, ok := status.Entries["repo.tar.gz"]
+	require.True(t, ok, "status file should have entry for tarball")
+	assert.Equal(t, "repo.tar.gz", entry.File, "should have correct file name")
+	assert.Equal(t, []string{"Generated embed.go file"}, entry.Changes, "should have correct changes")
+	assert.Equal(t, mock.GetSourceInfo(cfg.ProviderArgs, mock.commitHash), entry.Source, "should have correct source")
+	assert.Equal(t, mock.GetPermalink(cfg.ProviderArgs, mock.commitHash, ""), entry.Permalink, "should have correct permalink")
+
+	// Run again to verify caching behavior
+	err = run(cfg, mock)
+	require.NoError(t, err, "second run should succeed")
+
+	// Status file should still only have one entry
+	status, err = loadStatusFile(statusPath)
+	require.NoError(t, err, "reading status file after second run should succeed")
+	require.Len(t, status.Entries, 1, "should still only have one entry in status file")
+}
