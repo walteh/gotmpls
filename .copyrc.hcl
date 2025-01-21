@@ -60,10 +60,6 @@ copy {
 			{
 				old = "tsjson.go",
 				new = "tsjson.gen.go"
-			},
-			{
-				old = "main()",
-				new = "main_old()"
 			}
 		]
 		ignore_files = [

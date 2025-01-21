@@ -25,7 +25,7 @@ func TestAll(t *testing.T) {
 	t.Skip("needs vscode-languageserver-node repository")
 	*lineNumbers = true
 	log.SetFlags(log.Lshortfile)
-	main_old()
+	main()
 }
 
 // check that the parsed file includes all the information

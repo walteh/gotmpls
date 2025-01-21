@@ -162,10 +162,10 @@ func (l *Logger) formatFileStatus(file FileInfo) string {
 	// Build type part with optional replacements
 	var typePart string
 	if file.Replacements != nil && *file.Replacements > 0 {
-		replacementText := color.New(color.Bold).Sprintf("[%d]", *file.Replacements)
-		typePart = fmt.Sprintf("%-*s%s", typeWidth-2, fileType, replacementText)
+		replacementText := fmt.Sprintf(" [%d]", *file.Replacements)
+		typePart = fmt.Sprintf("%-*s", typeWidth-2, string(fileType)+replacementText)
 	} else {
-		typePart = fmt.Sprintf("%-*s", typeWidth-2, fileType)
+		typePart = fmt.Sprintf("%-*s", typeWidth-2, string(fileType))
 	}
 
 	// Build status part
@@ -219,8 +219,8 @@ func (l *Logger) formatRepoDisplay(repo RepoDisplay) {
 func (l *Logger) Header(msg string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	fmt.Fprintf(l.out, "copyrc %s\n\n",
-		color.New(color.Faint).Sprint("• Syncing repository files"))
+	copyrcheaderText := color.New(color.Bold, color.FgCyan).Sprintf("copyrc")
+	fmt.Fprintf(l.out, "\n%s %s\n\n", copyrcheaderText, color.New(color.Faint).Sprint("• syncing repository files"))
 	l.zlog.Info().Msg(msg)
 }
 

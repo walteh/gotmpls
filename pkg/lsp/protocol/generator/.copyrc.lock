@@ -1,5 +1,5 @@
 {
-	"last_updated": "2025-01-21T22:09:22.026702Z",
+	"last_updated": "2025-01-21T22:17:55.707752Z",
 	"commit_hash": "b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3",
 	"branch": "master",
 	"coppied_files": {
@@ -28,7 +28,7 @@
 			"file": "main.copy.go",
 			"source": "github.com/golang/tools@b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3",
 			"permalink": "https://raw.githubusercontent.com/golang/tools/b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3/gopls/internal/protocol/generate/main.go",
-			"last_updated": "2025-01-21T21:24:20.518677Z",
+			"last_updated": "2025-01-21T22:17:55.618702Z",
 			"changes": [
 				"Line 56: Replaced 'func processinline()' with 'func processinline_old()'",
 				"Line 105: Replaced 'golang.org/x/tools/internal/jsonrpc2' with 'github.com/creachadair/jrpc2'",
@@ -40,18 +40,14 @@
 				"Line 188: Replaced 'tsprotocol.go' with 'tsprotocol.gen.go'",
 				"Line 155: Replaced 'tsserver.go' with 'tsserver.gen.go'",
 				"Line 124: Replaced 'tsclient.go' with 'tsclient.gen.go'",
-				"Line 212: Replaced 'tsjson.go' with 'tsjson.gen.go'",
-				"Line 49: Replaced 'main()' with 'main_old()'"
+				"Line 212: Replaced 'tsjson.go' with 'tsjson.gen.go'"
 			]
 		},
 		"main_test.copy.go": {
 			"file": "main_test.copy.go",
 			"source": "github.com/golang/tools@b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3",
 			"permalink": "https://raw.githubusercontent.com/golang/tools/b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3/gopls/internal/protocol/generate/main_test.go",
-			"last_updated": "2025-01-21T21:24:20.634098Z",
-			"changes": [
-				"Line 28: Replaced 'main()' with 'main_old()'"
-			]
+			"last_updated": "2025-01-21T22:17:55.637138Z"
 		},
 		"output.copy.go": {
 			"file": "output.copy.go",
@@ -148,10 +144,6 @@
 				{
 					"old": "tsjson.go",
 					"new": "tsjson.gen.go"
-				},
-				{
-					"old": "main()",
-					"new": "main_old()"
 				}
 			],
 			"ignore_files": [

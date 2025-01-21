@@ -46,7 +46,7 @@ var (
 	lineNumbers = flag.Bool("l", false, "add line numbers to generated output")
 )
 
-func main_old() {
+func main() {
 	log.SetFlags(log.Lshortfile) // log file name and line number, not time
 	flag.Parse()
 
