@@ -50,36 +50,9 @@ tasks:
         generates:
             - ./out/tools/**/*
 
-    download-repo-as-tarball:
-        desc: Download a specific repository and store it
-        vars:
-            REPO: "{{.REPO}}"
-            ORG: "{{.ORG}}"
-            REF: "{{.REF}}"
-            PKG: '{{.REPO | lower | replace "-" ""}}'
-            PATH: "gen/git-repo-tarballs"
+    mockery:
         cmds:
-            - ./scripts/download-repo-tarball.sh --repo {{.REPO}} --org {{.ORG}} --ref {{.REF}} {{if .PKG}}--pkg {{.PKG}}{{end}} --path {{.PATH}}
-        status:
-            - test -d {{.PATH}}/{{.REPO}}/{{.REPO}}.tar.gz
-
-    download-all-repos-as-tarballs:
-        desc: Download all configured repositories
-        cmds:
-            - task: download-repo-as-tarball
-              vars:
-                  REPO: nvim-lspconfig
-                  ORG: neovim
-                  REF: tags/v1.3.0
-            - task: download-repo-as-tarball
-              vars:
-                  REPO: vscode-languageserver-node
-                  ORG: microsoft
-                  REF: tags/release/jsonrpc/9.0.0-next.6
-
-    generate:
-        cmds:
-            - mockery
+            - ./scripts/run-tool.sh mockery
             - find ./gen/mockery -type f -not -mmin -1 -delete
         generates:
             - ./gen/mockery/*.go
@@ -113,63 +86,19 @@ tasks:
             - bun install
             - bun run build
 
-    sync-go-files:
-        desc: Sync Go files from a GitHub repository
-        requires:
-            {
-                vars:
-                    [
-                        DEST,
-                        STRINGS_TO_REPLACE,
-                        FILES_TO_IGNORE,
-                        SRC_REPO,
-                        SRC_REF,
-                        SRC_PATH,
-                    ],
-            }
-        method: timestamp
-        generates:
-            - "{{.DEST}}/*.copy.*"
-            - "{{.DEST}}/.copy-status"
-            - "!{{.DEST}}/*.patch.go"
+    copyrc:
+        desc: copyrc
         cmds:
-            - |
-                go run ./cmd/copy-files --src-repo "{{.SRC_REPO}}" --ref "{{.SRC_REF}}" --src-path "{{.SRC_PATH}}" --dest-path "{{.DEST}}" \
-                     --replacements '{{toJson .STRINGS_TO_REPLACE}}' --ignore '{{toJson .FILES_TO_IGNORE}}'
+            - go run ./cmd/copyrc -config=.copyrc.hcl
+        sources:
+            - .copyrc.hcl
+        generates:
+            - "**/*.copyrc.lock"
         status:
-            - go run ./cmd/copy-files --src-repo "{{.SRC_REPO}}" --ref "{{.SRC_REF}}" --src-path "{{.SRC_PATH}}" --dest-path "{{.DEST}}" --status
-
-    copy-lsp-generator:
-        desc: copy LSP protocol generator files from golang/tools
-        generates:
-            - "./pkg/lsp/protocol/generator/*.go"
-            - "!./pkg/lsp/protocol/generator/*.patch.go"
-
-        cmds:
-            - task: sync-go-files
-              vars:
-                  SRC_REPO: github.com/golang/tools
-                  SRC_REF: master
-                  SRC_PATH: gopls/internal/protocol/generate
-                  DEST: ./pkg/lsp/protocol/generator
-                  STRINGS_TO_REPLACE:
-                      - "func processinline():func processinline_old()"
-                      - golang.org/x/tools/internal/jsonrpc2:github.com/creachadair/jrpc2
-                      - reply jsonrpc2.Replier, r jsonrpc2.Request:conn \*jrpc2.Server, r \*jrpc2.Request
-                      - func genCase(:func genCase_old(
-                      - func genFunc(:func genFunc_old(
-                      - UnmarshalJSON(r.Params(), \&params):UnmarshalJSON(r, \&params)
-                      - reply(ctx, :reply_fwd(ctx, conn, r,
-                      - sendParseError(ctx, reply,:sendParseError(ctx, conn, r,
-                      - recoverHandlerPanic(r.Method()):recoverHandlerPanic(r.Method)
-                      - tsprotocol.go:tsprotocol.gen.go
-                      - tsserver.go:tsserver.gen.go
-                      - tsclient.go:tsclient.gen.go
-                      - tsjson.go:tsjson.gen.go
-                  FILES_TO_IGNORE: []
+            - go run ./cmd/copyrc -config=.copyrc.hcl -status
 
     generate-lsp-protocol:
-        deps: [copy-lsp-generator]
+        deps: [copyrc]
         sources:
             - "./pkg/lsp/protocol/generator/*.go"
         generates:

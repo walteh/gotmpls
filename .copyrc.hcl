@@ -9,25 +9,63 @@ copy {
 	}
 	options {
 		replacements = [
-			{ old = "func processinline()", new = "func processinline_old()" },
-			{ old = "golang.org/x/tools/internal/jsonrpc2", new = "github.com/creachadair/jrpc2" },
-			{ old = "reply jsonrpc2.Replier, r jsonrpc2.Request", new = "conn *jrpc2.Server, r *jrpc2.Request" },
-			{ old = "func genCase(", new = "func genCase_old(" },
-			{ old = "func genFunc(", new = "func genFunc_old(" },
-			{ old = "UnmarshalJSON(r.Params(), &params)", new = "UnmarshalJSON(r, &params)" },
-			{ old = "reply(ctx, ", new = "reply_fwd(ctx, conn, r," },
-			{ old = "sendParseError(ctx, reply,", new = "sendParseError(ctx, conn, r," },
-			{ old = "recoverHandlerPanic(r.Method)", new = "recoverHandlerPanic(r.Method)" },
-			{ old = "tsprotocol.go", new = "tsprotocol.gen.go" },
-			{ old = "tsserver.go", new = "tsserver.gen.go" },
-			{ old = "tsclient.go", new = "tsclient.gen.go" },
-			{ old = "tsjson.go", new = "tsjson.gen.go" },
+			{
+				old = "func processinline()",
+				new = "func processinline_old()",
+			},
+			{
+				old = "golang.org/x/tools/internal/jsonrpc2",
+				new = "github.com/creachadair/jrpc2"
+			},
+			{
+				old = "reply jsonrpc2.Replier, r jsonrpc2.Request",
+				new = "conn *jrpc2.Server, r *jrpc2.Request"
+			},
+			{
+				old = "func genCase(",
+				new = "func genCase_old("
+			},
+			{
+				old = "func genFunc(",
+				new = "func genFunc_old("
+			},
+			{
+				old = "UnmarshalJSON(r.Params(), &params)",
+				new = "UnmarshalJSON(r, &params)"
+			},
+			{
+				old = "reply(ctx, ",
+				new = "reply_fwd(ctx, conn, r,"
+			},
+			{
+				old = "sendParseError(ctx, reply,",
+				new = "sendParseError(ctx, conn, r,"
+			},
+			{
+				old = "recoverHandlerPanic(r.Method())",
+				new = "recoverHandlerPanic(r.Method)"
+			},
+			{
+				old = "tsprotocol.go",
+				new = "tsprotocol.gen.go"
+			},
+			{
+				old = "tsserver.go",
+				new = "tsserver.gen.go"
+			},
+			{
+				old = "tsclient.go",
+				new = "tsclient.gen.go"
+			},
+			{
+				old = "tsjson.go",
+				new = "tsjson.gen.go"
+			},
 		]
 		ignore_files = [
 			"*.txt",
 		]
 	}
-
 }
 
 archive {

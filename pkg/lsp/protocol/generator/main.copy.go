@@ -111,7 +111,7 @@ func writeclient() {
 	}
 	out.WriteString("}\n\n")
 	out.WriteString(`func clientDispatch(ctx context.Context, client Client, conn *jrpc2.Server, r *jrpc2.Request) (bool, error) {
-	defer recoverHandlerPanic(r.Method())
+	defer recoverHandlerPanic(r.Method)
 	switch r.Method() {
 `)
 	for _, k := range ccases.keys() {
@@ -142,7 +142,7 @@ func writeserver() {
 }
 
 func serverDispatch(ctx context.Context, server Server, conn *jrpc2.Server, r *jrpc2.Request) (bool, error) {
-	defer recoverHandlerPanic(r.Method())
+	defer recoverHandlerPanic(r.Method)
 	switch r.Method() {
 `)
 	for _, k := range scases.keys() {

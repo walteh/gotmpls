@@ -469,14 +469,8 @@ func run(cfg *Config, provider RepoProvider) error {
 			}
 		}
 
-		// Update status file metadata
-		status.LastUpdated = time.Now().UTC()
-		status.CommitHash = commitHash
 		status.Ref = cfg.ProviderArgs.Ref
-		fmt.Printf("📝 Updated status file metadata:\n")
-		fmt.Printf("  - Last Updated: %s\n", info(status.LastUpdated))
-		fmt.Printf("  - Commit Hash: %s\n", info(status.CommitHash))
-		fmt.Printf("  - Branch: %s\n", info(status.Ref))
+		status.CommitHash = commitHash
 	}
 
 	status.Args.SrcRepo = cfg.ProviderArgs.Repo
@@ -502,6 +496,14 @@ func run(cfg *Config, provider RepoProvider) error {
 		}
 		status.Args.ArchiveArgs.GoEmbed = cfg.ArchiveArgs.GoEmbed
 	}
+
+	// Update status file metadata
+	status.LastUpdated = time.Now().UTC()
+
+	fmt.Printf("📝 Updated status file metadata:\n")
+	fmt.Printf("  - Last Updated: %s\n", info(status.LastUpdated))
+	fmt.Printf("  - Commit Hash: %s\n", info(status.CommitHash))
+	fmt.Printf("  - Branch: %s\n", info(status.Ref))
 
 	// Write final status
 	fmt.Printf("💾 Writing status file to: %s\n", info(statusFile))
@@ -554,10 +556,24 @@ func loadStatusFile(path string) (*StatusFile, error) {
 
 // 📝 Write status file
 func writeStatusFile(path string, status *StatusFile) error {
+
+	// read the current status file json
+	currentStatus, err := os.ReadFile(path)
+	if err != nil {
+		return errors.Errorf("reading current status file: %w", err)
+	}
+
 	data, err := json.MarshalIndent(status, "", "\t")
 	if err != nil {
 		return errors.Errorf("marshaling status: %w", err)
 	}
+
+	// if the current status file is the same as the new status file, return
+	if bytes.Equal(currentStatus, data) {
+		return nil
+	}
+
+	status.LastUpdated = time.Now().UTC()
 
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		return errors.Errorf("writing status file: %w", err)
@@ -737,63 +753,63 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 		fmt.Fprintf(&buf, "-->\n\n")
 	}
 
-	// Add package declaration for Go files
-	if ext == ".go" && !bytes.Contains(contentz, []byte("package ")) {
-		pkgName := filepath.Base(cfg.DestPath)
-		fmt.Printf("📦 Adding package declaration: %s\n", info(pkgName))
-		fmt.Fprintf(&buf, "package %s\n\n", pkgName)
-		entry.Changes = append(entry.Changes, fmt.Sprintf("Added package declaration: %s", pkgName))
-	}
+	// // Add package declaration for Go files
+	// if ext == ".go" && !bytes.Contains(contentz, []byte("package ")) {
+	// 	pkgName := filepath.Base(cfg.DestPath)
+	// 	fmt.Printf("📦 Adding package declaration: %s\n", info(pkgName))
+	// 	fmt.Fprintf(&buf, "package %s\n\n", pkgName)
+	// 	entry.Changes = append(entry.Changes, fmt.Sprintf("Added package declaration: %s", pkgName))
+	// }
 
 	// Write original content
 	buf.Write(contentz)
 
 	// Apply replacements for Go files
-	if ext == ".go" {
-		fmt.Printf("🔄 Applying %d replacements\n", len(cfg.CopyArgs.Replacements))
-		for _, r := range cfg.CopyArgs.Replacements {
-			if r.File != nil && *r.File != "" {
-				matched, err := doublestar.Match(*r.File, file)
-				if err != nil {
-					return errors.Errorf("matching file: %w", err)
-				}
-				if !matched {
-					continue
-				}
+	// if ext == ".go" {
+	fmt.Printf("🔄 Applying %d replacements\n", len(cfg.CopyArgs.Replacements))
+	for _, r := range cfg.CopyArgs.Replacements {
+		if r.File != nil && *r.File != "" {
+			matched, err := doublestar.Match(*r.File, file)
+			if err != nil {
+				return errors.Errorf("matching file: %w", err)
 			}
-			if bytes.Contains(buf.Bytes(), []byte(r.Old)) {
-				// Find line numbers for the changes
-				lines := bytes.Split(buf.Bytes(), []byte("\n"))
-				for i, line := range lines {
-					if bytes.Contains(line, []byte(r.Old)) {
-						change := fmt.Sprintf("Line %d: Replaced '%s' with '%s'", i+1, r.Old, r.New)
-						fmt.Printf("  - %s\n", info(change))
-						entry.Changes = append(entry.Changes, change)
-					}
-				}
-
-				// Apply the replacement
-				newContent := bytes.ReplaceAll(buf.Bytes(), []byte(r.Old), []byte(r.New))
-				buf.Reset()
-				buf.Write(newContent)
+			if !matched {
+				continue
 			}
 		}
+		if bytes.Contains(buf.Bytes(), []byte(r.Old)) {
+			// Find line numbers for the changes
+			lines := bytes.Split(buf.Bytes(), []byte("\n"))
+			for i, line := range lines {
+				if bytes.Contains(line, []byte(r.Old)) {
+					change := fmt.Sprintf("Line %d: Replaced '%s' with '%s'", i+1, r.Old, r.New)
+					fmt.Printf("  - %s\n", info(change))
+					entry.Changes = append(entry.Changes, change)
+				}
+			}
+
+			// Apply the replacement
+			newContent := bytes.ReplaceAll(buf.Bytes(), []byte(r.Old), []byte(r.New))
+			buf.Reset()
+			buf.Write(newContent)
+		}
+		// }
 	}
 
 	// Check if file exists and has .patch suffix
 	outPath := filepath.Join(cfg.DestPath, entry.File)
-	patchPath := filepath.Join(cfg.DestPath, base+".copy.patch"+ext)
-	fmt.Printf("📝 Output path: %s\n", info(outPath))
-	if _, err := os.Stat(patchPath); err == nil {
-		// Skip files that have a .patch version
-		fmt.Printf("%s Skipping %s (has .patch file)\n", emoji("⚠️"), warn(entry.File))
-		return nil
-	}
 
-	// Write the file
-	fmt.Printf("💾 Writing %d bytes to %s\n", buf.Len(), info(outPath))
-	if err := os.WriteFile(outPath, buf.Bytes(), 0644); err != nil {
-		return errors.Errorf("writing file: %w", err)
+	_, hasOldStatus := status.Entries[entry.File]
+
+	// if the current and new file are the same, skip
+	if bytes.Equal(buf.Bytes(), contentz) && hasOldStatus {
+		entry.Downloaded = status.Entries[entry.File].Downloaded
+	} else {
+		// Write the file
+		fmt.Printf("💾 Writing %d bytes to %s\n", buf.Len(), info(outPath))
+		if err := os.WriteFile(outPath, buf.Bytes(), 0644); err != nil {
+			return errors.Errorf("writing file: %w", err)
+		}
 	}
 
 	// Update status file (with mutex for concurrent access)

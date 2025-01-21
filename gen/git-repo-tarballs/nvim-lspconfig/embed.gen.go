@@ -14,5 +14,5 @@ var (
 	Commit     = "343ac34abc7ab53fae33357f915024aaacb76a3e"
 	Repository = "github.com/neovim/nvim-lspconfig"
 	Permalink  = "https://github.com/neovim/nvim-lspconfig/archive/refs/tags/v1.3.0.tar.gz"
-	Downloaded = "2025-01-21T17:18:35Z"
+	Downloaded = "2025-01-21T17:52:50Z"
 )
