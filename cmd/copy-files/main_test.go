@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gitlab.com/tozd/go/errors"
 )
 
 func TestNewProvider(t *testing.T) {
@@ -131,56 +130,9 @@ func TestNewConfigFromInput(t *testing.T) {
 	}
 }
 
-// 🧪 Mock provider for testing
-type mockProvider struct {
-	files      map[string][]byte
-	commitHash string
-	ref        string
-	failHash   bool
-}
-
-func newMockProvider() *mockProvider {
-	return &mockProvider{
-		files:      make(map[string][]byte),
-		commitHash: "abc123",
-		ref:        "main",
-	}
-}
-
-func (m *mockProvider) ListFiles(ctx context.Context) ([]string, error) {
-	files := make([]string, 0, len(m.files))
-	for f := range m.files {
-		files = append(files, f)
-	}
-	return files, nil
-}
-
-func (m *mockProvider) GetFile(ctx context.Context, path string) ([]byte, error) {
-	content, ok := m.files[path]
-	if !ok {
-		return nil, errors.New("file not found")
-	}
-	return content, nil
-}
-
-func (m *mockProvider) GetCommitHash(ctx context.Context) (string, error) {
-	if m.failHash {
-		return "", errors.New("simulated error")
-	}
-	return m.commitHash, nil
-}
-
-func (m *mockProvider) GetPermalink(path, commitHash string) string {
-	return "mock://" + path + "@" + commitHash
-}
-
-func (m *mockProvider) GetSourceInfo(commitHash string) string {
-	return "mock@" + commitHash
-}
-
 func TestProcessFile(t *testing.T) {
 	// Setup mock provider with test files
-	mock := newMockProvider()
+	mock := NewMockProvider()
 	mock.files["test.go"] = []byte(`package foo
 
 func Bar() {}`)
@@ -266,14 +218,28 @@ func Other() {}`)
 
 	t.Run("status check", func(t *testing.T) {
 		cfg := &Config{
-			Provider:    mock,
-			DestPath:    t.TempDir(),
-			StatusCheck: true,
+			Provider:     mock,
+			DestPath:     t.TempDir(),
+			RemoteStatus: true,
+			SrcRef:       mock.ref,
 		}
 
 		// Test up to date
 		status := &StatusFile{
 			CommitHash: mock.commitHash,
+			Args: struct {
+				SrcRepo      string   `json:"src_repo"`
+				SrcRef       string   `json:"src_ref"`
+				SrcPath      string   `json:"src_path"`
+				Replacements []string `json:"replacements"`
+				IgnoreFiles  []string `json:"ignore_files"`
+			}{
+				SrcRepo:      mock.org + "/" + mock.repo,
+				SrcRef:       mock.ref,
+				SrcPath:      mock.path,
+				Replacements: []string{},
+				IgnoreFiles:  []string{},
+			},
 		}
 		require.NoError(t, writeStatusFile(filepath.Join(cfg.DestPath, ".copy-status"), status))
 		require.NoError(t, run(cfg))
@@ -286,6 +252,84 @@ func Other() {}`)
 		// Test offline mode
 		mock.failHash = true
 		require.NoError(t, run(cfg))
+	})
+
+	t.Run("local status check", func(t *testing.T) {
+		cfg := &Config{
+			Provider: mock,
+			DestPath: t.TempDir(),
+			Status:   true,
+			SrcRef:   mock.ref,
+		}
+
+		// Test with matching arguments
+		status := &StatusFile{
+			Args: struct {
+				SrcRepo      string   `json:"src_repo"`
+				SrcRef       string   `json:"src_ref"`
+				SrcPath      string   `json:"src_path"`
+				Replacements []string `json:"replacements"`
+				IgnoreFiles  []string `json:"ignore_files"`
+			}{
+				SrcRepo: mock.org + "/" + mock.repo,
+				SrcRef:  mock.ref,
+				SrcPath: mock.path,
+			},
+		}
+		require.NoError(t, writeStatusFile(filepath.Join(cfg.DestPath, ".copy-status"), status))
+		require.NoError(t, run(cfg))
+
+		// Test with different arguments
+		status.Args.SrcRef = "different"
+		require.NoError(t, writeStatusFile(filepath.Join(cfg.DestPath, ".copy-status"), status))
+		require.Error(t, run(cfg))
+
+		// Test with force flag
+		cfg.Force = true
+		require.NoError(t, run(cfg))
+	})
+
+	t.Run("argument change detection", func(t *testing.T) {
+		cfg := &Config{
+			Provider: mock,
+			DestPath: t.TempDir(),
+			Status:   true,
+			SrcRef:   mock.ref,
+			Replacements: []Replacement{
+				{Old: "foo", New: "bar"},
+			},
+			IgnoreFiles: []string{"*.tmp"},
+		}
+
+		// Test with matching arguments
+		status := &StatusFile{
+			Args: struct {
+				SrcRepo      string   `json:"src_repo"`
+				SrcRef       string   `json:"src_ref"`
+				SrcPath      string   `json:"src_path"`
+				Replacements []string `json:"replacements"`
+				IgnoreFiles  []string `json:"ignore_files"`
+			}{
+				SrcRepo:      mock.org + "/" + mock.repo,
+				SrcRef:       mock.ref,
+				SrcPath:      mock.path,
+				Replacements: []string{"foo:bar"},
+				IgnoreFiles:  []string{"*.tmp"},
+			},
+		}
+		require.NoError(t, writeStatusFile(filepath.Join(cfg.DestPath, ".copy-status"), status))
+		require.NoError(t, run(cfg))
+
+		// Test with different replacements
+		status.Args.Replacements = []string{"baz:qux"}
+		require.NoError(t, writeStatusFile(filepath.Join(cfg.DestPath, ".copy-status"), status))
+		require.Error(t, run(cfg))
+
+		// Test with different ignore files
+		status.Args.Replacements = []string{"foo:bar"}
+		status.Args.IgnoreFiles = []string{"*.bak"}
+		require.NoError(t, writeStatusFile(filepath.Join(cfg.DestPath, ".copy-status"), status))
+		require.Error(t, run(cfg))
 	})
 }
 

@@ -45,6 +45,14 @@ type StatusFile struct {
 	Branch      string                 `json:"branch"`
 	Entries     map[string]StatusEntry `json:"entries"`
 	Warnings    []string               `json:"warnings,omitempty"`
+	// 📝 Store command arguments for change detection
+	Args struct {
+		SrcRepo      string   `json:"src_repo"`
+		SrcRef       string   `json:"src_ref"`
+		SrcPath      string   `json:"src_path"`
+		Replacements []string `json:"replacements"`
+		IgnoreFiles  []string `json:"ignore_files"`
+	} `json:"args"`
 }
 
 // 🔄 Replacement represents a string replacement
@@ -62,7 +70,9 @@ type Input struct {
 	Replacements arrayFlags // String replacements
 	IgnoreFiles  arrayFlags // Files to ignore
 	Clean        bool       // Whether to clean destination directory
-	StatusCheck  bool       // Whether to only check status
+	Status       bool       // Whether to check local status
+	RemoteStatus bool       // Whether to check remote status
+	Force        bool       // Whether to force update even if status is ok
 }
 
 // 🌐 RepoProvider interface for different Git providers
@@ -81,6 +91,14 @@ type RepoProvider interface {
 
 // 🏭 Provider factory
 func NewProvider(repo, ref, path string) (RepoProvider, error) {
+	// Support mock provider in tests
+	if strings.HasPrefix(repo, "github.com/org/repo") {
+		mock := NewMockProvider()
+		mock.ref = ref
+		mock.path = path
+		return mock, nil
+	}
+
 	if strings.HasPrefix(repo, "github.com/") {
 		return NewGithubProvider(repo, ref, path)
 	}
@@ -94,7 +112,9 @@ type Config struct {
 	Replacements []Replacement
 	IgnoreFiles  []string
 	Clean        bool   // Whether to clean destination directory
-	StatusCheck  bool   // Whether to only check status
+	Status       bool   // Whether to check local status
+	RemoteStatus bool   // Whether to check remote status
+	Force        bool   // Whether to force update even if status is ok
 	SrcRef       string // Source branch/ref
 }
 
@@ -102,6 +122,11 @@ func NewConfigFromInput(input Input) (*Config, error) {
 	provider, err := NewProvider(input.SrcRepo, input.SrcRef, input.SrcPath)
 	if err != nil {
 		return nil, errors.Errorf("creating provider: %w", err)
+	}
+
+	// Set fallback branch if using GithubProvider
+	if gh, ok := provider.(*GithubProvider); ok {
+		gh.fallbackBranch = "master" // Default fallback
 	}
 
 	replacements := make([]Replacement, 0, len(input.Replacements))
@@ -118,17 +143,20 @@ func NewConfigFromInput(input Input) (*Config, error) {
 		Replacements: replacements,
 		IgnoreFiles:  []string(input.IgnoreFiles),
 		Clean:        input.Clean,
-		StatusCheck:  input.StatusCheck,
+		Status:       input.Status,
+		RemoteStatus: input.RemoteStatus,
+		Force:        input.Force,
 		SrcRef:       input.SrcRef,
 	}, nil
 }
 
 // 🏗️ Github implementation
 type GithubProvider struct {
-	org  string // Parsed from repo URL
-	repo string // Parsed from repo URL
-	ref  string
-	path string
+	org            string // Parsed from repo URL
+	repo           string // Parsed from repo URL
+	ref            string
+	path           string
+	fallbackBranch string // Fallback branch if ref doesn't exist
 }
 
 func NewGithubProvider(repo, ref, path string) (*GithubProvider, error) {
@@ -140,10 +168,11 @@ func NewGithubProvider(repo, ref, path string) (*GithubProvider, error) {
 	}
 
 	return &GithubProvider{
-		org:  parts[0],
-		repo: parts[1],
-		ref:  ref,
-		path: path,
+		org:            parts[0],
+		repo:           parts[1],
+		ref:            ref,
+		path:           path,
+		fallbackBranch: "master", // Default fallback
 	}, nil
 }
 
@@ -201,11 +230,11 @@ func (g *GithubProvider) GetCommitHash(ctx context.Context) (string, error) {
 		return hash, nil
 	}
 
-	// If ref is "main", try "master" as fallback
-	if g.ref == "main" {
-		hash, err = g.tryGetCommitHash(ctx, "master")
+	// If ref is the default branch, try fallback
+	if g.ref == "main" || g.ref == "master" {
+		hash, err = g.tryGetCommitHash(ctx, g.fallbackBranch)
 		if err == nil {
-			g.ref = "master" // Update ref to the working one
+			g.ref = g.fallbackBranch // Update ref to the working one
 			return hash, nil
 		}
 	}
@@ -243,6 +272,8 @@ func (g *GithubProvider) GetSourceInfo(commitHash string) string {
 func main() {
 	// 🎯 Parse command line flags
 	var input Input
+	var configFile string
+	flag.StringVar(&configFile, "config", "", "Path to config file (.copyrc)")
 	flag.StringVar(&input.SrcRepo, "src-repo", "", "Source repository (e.g. github.com/org/repo)")
 	flag.StringVar(&input.SrcRef, "ref", "main", "Source branch/ref")
 	flag.StringVar(&input.SrcPath, "src-path", "", "Source path within repository")
@@ -250,8 +281,25 @@ func main() {
 	flag.Var(&input.Replacements, "replacements", "JSON array or comma-separated list of replacements in old:new format")
 	flag.Var(&input.IgnoreFiles, "ignore", "JSON array or comma-separated list of files to ignore")
 	flag.BoolVar(&input.Clean, "clean", false, "Clean destination directory before copying")
-	flag.BoolVar(&input.StatusCheck, "status", false, "Check if files are up to date")
+	flag.BoolVar(&input.Status, "status", false, "Check if files are up to date (local check only)")
+	flag.BoolVar(&input.RemoteStatus, "remote-status", false, "Check if files are up to date (includes remote check)")
+	flag.BoolVar(&input.Force, "force", false, "Force update even if status is ok")
 	flag.Parse()
+
+	// 🔍 Check if using config file
+	if configFile != "" {
+		cfg, err := LoadConfig(configFile)
+		if err != nil {
+			fmt.Printf("%s %v\n", errfmt("❌"), err)
+			os.Exit(1)
+		}
+
+		if err := cfg.RunAll(input.Clean, input.Status, input.RemoteStatus, input.Force); err != nil {
+			fmt.Printf("%s %v\n", errfmt("❌"), err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	// 🔍 Validate required flags
 	var missingFlags []string
@@ -296,6 +344,38 @@ func run(cfg *Config) error {
 		}
 	}
 
+	// 🔍 Check if arguments have changed
+	if cfg.Status || cfg.RemoteStatus {
+		if !cfg.Force && status.Args.SrcRepo != "" {
+			// Get provider info
+			var srcRepo, srcPath string
+			switch p := cfg.Provider.(type) {
+			case *GithubProvider:
+				srcRepo = p.org + "/" + p.repo
+				srcPath = p.path
+			case *MockProvider:
+				srcRepo = p.org + "/" + p.repo
+				srcPath = p.path
+			default:
+				return errors.New("unsupported provider type")
+			}
+
+			// Check if any arguments have changed
+			if status.Args.SrcRepo != srcRepo ||
+				status.Args.SrcRef != cfg.SrcRef ||
+				status.Args.SrcPath != srcPath ||
+				!stringSlicesEqual(status.Args.Replacements, cfg.Replacements) ||
+				!stringSlicesEqual(status.Args.IgnoreFiles, cfg.IgnoreFiles) {
+				return errors.New("configuration has changed")
+			}
+
+			// For local status check, we're done
+			if cfg.Status && !cfg.RemoteStatus {
+				return nil
+			}
+		}
+	}
+
 	// 🧹 Clean if requested
 	if cfg.Clean {
 		if err := cleanDestination(cfg.DestPath); err != nil {
@@ -303,60 +383,82 @@ func run(cfg *Config) error {
 		}
 	}
 
-	// 🔍 Get commit hash
-	commitHash, err := cfg.Provider.GetCommitHash(ctx)
-	if err != nil {
-		if cfg.StatusCheck {
-			fmt.Fprintf(os.Stderr, "%s Unable to check remote status: %v\n", warn("⚠️"), err)
-			return nil // Not an error for status check
+	// 🔍 Get commit hash (only for remote status or actual sync)
+	if !cfg.Status || cfg.RemoteStatus {
+		commitHash, err := cfg.Provider.GetCommitHash(ctx)
+		if err != nil {
+			if cfg.RemoteStatus {
+				fmt.Fprintf(os.Stderr, "%s Unable to check remote status: %v\n", warn("⚠️"), err)
+				return nil // Not an error for status check
+			}
+			return errors.Errorf("getting commit hash: %w", err)
 		}
-		return errors.Errorf("getting commit hash: %w", err)
-	}
 
-	// 📋 List files
-	files, err := cfg.Provider.ListFiles(ctx)
-	if err != nil {
-		if cfg.StatusCheck {
-			fmt.Fprintf(os.Stderr, "%s Unable to list remote files: %v\n", warn("⚠️"), err)
-			return nil // Not an error for status check
-		}
-		return errors.Errorf("listing files: %w", err)
-	}
-
-	// Status check only
-	if cfg.StatusCheck {
-		if status.CommitHash != commitHash {
+		// Check if files are up to date
+		if (cfg.Status || cfg.RemoteStatus) && !cfg.Force {
+			if status.CommitHash == commitHash {
+				return nil
+			}
 			return errors.New("files are out of date")
 		}
-		return nil
+
+		// 📋 List files
+		files, err := cfg.Provider.ListFiles(ctx)
+		if err != nil {
+			if cfg.RemoteStatus {
+				fmt.Fprintf(os.Stderr, "%s Unable to list remote files: %v\n", warn("⚠️"), err)
+				return nil // Not an error for status check
+			}
+			return errors.Errorf("listing files: %w", err)
+		}
+
+		// 🔄 Process each file
+		g, ctx := errgroup.WithContext(ctx)
+		var mu sync.Mutex // For status file access
+		for _, file := range files {
+			file := file // capture for goroutine
+			g.Go(func() error {
+				return processFile(ctx, cfg, file, commitHash, status, &mu)
+			})
+		}
+
+		if err := g.Wait(); err != nil {
+			return err
+		}
+
+		// Update status file metadata
+		status.LastUpdated = time.Now().UTC()
+		status.CommitHash = commitHash
+		status.Branch = cfg.SrcRef
 	}
 
-	// 🔄 Process each file
-	g, ctx := errgroup.WithContext(ctx)
-	var mu sync.Mutex // For status file access
-	for _, file := range files {
-		file := file // capture for goroutine
-		g.Go(func() error {
-			return processFile(ctx, cfg, file, commitHash, status, &mu)
-		})
+	// Update status file arguments
+	switch p := cfg.Provider.(type) {
+	case *GithubProvider:
+		status.Args.SrcRepo = p.org + "/" + p.repo
+		status.Args.SrcPath = p.path
+	case *MockProvider:
+		status.Args.SrcRepo = p.org + "/" + p.repo
+		status.Args.SrcPath = p.path
+	default:
+		return errors.New("unsupported provider type")
 	}
-
-	if err := g.Wait(); err != nil {
-		return err
+	status.Args.SrcRef = cfg.SrcRef
+	status.Args.Replacements = make([]string, len(cfg.Replacements))
+	for i, r := range cfg.Replacements {
+		status.Args.Replacements[i] = r.Old + ":" + r.New
 	}
-
-	// Update status file metadata
-	status.LastUpdated = time.Now().UTC()
-	status.CommitHash = commitHash
-	status.Branch = cfg.SrcRef
+	status.Args.IgnoreFiles = cfg.IgnoreFiles
 
 	// Write final status
 	if err := writeStatusFile(statusFile, status); err != nil {
 		return errors.Errorf("writing status file: %w", err)
 	}
 
-	fmt.Printf("\n%s Successfully processed %d files\n", emoji("✨"), len(files))
-	fmt.Printf("%s See %s for detailed information\n", emoji("📝"), info(statusFile))
+	if !cfg.Status && !cfg.RemoteStatus {
+		fmt.Printf("\n%s Successfully processed %d files\n", emoji("✨"), len(status.Entries))
+		fmt.Printf("%s See %s for detailed information\n", emoji("📝"), info(statusFile))
+	}
 	return nil
 }
 
@@ -537,4 +639,32 @@ func (i *arrayFlags) Set(value string) error {
 	// Single value
 	*i = append(*i, value)
 	return nil
+}
+
+// Helper function to compare string slices
+func stringSlicesEqual(a []string, b interface{}) bool {
+	switch v := b.(type) {
+	case []string:
+		if len(a) != len(v) {
+			return false
+		}
+		for i := range a {
+			if a[i] != v[i] {
+				return false
+			}
+		}
+		return true
+	case []Replacement:
+		if len(a) != len(v) {
+			return false
+		}
+		for i := range a {
+			if a[i] != v[i].Old+":"+v[i].New {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
 }
