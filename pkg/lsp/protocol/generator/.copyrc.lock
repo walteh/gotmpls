@@ -1,13 +1,13 @@
 {
-	"last_updated": "2025-01-21T18:39:17.529075Z",
-	"commit_hash": "96a07bb5a10cad767e4a70c7fad8c2d09f663712",
+	"last_updated": "2025-01-21T22:09:22.026702Z",
+	"commit_hash": "b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3",
 	"branch": "master",
 	"coppied_files": {
 		"README.copy.md": {
 			"file": "README.copy.md",
-			"source": "github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/96a07bb5a10cad767e4a70c7fad8c2d09f663712/gopls/internal/protocol/generate/README.md",
-			"last_updated": "2025-01-21T18:39:17.526023Z",
+			"source": "github.com/golang/tools@b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3/gopls/internal/protocol/generate/README.md",
+			"last_updated": "2025-01-21T20:01:06.932073Z",
 			"changes": [
 				"Line 90: Replaced 'tsprotocol.go' with 'tsprotocol.gen.go'",
 				"Line 129: Replaced 'tsprotocol.go' with 'tsprotocol.gen.go'",
@@ -20,15 +20,15 @@
 		},
 		"generate.copy.go": {
 			"file": "generate.copy.go",
-			"source": "github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/96a07bb5a10cad767e4a70c7fad8c2d09f663712/gopls/internal/protocol/generate/generate.go",
-			"last_updated": "2025-01-21T18:39:17.527546Z"
+			"source": "github.com/golang/tools@b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3/gopls/internal/protocol/generate/generate.go",
+			"last_updated": "2025-01-21T20:01:06.900919Z"
 		},
 		"main.copy.go": {
 			"file": "main.copy.go",
-			"source": "github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/96a07bb5a10cad767e4a70c7fad8c2d09f663712/gopls/internal/protocol/generate/main.go",
-			"last_updated": "2025-01-21T18:39:17.52759Z",
+			"source": "github.com/golang/tools@b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3/gopls/internal/protocol/generate/main.go",
+			"last_updated": "2025-01-21T21:24:20.518677Z",
 			"changes": [
 				"Line 56: Replaced 'func processinline()' with 'func processinline_old()'",
 				"Line 105: Replaced 'golang.org/x/tools/internal/jsonrpc2' with 'github.com/creachadair/jrpc2'",
@@ -40,20 +40,24 @@
 				"Line 188: Replaced 'tsprotocol.go' with 'tsprotocol.gen.go'",
 				"Line 155: Replaced 'tsserver.go' with 'tsserver.gen.go'",
 				"Line 124: Replaced 'tsclient.go' with 'tsclient.gen.go'",
-				"Line 212: Replaced 'tsjson.go' with 'tsjson.gen.go'"
+				"Line 212: Replaced 'tsjson.go' with 'tsjson.gen.go'",
+				"Line 49: Replaced 'main()' with 'main_old()'"
 			]
 		},
 		"main_test.copy.go": {
 			"file": "main_test.copy.go",
-			"source": "github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/96a07bb5a10cad767e4a70c7fad8c2d09f663712/gopls/internal/protocol/generate/main_test.go",
-			"last_updated": "2025-01-21T18:39:17.52592Z"
+			"source": "github.com/golang/tools@b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3/gopls/internal/protocol/generate/main_test.go",
+			"last_updated": "2025-01-21T21:24:20.634098Z",
+			"changes": [
+				"Line 28: Replaced 'main()' with 'main_old()'"
+			]
 		},
 		"output.copy.go": {
 			"file": "output.copy.go",
-			"source": "github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/96a07bb5a10cad767e4a70c7fad8c2d09f663712/gopls/internal/protocol/generate/output.go",
-			"last_updated": "2025-01-21T18:39:17.527653Z",
+			"source": "github.com/golang/tools@b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3/gopls/internal/protocol/generate/output.go",
+			"last_updated": "2025-01-21T20:01:06.913771Z",
 			"changes": [
 				"Line 94: Replaced 'func genCase(' with 'func genCase_old('",
 				"Line 136: Replaced 'func genFunc(' with 'func genFunc_old('",
@@ -69,21 +73,21 @@
 		},
 		"tables.copy.go": {
 			"file": "tables.copy.go",
-			"source": "github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/96a07bb5a10cad767e4a70c7fad8c2d09f663712/gopls/internal/protocol/generate/tables.go",
-			"last_updated": "2025-01-21T18:39:17.525887Z"
+			"source": "github.com/golang/tools@b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3/gopls/internal/protocol/generate/tables.go",
+			"last_updated": "2025-01-21T20:01:06.919698Z"
 		},
 		"typenames.copy.go": {
 			"file": "typenames.copy.go",
-			"source": "github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/96a07bb5a10cad767e4a70c7fad8c2d09f663712/gopls/internal/protocol/generate/typenames.go",
-			"last_updated": "2025-01-21T18:39:17.527657Z"
+			"source": "github.com/golang/tools@b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3/gopls/internal/protocol/generate/typenames.go",
+			"last_updated": "2025-01-21T20:01:06.900845Z"
 		},
 		"types.copy.go": {
 			"file": "types.copy.go",
-			"source": "github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/96a07bb5a10cad767e4a70c7fad8c2d09f663712/gopls/internal/protocol/generate/types.go",
-			"last_updated": "2025-01-21T18:39:17.527612Z"
+			"source": "github.com/golang/tools@b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/b0164fc0abdbbdf9b536f4c09abc0b3b228c00d3/gopls/internal/protocol/generate/types.go",
+			"last_updated": "2025-01-21T20:01:06.901929Z"
 		}
 	},
 	"generated_files": {},
@@ -144,6 +148,10 @@
 				{
 					"old": "tsjson.go",
 					"new": "tsjson.gen.go"
+				},
+				{
+					"old": "main()",
+					"new": "main_old()"
 				}
 			],
 			"ignore_files": [

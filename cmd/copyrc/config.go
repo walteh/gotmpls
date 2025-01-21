@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"strings"
 
@@ -108,49 +109,54 @@ func LoadConfig(path string) (*CopyConfig, error) {
 
 // 🏃 Run all copy operations
 func (cfg *CopyConfig) RunAll(clean, status, remoteStatus, force bool, provider RepoProvider) error {
-	for _, copyEntry := range cfg.Copies {
-		input := Config{
+	logger := NewLogger(os.Stdout)
+	logger.Header("Copying files from repositories")
+
+	// Process copies
+	for _, copy := range cfg.Copies {
+		logger.Operation(fmt.Sprintf("Repository: %s (ref: %s -> %s)", copy.Source.Repo, copy.Source.Ref, copy.Destination.Path))
+		config := &Config{
 			ProviderArgs: ProviderArgs{
-				Repo: copyEntry.Source.Repo,
-				Ref:  copyEntry.Source.Ref,
-				Path: copyEntry.Source.Path,
+				Repo: copy.Source.Repo,
+				Ref:  copy.Source.Ref,
+				Path: copy.Source.Path,
 			},
-			DestPath:     copyEntry.Destination.Path,
+			DestPath: copy.Destination.Path,
+			CopyArgs: &ConfigCopyArgs{
+				Replacements: copy.Options.Replacements,
+				IgnoreFiles:  copy.Options.IgnoreFiles,
+			},
 			Clean:        clean,
 			Status:       status,
 			RemoteStatus: remoteStatus,
 			Force:        force,
-			CopyArgs: &ConfigCopyArgs{
-				Replacements: copyEntry.Options.Replacements,
-				IgnoreFiles:  copyEntry.Options.IgnoreFiles,
-			},
 		}
 
-		// Run copy operation
-		if err := run(&input, provider); err != nil {
-			return errors.Errorf("copying %s: %w", copyEntry.Source.Repo, err)
+		if err := run(config, provider); err != nil {
+			return errors.Errorf("running copy %s: %w", copy.Destination.Path, err)
 		}
 	}
 
-	for _, archiveEntry := range cfg.Archives {
-		input := Config{
+	// Process archives
+	for _, archive := range cfg.Archives {
+		logger.Operation(fmt.Sprintf("Repository: %s (ref: %s -> %s) [archive]", archive.Source.Repo, archive.Source.Ref, archive.Destination.Path))
+		config := &Config{
 			ProviderArgs: ProviderArgs{
-				Repo: archiveEntry.Source.Repo,
-				Ref:  archiveEntry.Source.Ref,
-				Path: archiveEntry.Source.Path,
+				Repo: archive.Source.Repo,
+				Ref:  archive.Source.Ref,
 			},
-			DestPath:     archiveEntry.Destination.Path,
+			DestPath: archive.Destination.Path,
+			ArchiveArgs: &ConfigArchiveArgs{
+				GoEmbed: archive.Options.GoEmbed,
+			},
 			Clean:        clean,
 			Status:       status,
 			RemoteStatus: remoteStatus,
 			Force:        force,
-			ArchiveArgs: &ConfigArchiveArgs{
-				GoEmbed: archiveEntry.Options.GoEmbed,
-			},
 		}
 
-		if err := run(&input, provider); err != nil {
-			return errors.Errorf("copying %s: %w", archiveEntry.Source.Repo, err)
+		if err := run(config, provider); err != nil {
+			return errors.Errorf("running archive %s: %w", archive.Destination.Path, err)
 		}
 	}
 
