@@ -175,12 +175,21 @@ func Other() {}`))
 	patchPath := filepath.Join(dest1, "test.copy.patch.go")
 	require.NoError(t, os.WriteFile(patchPath, []byte("patch content"), 0644))
 
+	// write a status file to dest1
+	statusPath := filepath.Join(dest1, ".copyrc.lock")
+	require.NoError(t, writeStatusFile(statusPath, &StatusFile{
+		CoppiedFiles: map[string]StatusEntry{
+			"test.copy.go": {
+				File: "test.copy.go",
+			},
+		},
+	}))
+
 	// Test clean
 	require.NoError(t, cfg.RunAll(true, false, false, false, mock))
-	_, err = os.Stat(filepath.Join(dest1, "test.copy.go"))
-	assert.True(t, os.IsNotExist(err), "file should be removed by clean")
-	_, err = os.Stat(patchPath)
-	assert.NoError(t, err, "patch file should still exist")
+	require.NoFileExists(t, filepath.Join(dest1, "test.copy.go"))
+	require.NoFileExists(t, statusPath)
+	require.FileExists(t, patchPath)
 }
 
 func TestLoadHCLConfig(t *testing.T) {

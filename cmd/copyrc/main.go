@@ -33,11 +33,16 @@ var (
 
 // 📝 Status file entry
 type StatusEntry struct {
-	File       string    `json:"file"`
-	Source     string    `json:"source"`
-	Permalink  string    `json:"permalink"`
-	Downloaded time.Time `json:"downloaded"`
-	Changes    []string  `json:"changes,omitempty"`
+	File        string    `json:"file"`
+	Source      string    `json:"source"`
+	Permalink   string    `json:"permalink"`
+	LastUpdated time.Time `json:"last_updated"`
+	Changes     []string  `json:"changes,omitempty"`
+}
+
+type GeneratedFileEntry struct {
+	File        string    `json:"file"`
+	LastUpdated time.Time `json:"last_updated"`
 }
 
 type StatusFileArgs struct {
@@ -50,13 +55,13 @@ type StatusFileArgs struct {
 
 // 📦 Status file structure
 type StatusFile struct {
-	LastUpdated time.Time              `json:"last_updated"`
-	CommitHash  string                 `json:"commit_hash"`
-	Ref         string                 `json:"branch"`
-	Entries     map[string]StatusEntry `json:"entries"`
-	Warnings    []string               `json:"warnings,omitempty"`
-	// 📝 Store command arguments for change detection
-	Args StatusFileArgs `json:"args"`
+	LastUpdated    time.Time                     `json:"last_updated"`
+	CommitHash     string                        `json:"commit_hash"`
+	Ref            string                        `json:"branch"`
+	CoppiedFiles   map[string]StatusEntry        `json:"coppied_files"`
+	GeneratedFiles map[string]GeneratedFileEntry `json:"generated_files"`
+	Warnings       []string                      `json:"warnings,omitempty" hcl:"warnings,omitempty" yaml:"warnings,omitempty"`
+	Args           StatusFileArgs                `json:"args" hcl:"args" yaml:"args"`
 }
 
 // 🔄 Replacement represents a string replacement
@@ -96,8 +101,8 @@ type RepoProvider interface {
 }
 
 type ConfigCopyArgs struct {
-	Replacements []Replacement `hcl:"replacements" yaml:"replacements"`
-	IgnoreFiles  []string      `hcl:"ignore_files" yaml:"ignore_files"`
+	Replacements []Replacement `hcl:"replacements" yaml:"replacements" json:"replacements"`
+	IgnoreFiles  []string      `hcl:"ignore_files" yaml:"ignore_files" json:"ignore_files"`
 }
 
 type ConfigArchiveArgs struct {
@@ -354,9 +359,14 @@ func run(cfg *Config, provider RepoProvider) error {
 	fmt.Printf("🔍 Loading status file from: %s\n", info(statusFile))
 	status, err := loadStatusFile(statusFile)
 	if err != nil {
+		return errors.Errorf("loading status file: %w", err)
+	}
+
+	if status == nil {
 		fmt.Printf("📝 Creating new status file (error loading: %v)\n", warn(err))
 		status = &StatusFile{
-			Entries: make(map[string]StatusEntry),
+			CoppiedFiles:   make(map[string]StatusEntry),
+			GeneratedFiles: make(map[string]GeneratedFileEntry),
 		}
 	}
 
@@ -403,9 +413,11 @@ func run(cfg *Config, provider RepoProvider) error {
 	// 🧹 Clean if requested
 	if cfg.Clean {
 		fmt.Printf("🧹 Cleaning destination directory: %s\n", info(cfg.DestPath))
-		if err := cleanDestination(cfg.DestPath); err != nil {
+		if err := cleanDestination(status, cfg.DestPath); err != nil {
 			return errors.Errorf("cleaning destination: %w", err)
 		}
+		fmt.Printf("🧹 Cleaned destination directory: %s\n", success(cfg.DestPath))
+		return nil
 	}
 
 	// 🔍 Get commit hash (only for remote status or actual sync)
@@ -497,9 +509,6 @@ func run(cfg *Config, provider RepoProvider) error {
 		status.Args.ArchiveArgs.GoEmbed = cfg.ArchiveArgs.GoEmbed
 	}
 
-	// Update status file metadata
-	status.LastUpdated = time.Now().UTC()
-
 	fmt.Printf("📝 Updated status file metadata:\n")
 	fmt.Printf("  - Last Updated: %s\n", info(status.LastUpdated))
 	fmt.Printf("  - Commit Hash: %s\n", info(status.CommitHash))
@@ -512,30 +521,36 @@ func run(cfg *Config, provider RepoProvider) error {
 	}
 
 	if !cfg.Status && !cfg.RemoteStatus {
-		fmt.Printf("\n%s Successfully processed %d files\n", emoji("✨"), len(status.Entries))
+		fmt.Printf("\n%s Successfully processed %d files\n", emoji("✨"), len(status.CoppiedFiles))
 		fmt.Printf("%s See %s for detailed information\n", emoji("📝"), info(statusFile))
 	}
 	return nil
 }
 
 // 🧹 Clean destination directory
-func cleanDestination(destPath string) error {
-	entries, err := os.ReadDir(destPath)
-	if err != nil {
-		return errors.Errorf("reading directory: %w", err)
+func cleanDestination(status *StatusFile, destPath string) error {
+
+	for _, entry := range status.CoppiedFiles {
+		fmt.Printf("🧹 Removing %s\n", info(entry.File))
+		if err := os.Remove(filepath.Join(destPath, entry.File)); err != nil {
+			return errors.Errorf("removing file: %w", err)
+		}
 	}
 
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if strings.Contains(name, ".copy.") && !strings.Contains(name, ".patch.") {
-			if err := os.Remove(filepath.Join(destPath, name)); err != nil {
-				return errors.Errorf("removing file: %w", err)
-			}
+	for _, entry := range status.GeneratedFiles {
+		fmt.Printf("🧹 Removing %s\n", info(entry.File))
+		if err := os.Remove(filepath.Join(destPath, entry.File)); err != nil {
+			return errors.Errorf("removing file: %w", err)
 		}
 	}
+
+	fmt.Printf("🧹 Removing %s\n", info(".copyrc.lock"))
+	if err := os.Remove(filepath.Join(destPath, ".copyrc.lock")); err != nil {
+		if !os.IsNotExist(err) {
+			return errors.Errorf("removing status file: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -543,12 +558,23 @@ func cleanDestination(destPath string) error {
 func loadStatusFile(path string) (*StatusFile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
 	var status StatusFile
 	if err := json.Unmarshal(data, &status); err != nil {
 		return nil, errors.Errorf("parsing status file: %w", err)
+	}
+
+	if status.CoppiedFiles == nil {
+		status.CoppiedFiles = make(map[string]StatusEntry)
+	}
+
+	if status.GeneratedFiles == nil {
+		status.GeneratedFiles = make(map[string]GeneratedFileEntry)
 	}
 
 	return &status, nil
@@ -560,7 +586,7 @@ func writeStatusFile(path string, status *StatusFile) error {
 	// read the current status file json
 	currentStatus, err := os.ReadFile(path)
 	if err != nil {
-		return errors.Errorf("reading current status file: %w", err)
+		currentStatus = []byte("invalid")
 	}
 
 	data, err := json.MarshalIndent(status, "", "\t")
@@ -574,6 +600,10 @@ func writeStatusFile(path string, status *StatusFile) error {
 	}
 
 	status.LastUpdated = time.Now().UTC()
+	data, err = json.MarshalIndent(status, "", "\t")
+	if err != nil {
+		return errors.Errorf("marshaling status: %w", err)
+	}
 
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		return errors.Errorf("writing status file: %w", err)
@@ -607,9 +637,14 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 			return errors.Errorf("getting file from tarball: %w", err)
 		}
 		fmt.Printf("📥 Downloaded %d bytes\n", len(data))
+		tarballPath := filepath.Join(repoDir, repoName+".tar.gz")
+
+		preTarball, err := os.ReadFile(tarballPath)
+		if err != nil {
+			preTarball = []byte("invalid")
+		}
 
 		// Save tarball
-		tarballPath := filepath.Join(repoDir, repoName+".tar.gz")
 		if err := os.WriteFile(tarballPath, data, 0644); err != nil {
 			return errors.Errorf("writing tarball: %w", err)
 		}
@@ -622,6 +657,21 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 		permalink, err := provider.GetArchiveUrl(ctx, cfg.ProviderArgs)
 		if err != nil {
 			return errors.Errorf("getting permalink: %w", err)
+		}
+
+		entry := StatusEntry{
+			File:      repoName + ".tar.gz",
+			Source:    sourceInfo,
+			Permalink: permalink,
+			Changes:   []string{},
+		}
+
+		_, hasOldStatus := status.CoppiedFiles[entry.File]
+
+		if bytes.Equal(preTarball, data) && hasOldStatus {
+			entry.LastUpdated = status.CoppiedFiles[entry.File].LastUpdated
+		} else {
+			entry.LastUpdated = time.Now().UTC()
 		}
 
 		if cfg.ArchiveArgs.GoEmbed {
@@ -642,25 +692,27 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 			fmt.Fprintf(&buf, "\tCommit     = %q\n", commitHash)
 			fmt.Fprintf(&buf, "\tRepository = %q\n", cfg.ProviderArgs.Repo)
 			fmt.Fprintf(&buf, "\tPermalink  = %q\n", permalink)
-			fmt.Fprintf(&buf, "\tDownloaded = %q\n", time.Now().UTC().Format(time.RFC3339))
+			fmt.Fprintf(&buf, "\tDownloaded = %q\n", entry.LastUpdated.Format(time.RFC3339))
 			fmt.Fprintf(&buf, ")\n")
 
 			if err := os.WriteFile(embedPath, buf.Bytes(), 0644); err != nil {
 				return errors.Errorf("writing embed.gen.go: %w", err)
 			}
+
+			entry.Changes = []string{"generated embed.gen.go file"}
+			status.GeneratedFiles["embed.gen.go"] = GeneratedFileEntry{
+				File:        "embed.gen.go",
+				LastUpdated: entry.LastUpdated,
+			}
+
 		}
-		// Create status entry
-		entry := StatusEntry{
-			File:       repoName + ".tar.gz",
-			Source:     sourceInfo,
-			Permalink:  permalink,
-			Downloaded: time.Now().UTC(),
-			Changes:    []string{"generated embed.gen.go file"},
-		}
+
+		// just in case
+		delete(status.GeneratedFiles, entry.File)
 
 		// Update status file (with mutex for concurrent access)
 		mu.Lock()
-		status.Entries[entry.File] = entry
+		status.CoppiedFiles[entry.File] = entry
 		mu.Unlock()
 		fmt.Printf("📝 Updated status entry for %s\n", info(entry.File))
 
@@ -719,10 +771,10 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 
 	// 📝 Create status entry
 	entry := StatusEntry{
-		File:       base + ".copy" + ext,
-		Source:     sourceInfo,
-		Permalink:  permalink,
-		Downloaded: time.Now().UTC(),
+		File:        base + ".copy" + ext,
+		Source:      sourceInfo,
+		Permalink:   permalink,
+		LastUpdated: time.Now().UTC(),
 	}
 	fmt.Printf("📝 Created status entry:\n")
 	fmt.Printf("  - Output file: %s\n", info(entry.File))
@@ -799,11 +851,12 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 	// Check if file exists and has .patch suffix
 	outPath := filepath.Join(cfg.DestPath, entry.File)
 
-	_, hasOldStatus := status.Entries[entry.File]
+	_, hasOldStatus := status.CoppiedFiles[entry.File]
 
+	currFile, err := os.ReadFile(outPath)
 	// if the current and new file are the same, skip
-	if bytes.Equal(buf.Bytes(), contentz) && hasOldStatus {
-		entry.Downloaded = status.Entries[entry.File].Downloaded
+	if err == nil && bytes.Equal(currFile, buf.Bytes()) && hasOldStatus {
+		entry.LastUpdated = status.CoppiedFiles[entry.File].LastUpdated
 	} else {
 		// Write the file
 		fmt.Printf("💾 Writing %d bytes to %s\n", buf.Len(), info(outPath))
@@ -814,7 +867,7 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 
 	// Update status file (with mutex for concurrent access)
 	mu.Lock()
-	status.Entries[entry.File] = entry
+	status.CoppiedFiles[entry.File] = entry
 	mu.Unlock()
 	fmt.Printf("📝 Updated status entry for %s\n", info(entry.File))
 

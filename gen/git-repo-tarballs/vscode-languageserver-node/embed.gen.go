@@ -14,5 +14,5 @@ var (
 	Commit     = "795aa54071f4f1e3ad7d95ba815fd286cfafab5e"
 	Repository = "github.com/microsoft/vscode-languageserver-node"
 	Permalink  = "https://github.com/microsoft/vscode-languageserver-node/archive/refs/tags/release/jsonrpc/9.0.0-next.6.tar.gz"
-	Downloaded = "2025-01-21T17:52:52Z"
+	Downloaded = "2025-01-21T18:39:20Z"
 )

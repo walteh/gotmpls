@@ -1,16 +1,22 @@
 {
-	"last_updated": "2025-01-21T17:52:50.847045Z",
+	"last_updated": "2025-01-21T18:42:39.841728Z",
 	"commit_hash": "343ac34abc7ab53fae33357f915024aaacb76a3e",
 	"branch": "tags/v1.3.0",
-	"entries": {
+	"coppied_files": {
 		"nvim-lspconfig.tar.gz": {
 			"file": "nvim-lspconfig.tar.gz",
 			"source": "github.com/neovim/nvim-lspconfig@343ac34abc7ab53fae33357f915024aaacb76a3e",
 			"permalink": "https://github.com/neovim/nvim-lspconfig/archive/refs/tags/v1.3.0.tar.gz",
-			"downloaded": "2025-01-21T17:52:50.847034Z",
+			"last_updated": "2025-01-21T18:39:19.247283Z",
 			"changes": [
 				"generated embed.gen.go file"
 			]
+		}
+	},
+	"generated_files": {
+		"embed.gen.go": {
+			"file": "embed.gen.go",
+			"last_updated": "2025-01-21T18:39:19.247283Z"
 		}
 	},
 	"args": {
