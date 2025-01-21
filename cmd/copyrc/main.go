@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/fatih/color"
 	"gitlab.com/tozd/go/errors"
 	"golang.org/x/exp/slices"
@@ -60,8 +61,9 @@ type StatusFile struct {
 
 // 🔄 Replacement represents a string replacement
 type Replacement struct {
-	Old string `json:"old" hcl:"old" yaml:"old" cty:"old"`
-	New string `json:"new" hcl:"new" yaml:"new" cty:"new"`
+	Old  string  `json:"old" hcl:"old" yaml:"old" cty:"old"`
+	New  string  `json:"new" hcl:"new" yaml:"new" cty:"new"`
+	File *string `json:"file,omitempty" hcl:"file,optional" yaml:"file,omitempty"`
 }
 
 // 📦 Input represents raw command line input
@@ -372,12 +374,12 @@ func run(cfg *Config, provider RepoProvider) error {
 		fmt.Printf("  - Path: %s vs %s\n", info(status.Args.SrcPath), info(cfg.ProviderArgs.Path))
 		var argsAreSame bool = false
 		if status.Args.ArchiveArgs != nil {
-			argsAreSame = (status.Args.ArchiveArgs.GoEmbed == cfg.ArchiveArgs.GoEmbed)
+			argsAreSame = status.Args.ArchiveArgs.GoEmbed == cfg.ArchiveArgs.GoEmbed
 			fmt.Printf("  - Archive Args: %v vs %v - %v\n", info(status.Args.ArchiveArgs.GoEmbed), info(cfg.ArchiveArgs.GoEmbed), status.Args.ArchiveArgs.GoEmbed == cfg.ArchiveArgs.GoEmbed)
 		}
 		if status.Args.CopyArgs != nil {
-			argsAreSame = (slices.Equal(status.Args.CopyArgs.Replacements, cfg.CopyArgs.Replacements) &&
-				slices.Equal(status.Args.CopyArgs.IgnoreFiles, cfg.CopyArgs.IgnoreFiles))
+			argsAreSame = slices.Equal(status.Args.CopyArgs.Replacements, cfg.CopyArgs.Replacements) &&
+				slices.Equal(status.Args.CopyArgs.IgnoreFiles, cfg.CopyArgs.IgnoreFiles)
 			fmt.Printf("  - Copy Args: %v vs %v - %v\n", info(status.Args.CopyArgs.Replacements), info(cfg.CopyArgs.Replacements), slices.Equal(status.Args.CopyArgs.Replacements, cfg.CopyArgs.Replacements))
 			fmt.Printf("  - Copy Args: %v vs %v - %v\n", info(status.Args.CopyArgs.IgnoreFiles), info(cfg.CopyArgs.IgnoreFiles), slices.Equal(status.Args.CopyArgs.IgnoreFiles, cfg.CopyArgs.IgnoreFiles))
 		}
@@ -750,6 +752,15 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 	if ext == ".go" {
 		fmt.Printf("🔄 Applying %d replacements\n", len(cfg.CopyArgs.Replacements))
 		for _, r := range cfg.CopyArgs.Replacements {
+			if r.File != nil && *r.File != "" {
+				matched, err := doublestar.Match(*r.File, file)
+				if err != nil {
+					return errors.Errorf("matching file: %w", err)
+				}
+				if !matched {
+					continue
+				}
+			}
 			if bytes.Contains(buf.Bytes(), []byte(r.Old)) {
 				// Find line numbers for the changes
 				lines := bytes.Split(buf.Bytes(), []byte("\n"))
