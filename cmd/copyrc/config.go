@@ -361,19 +361,6 @@ func LoadConfig(path string) (*CopyConfig, error) {
 // }
 
 // 🔍 Set defaults and validate config
-func finalizeConfig(cfg *CopyConfig) (*CopyConfig, error) {
-
-	if cfg.StatusFile == "" {
-		cfg.StatusFile = ".copy-status"
-	}
-
-	// Validate config
-	if err := validateConfig(cfg); err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
-}
 
 // 🔍 Validate config
 func validateConfig(cfg *CopyConfig) error {

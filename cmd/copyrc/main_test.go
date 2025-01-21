@@ -207,7 +207,7 @@ func Other() {}`))
 
 	t.Run("status check", func(t *testing.T) {
 		dir := t.TempDir()
-		statusPath := filepath.Join(dir, ".copy-status")
+		statusPath := filepath.Join(dir, ".copyrc.lock")
 
 		// Create initial status
 		status := &StatusFile{
@@ -242,7 +242,7 @@ func Other() {}`))
 
 	t.Run("local_status_check", func(t *testing.T) {
 		dir := t.TempDir()
-		statusPath := filepath.Join(dir, ".copy-status")
+		statusPath := filepath.Join(dir, ".copyrc.lock")
 
 		// Create initial status
 		status := &StatusFile{
@@ -292,7 +292,7 @@ func Other() {}`))
 
 	t.Run("argument_change_detection", func(t *testing.T) {
 		dir := t.TempDir()
-		statusPath := filepath.Join(dir, ".copy-status")
+		statusPath := filepath.Join(dir, ".copyrc.lock")
 
 		// Create initial status
 		status := &StatusFile{
@@ -336,7 +336,7 @@ func Other() {}`))
 
 func TestStatusFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, ".copy-status")
+	path := filepath.Join(dir, ".copyrc.lock")
 
 	// Create test status
 	status := &StatusFile{
@@ -419,7 +419,7 @@ func TestTarballMode(t *testing.T) {
 	assert.Contains(t, contentStr, "Repository = \"github.com/org/repo\"", "should have correct repository")
 
 	// Verify status file
-	statusPath := filepath.Join(repoDir, ".copy-status")
+	statusPath := filepath.Join(repoDir, ".copyrc.lock")
 	require.FileExists(t, statusPath, "status file should exist at %s", statusPath)
 
 	// Read and verify status file

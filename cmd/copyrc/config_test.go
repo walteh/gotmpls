@@ -20,7 +20,7 @@ func TestLoadConfig(t *testing.T) {
 		{
 			name: "valid_config",
 			config: `
-status_file: .copy-status
+status_file: .copyrc.lock
 copies:
   - source:
       repo: org/repo
@@ -36,7 +36,7 @@ copies:
         - "*.txt"
 `,
 			validate: func(t *testing.T, cfg *CopyConfig) {
-				require.Equal(t, ".copy-status", cfg.StatusFile)
+				require.Equal(t, ".copyrc.lock", cfg.StatusFile)
 				require.Len(t, cfg.Copies, 1)
 				require.Equal(t, "org/repo", cfg.Copies[0].Source.Repo)
 				require.Equal(t, "main", cfg.Copies[0].Source.Ref)
@@ -122,7 +122,7 @@ func Other() {}`))
 
 	// Create config
 	cfg := &CopyConfig{
-		StatusFile: ".copy-status",
+		StatusFile: ".copyrc.lock",
 		Defaults:   &DefaultsBlock{},
 		Copies: []*CopyEntry{
 			{
@@ -197,7 +197,7 @@ func TestLoadHCLConfig(t *testing.T) {
 			name: "valid_hcl_config",
 			config: `
 # Global settings
-status_file = ".copy-status"
+status_file = ".copyrc.lock"
 
 # Default settings
 defaults {
@@ -225,7 +225,7 @@ copy {
 }
 `,
 			validate: func(t *testing.T, cfg *CopyConfig) {
-				require.Equal(t, ".copy-status", cfg.StatusFile)
+				require.Equal(t, ".copyrc.lock", cfg.StatusFile)
 				require.NotNil(t, cfg.Defaults)
 				require.Len(t, cfg.Copies, 1)
 				require.Equal(t, "org/repo", cfg.Copies[0].Source.Repo)

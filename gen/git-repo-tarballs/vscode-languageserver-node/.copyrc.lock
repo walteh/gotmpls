@@ -1,5 +1,5 @@
 {
-	"last_updated": "2025-01-21T17:12:06.542157Z",
+	"last_updated": "2025-01-21T17:18:36.602791Z",
 	"commit_hash": "795aa54071f4f1e3ad7d95ba815fd286cfafab5e",
 	"branch": "tags/release/jsonrpc/9.0.0-next.6",
 	"entries": {
@@ -7,7 +7,7 @@
 			"file": "vscode-languageserver-node.tar.gz",
 			"source": "github.com/microsoft/vscode-languageserver-node@795aa54071f4f1e3ad7d95ba815fd286cfafab5e",
 			"permalink": "https://github.com/microsoft/vscode-languageserver-node/archive/refs/tags/release/jsonrpc/9.0.0-next.6.tar.gz",
-			"downloaded": "2025-01-21T17:12:06.54207Z",
+			"downloaded": "2025-01-21T17:18:36.60273Z",
 			"changes": [
 				"generated embed.gen.go file"
 			]
