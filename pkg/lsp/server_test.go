@@ -2,73 +2,13 @@ package lsp_test
 
 import (
 	"context"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
-	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/walteh/gotmpls/gen/mockery"
 	"github.com/walteh/gotmpls/pkg/lsp"
 	"github.com/walteh/gotmpls/pkg/lsp/integration/nvim"
 	"github.com/walteh/gotmpls/pkg/lsp/protocol"
 )
-
-// RunWithMockServer creates a server with a mock client for testing.
-// It returns the mock client for setting expectations and the server for making requests.
-func RunWithMockServer(t *testing.T, docs map[string]string) (context.Context, *mockery.MockClient_protocol, *lsp.Server, func(string) protocol.DocumentURI) {
-	t.Helper()
-
-	ctx := context.Background()
-
-	ctx = zerolog.New(zerolog.TestWriter{T: t}).With().Str("test", t.Name()).Timestamp().Logger().WithContext(ctx)
-
-	// Create server
-	server := lsp.NewServer(ctx)
-
-	// Create mock client and set it up
-	mockClient := mockery.NewMockClient_protocol(t)
-	server.SetCallbackClient(mockClient)
-
-	tmpDir := t.TempDir()
-
-	// pubMock := mockClient.EXPECT().PublishDiagnostics(mock.Anything, mock.Anything).Return(nil).Maybe()
-
-	for uri, content := range docs {
-		var langID string
-		if strings.HasSuffix(uri, ".tmpl") {
-			langID = "gotmpl"
-		} else {
-			langID = "go"
-		}
-		docURI := toDocURI(filepath.Join(tmpDir, uri))
-		server.Documents().Store(docURI, &lsp.Document{
-			URI:        string(docURI),
-			LanguageID: protocol.LanguageKind(langID),
-			Version:    1,
-			Content:    content,
-		})
-		os.WriteFile(filepath.Join(tmpDir, uri), []byte(content), 0644)
-	}
-
-	// pubMock.Unset()
-
-	return ctx, mockClient, server, func(uri string) protocol.DocumentURI {
-		if strings.HasPrefix(uri, "file://") {
-			return protocol.DocumentURI(uri)
-		}
-		return toDocURI(filepath.Join(tmpDir, uri))
-	}
-}
-
-func toDocURI(uri string) protocol.DocumentURI {
-	if strings.HasPrefix(uri, "file://") {
-		return protocol.DocumentURI(uri)
-	}
-	return protocol.DocumentURI("file://" + uri)
-}
 
 // Helper to open a document in the server
 func OpenDocument(ctx context.Context, t *testing.T, server *lsp.Server, uri protocol.DocumentURI, content string) error {
@@ -614,83 +554,4 @@ type Person struct {
 	//
 	// require.NotNil(t, newTokens, "semantic tokens after modification should not be nil")
 	// require.NotEmpty(t, newTokens.Data, "should have semantic tokens after modification")
-}
-
-// Example test using the simplified helper
-func TestServerWithMocks(t *testing.T) {
-	t.Parallel()
-
-	t.Run("basic_operations", func(t *testing.T) {
-		t.Parallel()
-
-		files := map[string]string{
-			"go.mod": "module test",
-			"test.go": `package test
-
-import _ "embed"
-//go:embed test.tmpl
-var TestTemplate string
-
-type Person struct {
-	Name string
-}`,
-			"test.tmpl": `{{- /*gotype: test.Person*/ -}}
-{{ .Name }}`,
-		}
-
-		ctx, mockClient, server, toDocURI := RunWithMockServer(t, files)
-
-		var params *protocol.PublishDiagnosticsParams
-		// Set up expectations
-		mockClient.EXPECT().PublishDiagnostics(ctx, mock.MatchedBy(func(p *protocol.PublishDiagnosticsParams) bool {
-			params = p
-			return params.URI == toDocURI("test.tmpl")
-		})).Return(nil).Once()
-
-		// Get hover info
-		err := server.DidChange(ctx, &protocol.DidChangeTextDocumentParams{
-			TextDocument: protocol.VersionedTextDocumentIdentifier{
-				Version: 1,
-				TextDocumentIdentifier: protocol.TextDocumentIdentifier{
-					URI: toDocURI("test.tmpl"),
-				},
-			},
-			ContentChanges: []protocol.TextDocumentContentChangeEvent{
-				{
-					Text: "x",
-					Range: &protocol.Range{
-						Start: protocol.Position{Line: 1, Character: 8},
-						End:   protocol.Position{Line: 1, Character: 8},
-					},
-					RangeLength: 2,
-				},
-			},
-		})
-		require.NoError(t, err, "hover should succeed")
-
-		doc, ok := server.Documents().Get(toDocURI("test.tmpl"))
-		require.True(t, ok, "document should be loaded")
-		require.Contains(t, doc.Content, "{{ .Namex }}")
-
-		mockClient.AssertExpectations(t)
-		expectedDiag := []protocol.Diagnostic{
-			{
-				Range: protocol.Range{
-					Start: protocol.Position{Line: 0, Character: 14},
-					End:   protocol.Position{Line: 0, Character: 25},
-				},
-				Severity: protocol.SeverityInformation,
-				Message:  "type hint successfully loaded: test.Person",
-			},
-			{
-				Range: protocol.Range{
-					Start: protocol.Position{Line: 1, Character: 3},
-					End:   protocol.Position{Line: 1, Character: 9},
-				},
-				Severity: protocol.SeverityError,
-				Message:  "field not found [ Namex ] in type [ Person ]",
-			},
-		}
-		require.Equal(t, expectedDiag, params.Diagnostics)
-	})
 }

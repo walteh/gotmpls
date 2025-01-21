@@ -66,10 +66,8 @@ func mockToDocURI(uri string) protocol.DocumentURI {
 }
 
 func TestMockServerHover(t *testing.T) {
-	t.Parallel()
 
 	t.Run("hover_shows_field_info", func(t *testing.T) {
-		t.Parallel()
 
 		files := map[string]string{
 			"go.mod": "module test",
@@ -106,10 +104,8 @@ type Person struct {
 }
 
 func TestMockServerDiagnostics(t *testing.T) {
-	t.Parallel()
 
 	t.Run("invalid_field_shows_diagnostic", func(t *testing.T) {
-		t.Parallel()
 
 		files := map[string]string{
 			"go.mod": "module test",
@@ -180,10 +176,8 @@ type Person struct {
 }
 
 func TestMockServerSemanticTokens(t *testing.T) {
-	t.Parallel()
 
 	t.Run("semantic_tokens_for_template", func(t *testing.T) {
-		t.Parallel()
 
 		files := map[string]string{
 			"go.mod": "module test",
@@ -233,10 +227,8 @@ type Person struct {
 }
 
 func TestMockServerDocumentLifecycle(t *testing.T) {
-	t.Parallel()
 
 	t.Run("document_lifecycle", func(t *testing.T) {
-		t.Parallel()
 
 		files := map[string]string{
 			"go.mod": "module test",
@@ -259,6 +251,8 @@ type Person struct {
 		mockClient.EXPECT().PublishDiagnostics(ctx, mock.MatchedBy(func(p *protocol.PublishDiagnosticsParams) bool {
 			return p.URI == toDocURI("test.tmpl")
 		})).Return(nil).Twice()
+
+		mockClient.EXPECT().SemanticTokensRefresh(ctx).Return(nil).Once()
 
 		// Open document
 		err := server.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
@@ -298,10 +292,8 @@ type Person struct {
 }
 
 func TestMockServerLifecycle(t *testing.T) {
-	t.Parallel()
 
 	t.Run("server_lifecycle", func(t *testing.T) {
-		t.Parallel()
 
 		ctx := context.Background()
 		server := lsp.NewServer(ctx)

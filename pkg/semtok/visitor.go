@@ -141,7 +141,7 @@ func (v *tokenVisitor) visitPipe(node *parse.PipeNode) {
 		v.visitCommand(cmd)
 		v.currentCommand = nil
 
-		// Add pipe operator token between commands (but not after the last one)
+		// Add pipe operator token between commands
 		if i < len(node.Cmds)-1 {
 			nextCmd := node.Cmds[i+1]
 			v.tokens = append(v.tokens, Token{
@@ -168,11 +168,11 @@ func (v *tokenVisitor) visitCommand(node *parse.CommandNode) {
 		case *parse.NumberNode:
 			v.visitNumber(n)
 		case *parse.CommandNode:
-			// Handle nested commands (in parentheses)
 			v.visitCommand(n)
 		case *parse.PipeNode:
-			// Handle nested pipes
 			v.visitPipe(n)
+		case *parse.BoolNode:
+			v.visitBool(n)
 		}
 	}
 }
@@ -256,18 +256,19 @@ func (v *tokenVisitor) visitIf(node *parse.IfNode) {
 		v.visitPipe(node.Pipe)
 	}
 
-	// Visit the list
+	// Visit the true branch
 	if node.List != nil {
-		for _, n := range node.List.Nodes {
-			v.Visit(n)
-		}
+		v.visitList(node.List)
 	}
 
-	// Visit the else list
+	// Visit the else branch
 	if node.ElseList != nil {
-		for _, n := range node.ElseList.Nodes {
-			v.Visit(n)
-		}
+		// v.tokens = append(v.tokens, Token{
+		// 	Type:     TokenKeyword,
+		// 	Modifier: ModifierNone,
+		// 	Range:    position.NewElseKeywordPosition(node),
+		// })
+		v.visitList(node.ElseList)
 	}
 }
 
@@ -280,16 +281,14 @@ func (v *tokenVisitor) visitRange(node *parse.RangeNode) {
 		Range:    position.NewKeywordPosition(node),
 	})
 
-	// Visit the pipe
+	// Visit the range expression
 	if node.Pipe != nil {
 		v.visitPipe(node.Pipe)
 	}
 
-	// Visit the list
+	// Visit the loop body
 	if node.List != nil {
-		for _, n := range node.List.Nodes {
-			v.Visit(n)
-		}
+		v.visitList(node.List)
 	}
 }
 
@@ -302,22 +301,29 @@ func (v *tokenVisitor) visitWith(node *parse.WithNode) {
 		Range:    position.NewKeywordPosition(node),
 	})
 
-	// Visit the pipe
+	// Visit the with expression
 	if node.Pipe != nil {
 		v.visitPipe(node.Pipe)
 	}
 
-	// Visit the list
+	// Visit the with body
 	if node.List != nil {
-		for _, n := range node.List.Nodes {
-			v.Visit(n)
-		}
+		v.visitList(node.List)
+	}
+
+	// Visit the else branch
+	if node.ElseList != nil {
+		// v.tokens = append(v.tokens, Token{
+		// 	Type:     TokenKeyword,
+		// 	Modifier: ModifierNone,
+		// 	Range:    position.NewElseKeywordPosition(node),
+		// })
+		v.visitList(node.ElseList)
 	}
 }
 
 // visitDot processes a dot node (e.g., .)
 func (v *tokenVisitor) visitDot(node *parse.DotNode) {
-	// Create a variable token for the dot
 	v.tokens = append(v.tokens, Token{
 		Type:     TokenVariable,
 		Modifier: ModifierNone,
@@ -327,11 +333,19 @@ func (v *tokenVisitor) visitDot(node *parse.DotNode) {
 
 // visitNumber processes a number node (e.g., 42)
 func (v *tokenVisitor) visitNumber(node *parse.NumberNode) {
-	// Create a number token
 	v.tokens = append(v.tokens, Token{
 		Type:     TokenNumber,
 		Modifier: ModifierNone,
 		Range:    position.NewNumberNodePosition(node),
+	})
+}
+
+// visitBool processes a bool node (e.g., true)
+func (v *tokenVisitor) visitBool(node *parse.BoolNode) {
+	v.tokens = append(v.tokens, Token{
+		Type:     TokenKeyword,
+		Modifier: ModifierNone,
+		Range:    position.NewBoolNodePosition(node),
 	})
 }
 

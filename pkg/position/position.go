@@ -72,6 +72,7 @@ import (
 	"strings"
 
 	"github.com/walteh/gotmpls/pkg/lsp/protocol"
+	"github.com/walteh/gotmpls/pkg/std/text/template/parse"
 )
 
 // Place represents a position in text using line and character (column) numbers.
@@ -327,5 +328,31 @@ func NewRangeFromLSPRange(ranged protocol.Range) Range {
 	return Range{
 		Start: Place{Line: int(ranged.Start.Line), Character: int(ranged.Start.Character)},
 		End:   Place{Line: int(ranged.End.Line), Character: int(ranged.End.Character)},
+	}
+}
+
+// NewBoolNodePosition creates a position for a bool node
+func NewBoolNodePosition(node *parse.BoolNode) RawPosition {
+	return RawPosition{
+		Text:   fmt.Sprintf("%v", node.True),
+		Offset: int(node.Pos),
+	}
+}
+
+// NewElseKeywordPosition creates a position for an else keyword
+func NewElseKeywordPosition(node interface{}) RawPosition {
+	switch n := node.(type) {
+	case *parse.IfNode:
+		return RawPosition{
+			Text:   "else",
+			Offset: int(n.ElseList.Position()),
+		}
+	case *parse.WithNode:
+		return RawPosition{
+			Text:   "else",
+			Offset: int(n.ElseList.Position()),
+		}
+	default:
+		return RawPosition{}
 	}
 }

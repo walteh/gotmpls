@@ -2,8 +2,6 @@ package lsp
 
 import (
 	"context"
-	"io"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -20,76 +18,6 @@ import (
 	"gitlab.com/tozd/go/errors"
 	"gopkg.in/fsnotify.v1"
 )
-
-// Document represents a text document with its metadata
-type Document struct {
-	URI        string
-	LanguageID protocol.LanguageKind
-	Version    int32
-	Content    string
-	AST        *parser.ParsedTemplateFile
-}
-
-// DocumentManager handles document operations
-type DocumentManager struct {
-	store *sync.Map // map[string]*Document
-}
-
-func NewDocumentManager() *DocumentManager {
-	return &DocumentManager{
-		store: &sync.Map{},
-	}
-}
-
-func (m *DocumentManager) GetNoFallback(uri protocol.DocumentURI) (*Document, bool) {
-	normalizedURI := normalizeURI(string(uri))
-	content, ok := m.store.Load(normalizedURI)
-	if content == nil {
-		return nil, ok
-	} else {
-		return content.(*Document), ok
-	}
-}
-
-func (m *DocumentManager) Get(uri protocol.DocumentURI) (*Document, bool) {
-	normalizedURI := normalizeURI(string(uri))
-	content, ok := m.store.Load(normalizedURI)
-	if !ok {
-		// Try with the original URI as fallback
-		content, ok = m.store.Load("file://" + uri)
-	}
-	if !ok {
-		// try filesystem
-		file, err := os.Open(normalizedURI)
-		if err != nil {
-			return nil, false
-		}
-		defer file.Close()
-		contentz, err := io.ReadAll(file)
-		if err != nil {
-			return nil, false
-		}
-		doc := &Document{
-			URI:     normalizedURI,
-			Content: string(contentz),
-		}
-		m.store.Store(normalizedURI, doc)
-		return doc, true
-	}
-
-	doc, ok := content.(*Document)
-	return doc, ok
-}
-
-func (m *DocumentManager) Store(uri protocol.DocumentURI, doc *Document) {
-	normalizedURI := normalizeURI(string(uri))
-	m.store.Store(normalizedURI, doc)
-}
-
-func (m *DocumentManager) Delete(uri string) {
-	normalizedURI := normalizeURI(uri)
-	m.store.Delete(normalizedURI)
-}
 
 // normalizeURI ensures consistent URI handling by removing the file:// prefix if present
 // and converting to a clean path
@@ -136,25 +64,6 @@ func NewServer(ctx context.Context) *Server {
 		debug:       false, // Disabled debug mode
 	}
 }
-
-// func (s *Server) Run(ctx context.Context, reader io.Reader, writer io.WriteCloser, opts *jrpc2.ServerOptions) error {
-// 	server := s.Detach(ctx, reader, writer, opts)
-// 	return server.Wait()
-// }
-
-// func (s *Server) BuildServerInstance(ctx context.Context, opts *jrpc2.ServerOptions) *protocol.ServerInstance {
-// 	logger := zerolog.Ctx(ctx)
-// 	logger.Info().Msg("starting LSP server")
-
-// 	if s.instance != nil {
-// 		s.instance.Config.ServerOpts = opts
-// 		return s.instance
-// 	}
-
-// 	s.instance = protocol.NewServerInstance(ctx, s, opts)
-
-// 	return s.instance
-// }
 
 func (me *Server) SetCallbackClient(client protocol.Client) {
 	me.callbackClient = client
@@ -210,17 +119,6 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.ParamInitializ
 			TextDocumentSync: &protocol.Or_ServerCapabilities_textDocumentSync{
 				Value: protocol.Incremental,
 			},
-			// DiagnosticProvider: &protocol.Or_ServerCapabilities_diagnosticProvider{
-			// 	Value: &protocol.DiagnosticRegistrationOptions{
-			// 		DiagnosticOptions: protocol.DiagnosticOptions{
-			// 			WorkDoneProgressOptions: protocol.WorkDoneProgressOptions{
-			// 				WorkDoneProgress: true,
-			// 			},
-			// 			Identifier:            "gotmpls",
-			// 			InterFileDependencies: true,
-			// 		},
-			// 	},
-			// },
 
 			CompletionProvider: &protocol.CompletionOptions{
 				WorkDoneProgressOptions: protocol.WorkDoneProgressOptions{
@@ -228,7 +126,6 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.ParamInitializ
 				},
 				TriggerCharacters: []string{".", ":", " "},
 			},
-
 			SemanticTokensProvider: &protocol.SemanticTokensOptions{
 				Legend: protocol.SemanticTokensLegend{
 					TokenTypes: []string{
@@ -388,10 +285,6 @@ func replaceContentFromRange(ctx context.Context, content string, rangez *protoc
 	startPos := position.NewRawPositionFromLineAndColumn(int(rangez.Start.Line), int(rangez.Start.Character), "", content)
 	endPos := position.NewRawPositionFromLineAndColumn(int(rangez.End.Line), int(rangez.End.Character), "", content)
 	zerolog.Ctx(ctx).Debug().Msgf(`replacing content from %s to %s with %s`, startPos.ID(), endPos.ID(), text)
-	// zerolog.Ctx(ctx).Debug().Str("Start", content[:startPos.Offset]).Msg("Start")
-	// zerolog.Ctx(ctx).Debug().Str("End", content[endPos.Offset:]).Msg("End")
-	// zerolog.Ctx(ctx).Debug().Str("Text", text).Msg("after: " + content[:startPos.Offset] + text + content[endPos.Offset:])
-
 	return content[:startPos.Offset] + text + content[endPos.Offset:]
 }
 
@@ -435,6 +328,19 @@ func (s *Server) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocume
 	}
 
 	s.documents.Store(params.TextDocument.URI, doc)
+
+	// Request semantic token refresh
+	if s.callbackClient != nil {
+		logger.Debug().Msg("requesting semantic token refresh")
+		err := s.callbackClient.SemanticTokensRefresh(ctx)
+		if err != nil {
+			logger.Warn().Err(err).Msg("failed to refresh semantic tokens")
+		}
+		logger.Debug().Msg("semantic token refresh requested")
+	} else {
+		logger.Warn().Msg("no callback client available for semantic token refresh")
+	}
+
 	return s.publishDiagnostics(ctx, params.TextDocument.URI, params.TextDocument.Text)
 }
 
@@ -615,17 +521,24 @@ func (s *Server) SemanticTokensFull(ctx context.Context, params *protocol.Semant
 
 	doc, ok := s.documents.Get(params.TextDocument.URI)
 	if !ok {
+		logger.Error().Str("uri", string(params.TextDocument.URI)).Msg("document not found")
 		return nil, errors.Errorf("document not found: %s", params.TextDocument.URI)
 	}
 
 	// Generate semantic tokens
 	tokens, err := semtok.GetTokensForText(ctx, []byte(doc.Content))
 	if err != nil {
+		logger.Error().Err(err).Msg("failed to generate semantic tokens")
 		return nil, errors.Errorf("generating semantic tokens: %w", err)
 	}
 
+	logger.Debug().Int("token_count", len(tokens)).Msg("generated semantic tokens")
+
 	// Convert to LSP format
-	return s.convertToLSPTokens(tokens, doc.Content), nil
+	result := s.convertToLSPTokens(tokens, doc.Content)
+	logger.Debug().Int("data_length", len(result.Data)).Msg("converted to LSP format")
+
+	return result, nil
 }
 
 func (s *Server) SemanticTokensFullDelta(ctx context.Context, params *protocol.SemanticTokensDeltaParams) (any, error) {
@@ -850,6 +763,7 @@ func (s *Server) convertToLSPTokens(tokens []semtok.Token, content string) *prot
 		rng := tok.Range.GetRange(content)
 		line := uint32(rng.Start.Line)
 		char := uint32(rng.Start.Character)
+		length := uint32(rng.End.Character - rng.Start.Character)
 
 		// Calculate relative positions
 		deltaLine := line - prevLine
@@ -858,8 +772,8 @@ func (s *Server) convertToLSPTokens(tokens []semtok.Token, content string) *prot
 			deltaChar = char - prevChar
 		}
 
-		// Map our token type to LSP token type index
-		tokenType := uint32(tokenTypeNamespace) // default to namespace
+		// Map token type to LSP token type
+		tokenType := uint32(0)
 		switch tok.Type {
 		case semtok.TokenVariable:
 			tokenType = uint32(tokenTypeVariable)
@@ -877,35 +791,23 @@ func (s *Server) convertToLSPTokens(tokens []semtok.Token, content string) *prot
 			tokenType = uint32(tokenTypeOperator)
 		}
 
-		// Map our token modifier to LSP token modifier bit flags
-		tokenModifier := uint32(0)
-		switch tok.Modifier {
-		case semtok.ModifierDeclaration:
-			tokenModifier |= tokenModDeclaration
-		case semtok.ModifierDefinition:
-			tokenModifier |= tokenModDefinition
-		case semtok.ModifierReadonly:
-			tokenModifier |= tokenModReadonly
-		case semtok.ModifierStatic:
-			tokenModifier |= tokenModStatic
-		case semtok.ModifierDeprecated:
-			tokenModifier |= tokenModDeprecated
+		// Map token modifiers to LSP token modifiers
+		tokenModifiers := uint32(0)
+		if tok.Modifier&semtok.ModifierDeclaration != 0 {
+			tokenModifiers |= tokenModDeclaration
+		}
+		if tok.Modifier&semtok.ModifierDefinition != 0 {
+			tokenModifiers |= tokenModDefinition
+		}
+		if tok.Modifier&semtok.ModifierReadonly != 0 {
+			tokenModifiers |= tokenModReadonly
 		}
 
-		// Append the 5 values:
-		// 1. deltaLine - relative line number from the previous token
-		// 2. deltaChar - relative character from the start of the line
-		// 3. length - length of the token
-		// 4. tokenType - semantic classification of the token
-		// 5. tokenModifiers - token modifiers as bit flags
-		data = append(data,
-			deltaLine,
-			deltaChar,
-			uint32(len(tok.Range.Text)),
-			tokenType,
-			tokenModifier,
-		)
+		// Add token data in LSP format:
+		// [deltaLine, deltaChar, length, tokenType, tokenModifiers]
+		data = append(data, deltaLine, deltaChar, length, tokenType, tokenModifiers)
 
+		// Update previous positions
 		prevLine = line
 		prevChar = char
 	}

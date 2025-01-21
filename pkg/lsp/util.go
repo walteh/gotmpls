@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/walteh/gotmpls/pkg/lsp/protocol"
 	"gitlab.com/tozd/go/errors"
 )
 
@@ -164,4 +165,11 @@ func uriToPath(uri string) (string, error) {
 	path = filepath.Clean(path)
 
 	return path, nil
+}
+
+func ToDocURI(uri string) protocol.DocumentURI {
+	if strings.HasPrefix(uri, "file://") {
+		return protocol.DocumentURI(uri)
+	}
+	return protocol.DocumentURI("file://" + uri)
 }
