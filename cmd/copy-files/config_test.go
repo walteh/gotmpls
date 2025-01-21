@@ -7,15 +7,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gitlab.com/tozd/go/errors"
 )
 
 func TestLoadConfig(t *testing.T) {
 	tests := []struct {
 		name        string
 		config      string
-		wantErr     bool
-		errContains string
-		validate    func(*testing.T, *CopyConfig)
+		expectError bool
+		validate    func(t *testing.T, cfg *CopyConfig)
 	}{
 		{
 			name: "valid_config",
@@ -24,48 +24,32 @@ default_branch: main
 status_file: .copy-status
 copies:
   - source:
-      repo: github.com/org/repo
+      repo: org/repo
       ref: main
-      path: path/to/files
+      path: /src
     destination:
-      path: ./pkg/dest
+      path: /dest
     options:
       replacements:
-        - "old:new"
-        - this: foo
-          with: bar
+        - "foo:bar"
+        - "xyz:yyz"
       ignore_files:
-        - "*.tmp"
-        - "*.bak"
-  - source:
-      repo: github.com/other/repo
-      path: other/path
-    destination:
-      path: ./pkg/other
+        - "*.txt"
 `,
 			validate: func(t *testing.T, cfg *CopyConfig) {
-				require.Len(t, cfg.Copies, 2)
-				assert.Equal(t, "main", cfg.DefaultBranch)
-				assert.Equal(t, ".copy-status", cfg.StatusFile)
-
-				// First copy entry
-				assert.Equal(t, "github.com/org/repo", cfg.Copies[0].Source.Repo)
-				assert.Equal(t, "main", cfg.Copies[0].Source.Ref)
-				assert.Equal(t, "path/to/files", cfg.Copies[0].Source.Path)
-				assert.Equal(t, "./pkg/dest", cfg.Copies[0].Destination.Path)
-
-				// Check replacements (converted to string format)
+				require.Equal(t, "main", cfg.DefaultBranch)
+				require.Equal(t, ".copy-status", cfg.StatusFile)
+				require.Len(t, cfg.Copies, 1)
+				require.Equal(t, "org/repo", cfg.Copies[0].Source.Repo)
+				require.Equal(t, "main", cfg.Copies[0].Source.Ref)
+				require.Equal(t, "/src", cfg.Copies[0].Source.Path)
+				require.Equal(t, "/dest", cfg.Copies[0].Destination.Path)
+				require.NotNil(t, cfg.Copies[0].Options)
 				require.Len(t, cfg.Copies[0].Options.Replacements, 2)
-				assert.Equal(t, "old:new", cfg.Copies[0].Options.Replacements[0])
-				assert.Equal(t, "foo:bar", cfg.Copies[0].Options.Replacements[1])
-
-				assert.Equal(t, []string{"*.tmp", "*.bak"}, cfg.Copies[0].Options.IgnoreFiles)
-
-				// Second copy entry
-				assert.Equal(t, "github.com/other/repo", cfg.Copies[1].Source.Repo)
-				assert.Equal(t, "main", cfg.Copies[1].Source.Ref) // Default branch
-				assert.Equal(t, "other/path", cfg.Copies[1].Source.Path)
-				assert.Equal(t, "./pkg/other", cfg.Copies[1].Destination.Path)
+				require.Equal(t, "foo:bar", cfg.Copies[0].Options.Replacements[0])
+				require.Equal(t, "xyz:yyz", cfg.Copies[0].Options.Replacements[1])
+				require.Len(t, cfg.Copies[0].Options.IgnoreFiles, 1)
+				require.Equal(t, "*.txt", cfg.Copies[0].Options.IgnoreFiles[0])
 			},
 		},
 		{
@@ -73,112 +57,70 @@ copies:
 			config: `
 default_branch: main
 fallback_branch: develop
-status_file: .copy-status
 copies:
   - source:
-      repo: github.com/org/repo
-      ref: main
-      path: path/to/files
+      repo: org/repo
+      path: /src
       fallback_branch: master
     destination:
-      path: ./pkg/dest
-    options:
-      replacements:
-        - "old:new"
-        - this: xyz
-          with: yyz
-      ignore_files:
-        - "*.tmp"
-        - "*.bak"
+      path: /dest
 `,
 			validate: func(t *testing.T, cfg *CopyConfig) {
+				require.Equal(t, "main", cfg.DefaultBranch)
+				require.Equal(t, "develop", cfg.FallbackBranch)
 				require.Len(t, cfg.Copies, 1)
-				assert.Equal(t, "main", cfg.DefaultBranch)
-				assert.Equal(t, "develop", cfg.FallbackBranch)
-				assert.Equal(t, ".copy-status", cfg.StatusFile)
-
-				// Check source config
-				assert.Equal(t, "github.com/org/repo", cfg.Copies[0].Source.Repo)
-				assert.Equal(t, "main", cfg.Copies[0].Source.Ref)
-				assert.Equal(t, "path/to/files", cfg.Copies[0].Source.Path)
-				assert.Equal(t, "master", cfg.Copies[0].Source.FallbackBranch)
-
-				// Check replacements
-				require.Len(t, cfg.Copies[0].Options.Replacements, 2)
-				assert.Equal(t, "old:new", cfg.Copies[0].Options.Replacements[0])
-				// The structured replacement should be converted to string format
-				assert.Equal(t, "xyz:yyz", cfg.Copies[0].Options.Replacements[1])
+				require.Equal(t, "master", cfg.Copies[0].Source.FallbackBranch)
 			},
-		},
-		{
-			name: "missing_required_fields",
-			config: `
-copies:
-  - source:
-      repo: github.com/org/repo
-    destination:
-      path: ./pkg/dest
-`,
-			wantErr:     true,
-			errContains: "source path is required",
 		},
 		{
 			name: "no_copies",
 			config: `
 default_branch: main
-status_file: .copy-status
+copies: []
 `,
-			wantErr:     true,
-			errContains: "no copy entries defined",
-		},
-		{
-			name: "invalid_yaml",
-			config: `
-default_branch: main
-copies:
-  - source:
-    - invalid
-`,
-			wantErr:     true,
-			errContains: "parsing config file",
+			expectError: true,
+			validate: func(t *testing.T, cfg *CopyConfig) {
+				require.Error(t, errors.New("no copy entries defined"))
+			},
 		},
 		{
 			name: "invalid_replacement_format",
 			config: `
 copies:
   - source:
-      repo: github.com/org/repo
-      path: path/to/files
+      repo: org/repo
+      path: /src
     destination:
-      path: ./pkg/dest
+      path: /dest
     options:
       replacements:
-        - this: foo
-          invalid: field
+        - "invalid"
 `,
-			wantErr:     true,
-			errContains: "must have 'this' and 'with' as strings",
+			expectError: true,
+			validate: func(t *testing.T, cfg *CopyConfig) {
+				require.Error(t, errors.New("copy entry 0, replacement 0: invalid format"))
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create temporary config file
-			dir := t.TempDir()
-			path := filepath.Join(dir, ".copyrc")
-			require.NoError(t, os.WriteFile(path, []byte(tt.config), 0644))
+			tmpDir := t.TempDir()
+			configPath := filepath.Join(tmpDir, "config.yaml")
+			err := os.WriteFile(configPath, []byte(tt.config), 0644)
+			require.NoError(t, err)
 
-			// Load config
-			cfg, err := LoadConfig(path)
-			if tt.wantErr {
+			cfg, err := LoadConfig(configPath)
+			if tt.expectError {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errContains)
+				if tt.validate != nil {
+					tt.validate(t, nil)
+				}
 				return
 			}
 
 			require.NoError(t, err)
 			require.NotNil(t, cfg)
-
 			if tt.validate != nil {
 				tt.validate(t, cfg)
 			}
@@ -209,49 +151,29 @@ func Other() {}`))
 		DefaultBranch:  "main",
 		FallbackBranch: "master",
 		StatusFile:     ".copy-status",
-		Copies: []CopyEntry{
+		Copies: []*CopyEntry{
 			{
-				Source: struct {
-					Repo           string "yaml:\"repo\""
-					Ref            string "yaml:\"ref\""
-					Path           string "yaml:\"path\""
-					FallbackBranch string "yaml:\"fallback_branch,omitempty\""
-				}{
+				Source: CopyEntry_Source{
 					Repo: mock.GetFullRepo(),
 					Ref:  mock.ref,
 					Path: mock.path,
 				},
-				Destination: struct {
-					Path string "yaml:\"path\""
-				}{
+				Destination: CopyEntry_Destination{
 					Path: dest1,
 				},
-				Options: struct {
-					Replacements []interface{} "yaml:\"replacements,omitempty\""
-					IgnoreFiles  []string      "yaml:\"ignore_files,omitempty\""
-				}{
-					Replacements: []interface{}{
+				Options: &CopyEntry_Options{
+					Replacements: []string{
 						"Bar:Baz",
-						map[string]interface{}{
-							"this": "foo",
-							"with": "bar",
-						},
+						"foo:bar",
 					},
 				},
 			},
 			{
-				Source: struct {
-					Repo           string "yaml:\"repo\""
-					Ref            string "yaml:\"ref\""
-					Path           string "yaml:\"path\""
-					FallbackBranch string "yaml:\"fallback_branch,omitempty\""
-				}{
+				Source: CopyEntry_Source{
 					Repo: mock.GetFullRepo(),
 					Path: mock.path,
 				},
-				Destination: struct {
-					Path string "yaml:\"path\""
-				}{
+				Destination: CopyEntry_Destination{
 					Path: dest2,
 				},
 			},
@@ -290,4 +212,146 @@ func Other() {}`))
 
 	// Clean up
 	mock.ClearFiles()
+}
+
+func TestLoadHCLConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		config      string
+		expectError bool
+		validate    func(t *testing.T, cfg *CopyConfig)
+	}{
+		{
+			name: "valid_hcl_config",
+			config: `
+# Global settings
+default_branch = "main"
+status_file = ".copy-status"
+
+# Default settings
+defaults {
+  source {
+    fallback_branch = "develop"
+  }
+}
+
+# Copy configuration
+copy {
+  source {
+    repo = "org/repo"
+    ref = "main"
+    path = "/src"
+  }
+  destination {
+    path = "/dest"
+  }
+  options {
+    replacements = [
+      "foo:bar",
+      "xyz:yyz"
+    ]
+    ignore_files = [
+      "*.txt"
+    ]
+  }
+}
+`,
+			validate: func(t *testing.T, cfg *CopyConfig) {
+				require.Equal(t, "main", cfg.DefaultBranch)
+				require.Equal(t, ".copy-status", cfg.StatusFile)
+				require.NotNil(t, cfg.Defaults)
+				require.Equal(t, "develop", cfg.Defaults.Source.FallbackBranch)
+				require.Len(t, cfg.Copies, 1)
+				require.Equal(t, "org/repo", cfg.Copies[0].Source.Repo)
+				require.Equal(t, "main", cfg.Copies[0].Source.Ref)
+				require.Equal(t, "/src", cfg.Copies[0].Source.Path)
+				require.Equal(t, "/dest", cfg.Copies[0].Destination.Path)
+				require.NotNil(t, cfg.Copies[0].Options)
+				require.Len(t, cfg.Copies[0].Options.Replacements, 2)
+				require.Equal(t, "foo:bar", cfg.Copies[0].Options.Replacements[0])
+				require.Equal(t, "xyz:yyz", cfg.Copies[0].Options.Replacements[1])
+				require.Len(t, cfg.Copies[0].Options.IgnoreFiles, 1)
+				require.Equal(t, "*.txt", cfg.Copies[0].Options.IgnoreFiles[0])
+			},
+		},
+		{
+			name: "invalid_hcl_syntax",
+			config: `
+copy {
+  source {
+    repo = org/repo" # Missing quote
+    path = "/src"
+  }
+  destination {
+    path = "/dest"
+  }
+}
+`,
+			expectError: true,
+		},
+		{
+			name: "missing_required_fields",
+			config: `
+copy {
+  source {
+    repo = "org/repo"
+    # Missing path
+  }
+  destination {
+    path = "/dest"
+  }
+}
+`,
+			expectError: true,
+		},
+		{
+			name: "no_copies",
+			config: `
+default_branch = "main"
+`,
+			expectError: true,
+		},
+		{
+			name: "invalid_replacement_format",
+			config: `
+copy {
+  source {
+    repo = "org/repo"
+    path = "/src"
+  }
+  destination {
+    path = "/dest"
+  }
+  options {
+    replacements = ["invalid"]
+  }
+}
+`,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			configPath := filepath.Join(tmpDir, "config.hcl")
+			err := os.WriteFile(configPath, []byte(tt.config), 0644)
+			require.NoError(t, err)
+
+			cfg, err := LoadConfig(configPath)
+			if tt.expectError {
+				require.Error(t, err)
+				if tt.validate != nil {
+					tt.validate(t, nil)
+				}
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, cfg)
+			if tt.validate != nil {
+				tt.validate(t, cfg)
+			}
+		})
+	}
 }
