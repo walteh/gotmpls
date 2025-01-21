@@ -1,4 +1,9 @@
-package generator
+<!--
+📦 Generated from: github.com/golang/tools@1261a24ceb1867ea7439eda244e53e7ace4ad777
+🔗 Source: https://github.com/golang/tools/blob/1261a24ceb1867ea7439eda244e53e7ace4ad777/gopls/internal/protocol/generate/README.md
+⏰ Downloaded at: 2025-01-21T11:02:03Z
+⚠️  This file is auto-generated. See .copy-status for details.
+-->
 
 # LSP Support for gopls
 
@@ -80,10 +85,10 @@ The code parses the json specification file, and scans all the types. It assigns
 above, to the types that are unnamed in the specification, and constructs Go equivalents as required.
 (Most of this code is in typenames.go.)
 
-There are four output files. tsclient.gen.go and tsserver.gen.go contain the definition and implementation
+There are four output files. tsclient.go and tsserver.go contain the definition and implementation
 of the `protocol.Client` and `protocol.Server` types and the code that dispatches on the Method
-of the Request or Notification. tsjson.gen.go contains the custom marshaling and unmarshaling code.
-And tsprotocol.gen.go contains the type and const definitions.
+of the Request or Notification. tsjson.go contains the custom marshaling and unmarshaling code.
+And tsprotocol.go contains the type and const definitions.
 
 ### Accommodating gopls
 
@@ -120,9 +125,9 @@ whose type is an "or" of 3 stringLiterals, which just becomes a `string`.
 While the code is executing, it checks that all the entries in the maps in tables.go are used.
 It also checks that the entries in `renameProp` and `goplsStar` are not redundant.
 
-As a one-time check on the first release of this code, diff-ing the existing and generated tsclient.gen.go
-and tsserver.gen.go code results in only whitespace and comment diffs. The existing and generated
-tsprotocol.gen.go differ in whitespace and comments, and in a substantial number of new type definitions
+As a one-time check on the first release of this code, diff-ing the existing and generated tsclient.go
+and tsserver.go code results in only whitespace and comment diffs. The existing and generated
+tsprotocol.go differ in whitespace and comments, and in a substantial number of new type definitions
 that the older, more heuristic, code did not generate. (And the unused type `_InitializeParams` differs
 slightly between the new and the old, and is not worth fixing.)
 

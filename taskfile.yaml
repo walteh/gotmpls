@@ -115,26 +115,40 @@ tasks:
 
     sync-go-files:
         desc: Sync Go files from a GitHub repository
-        requires: { vars: [SRC, DEST, STRINGS_TO_REPLACE, FILES_TO_IGNORE] }
+        requires:
+            {
+                vars:
+                    [
+                        DEST,
+                        STRINGS_TO_REPLACE,
+                        FILES_TO_IGNORE,
+                        SRC_REPO,
+                        SRC_REF,
+                        SRC_PATH,
+                    ],
+            }
         method: timestamp
         generates:
-            - "{{.DEST}}/*"
+            - "{{.DEST}}/*.copy.*"
+            - "{{.DEST}}/.copy-status"
             - "!{{.DEST}}/*.patch.go"
         cmds:
             - |
-                ./scripts/sync-go-files.sh {{.SRC}} {{.DEST}} {{if .STRINGS_TO_REPLACE}}{{range $index, $str := .STRINGS_TO_REPLACE}} --string-to-replace "{{$str}}"{{end}}{{end}} {{if .FILES_TO_IGNORE}}{{range $index, $file := .FILES_TO_IGNORE}} --file-to-ignore "{{$file}}"{{end}}{{end}}
+                go run ./cmd/copy-files --src-repo "{{.SRC_REPO}}" --ref "{{.SRC_REF}}" --src-path "{{.SRC_PATH}}" --dest-path "{{.DEST}}" \
+                     --replacements '{{toJson .STRINGS_TO_REPLACE}}' --ignore '{{toJson .FILES_TO_IGNORE}}'
 
-    sync-lsp-generator:
-        desc: Sync LSP generator files from golang/tools
+    copy-lsp-generator:
+        desc: copy LSP protocol generator files from golang/tools
         generates:
             - "./pkg/lsp/protocol/generator/*.go"
             - "!./pkg/lsp/protocol/generator/*.patch.go"
-            - "./pkg/lsp/protocol/*.gen.go"
 
         cmds:
             - task: sync-go-files
               vars:
-                  SRC: github.com/golang/tools/blob/master/gopls/internal/protocol/generate
+                  SRC_REPO: github.com/golang/tools
+                  SRC_REF: master
+                  SRC_PATH: gopls/internal/protocol/generate
                   DEST: ./pkg/lsp/protocol/generator
                   STRINGS_TO_REPLACE:
                       - "func processinline():func processinline_old()"
@@ -151,20 +165,15 @@ tasks:
                       - tsclient.go:tsclient.gen.go
                       - tsjson.go:tsjson.gen.go
                   FILES_TO_IGNORE: []
-            - go generate ./pkg/lsp/protocol/generator
 
-    sync-participle:
-        desc: Sync participle files from alecthomas/participle
+    generate-lsp-protocol:
+        deps: [copy-lsp-generator]
+        sources:
+            - "./pkg/lsp/protocol/generator/*.go"
+        generates:
+            - "./pkg/lsp/protocol/*.gen.go"
         cmds:
-            - task: sync-go-files
-              vars:
-                  SRC: github.com/alecthomas/participle/blob/master/cmd/participle
-                  DEST: ./gen/participle
-                  FILES_TO_IGNORE:
-                      - "go.mod"
-                      - "go.sum"
-                  STRINGS_TO_REPLACE:
-                      - "replace github.com/alecthomas/participle/v2 => ../..:"
+            - go generate ./pkg/lsp/protocol/generator
 
     go-mod-tidy:
         env:

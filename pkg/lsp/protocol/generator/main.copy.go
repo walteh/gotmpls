@@ -1,3 +1,8 @@
+// 📦 Generated from: github.com/golang/tools@1261a24ceb1867ea7439eda244e53e7ace4ad777
+// 🔗 Source: https://github.com/golang/tools/blob/1261a24ceb1867ea7439eda244e53e7ace4ad777/gopls/internal/protocol/generate/main.go
+// ⏰ Downloaded at: 2025-01-21T11:02:03Z
+// ⚠️  This file is auto-generated. See .copy-status for details.
+
 // Copyright 2022 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -106,7 +111,7 @@ func writeclient() {
 		out.WriteString(cdecls[k])
 	}
 	out.WriteString("}\n\n")
-	out.WriteString(`func clientDispatch(ctx context.Context, client Client, conn *jrpc2.Server, r *jrpc2.Request) (bool, error) {
+	out.WriteString(`func clientDispatch(ctx context.Context, client Client, conn \*jrpc2.Server, r \*jrpc2.Request) (bool, error) {
 	defer recoverHandlerPanic(r.Method)
 	switch r.Method() {
 `)
@@ -137,7 +142,7 @@ func writeserver() {
 	out.WriteString(`
 }
 
-func serverDispatch(ctx context.Context, server Server, conn *jrpc2.Server, r *jrpc2.Request) (bool, error) {
+func serverDispatch(ctx context.Context, server Server, conn \*jrpc2.Server, r \*jrpc2.Request) (bool, error) {
 	defer recoverHandlerPanic(r.Method)
 	switch r.Method() {
 `)

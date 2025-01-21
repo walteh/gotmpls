@@ -1,3 +1,8 @@
+// 📦 Generated from: github.com/golang/tools@1261a24ceb1867ea7439eda244e53e7ace4ad777
+// 🔗 Source: https://github.com/golang/tools/blob/1261a24ceb1867ea7439eda244e53e7ace4ad777/gopls/internal/protocol/generate/output.go
+// ⏰ Downloaded at: 2025-01-21T11:02:03Z
+// ⚠️  This file is auto-generated. See .copy-status for details.
+
 // Copyright 2022 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -100,7 +105,7 @@ func genCase_old(_ *Model, method string, param, result *Type, dir string) {
 			nm = "ParamConfiguration" // gopls compatibility
 		}
 		fmt.Fprintf(out, "\t\tvar params %s\n", nm)
-		fmt.Fprintf(out, "\t\tif err := UnmarshalJSON(r, &params); err != nil {\n")
+		fmt.Fprintf(out, "\t\tif err := UnmarshalJSON(r.Params(), &params); err != nil {\n")
 		fmt.Fprintf(out, "\t\t\treturn true, sendParseError(ctx, conn, r, err)\n\t\t}\n")
 		p = ", &params"
 	}
