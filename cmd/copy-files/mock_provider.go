@@ -53,24 +53,17 @@ func (m *MockProvider) ListFiles(ctx context.Context, args ProviderArgs) ([]stri
 	return files, nil
 }
 
-func (m *MockProvider) GetFile(ctx context.Context, args ProviderArgs, path string) ([]byte, error) {
-	content, ok := m.files[path]
-	if !ok {
-		return nil, errors.New("file not found")
-	}
-	return content, nil
-}
-
 func (m *MockProvider) GetCommitHash(ctx context.Context, args ProviderArgs) (string, error) {
 	return m.commitHash, nil
 }
 
-func (m *MockProvider) GetPermalink(args ProviderArgs, commitHash string, file string) string {
-	return "mock://" + file + "@" + commitHash
+func (m *MockProvider) GetPermalink(ctx context.Context, args ProviderArgs, commitHash string, file string) (string, error) {
+	// return the path of the file with file:// prefix
+	return "file://" + filepath.Join(m.path, file), nil
 }
 
-func (m *MockProvider) GetSourceInfo(args ProviderArgs, commitHash string) string {
-	return "mock@" + commitHash
+func (m *MockProvider) GetSourceInfo(ctx context.Context, args ProviderArgs, commitHash string) (string, error) {
+	return "mock@" + commitHash, nil
 }
 
 func (m *MockProvider) GetFullRepo() string {

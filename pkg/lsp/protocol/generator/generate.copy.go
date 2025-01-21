@@ -1,6 +1,6 @@
-// 📦 Generated from: github.com/golang/tools@1261a24ceb1867ea7439eda244e53e7ace4ad777
-// 🔗 Source: https://github.com/golang/tools/blob/1261a24ceb1867ea7439eda244e53e7ace4ad777/gopls/internal/protocol/generate/generate.go
-// ⏰ Downloaded at: 2025-01-21T11:15:18Z
+// 📦 Generated from: github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712
+// 🔗 Source: https://raw.githubusercontent.com/golang/tools/master/gopls/internal/protocol/generate/generate.go
+// ⏰ Downloaded at: 2025-01-21T16:32:51Z
 // ⚠️  This file is auto-generated. See .copy-status for details.
 
 // Copyright 2022 The Go Authors. All rights reserved.

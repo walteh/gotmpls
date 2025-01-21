@@ -1,6 +1,6 @@
-// 📦 Generated from: github.com/golang/tools@1261a24ceb1867ea7439eda244e53e7ace4ad777
-// 🔗 Source: https://github.com/golang/tools/blob/1261a24ceb1867ea7439eda244e53e7ace4ad777/gopls/internal/protocol/generate/main.go
-// ⏰ Downloaded at: 2025-01-21T11:15:18Z
+// 📦 Generated from: github.com/golang/tools@96a07bb5a10cad767e4a70c7fad8c2d09f663712
+// 🔗 Source: https://raw.githubusercontent.com/golang/tools/master/gopls/internal/protocol/generate/main.go
+// ⏰ Downloaded at: 2025-01-21T16:32:51Z
 // ⚠️  This file is auto-generated. See .copy-status for details.
 
 // Copyright 2022 The Go Authors. All rights reserved.
@@ -111,8 +111,8 @@ func writeclient() {
 		out.WriteString(cdecls[k])
 	}
 	out.WriteString("}\n\n")
-	out.WriteString(`func clientDispatch(ctx context.Context, client Client, conn \*jrpc2.Server, r \*jrpc2.Request) (bool, error) {
-	defer recoverHandlerPanic(r.Method)
+	out.WriteString(`func clientDispatch(ctx context.Context, client Client, conn *jrpc2.Server, r *jrpc2.Request) (bool, error) {
+	defer recoverHandlerPanic(r.Method())
 	switch r.Method() {
 `)
 	for _, k := range ccases.keys() {
@@ -142,8 +142,8 @@ func writeserver() {
 	out.WriteString(`
 }
 
-func serverDispatch(ctx context.Context, server Server, conn \*jrpc2.Server, r \*jrpc2.Request) (bool, error) {
-	defer recoverHandlerPanic(r.Method)
+func serverDispatch(ctx context.Context, server Server, conn *jrpc2.Server, r *jrpc2.Request) (bool, error) {
+	defer recoverHandlerPanic(r.Method())
 	switch r.Method() {
 `)
 	for _, k := range scases.keys() {

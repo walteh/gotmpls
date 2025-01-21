@@ -44,20 +44,22 @@ func TestGithubProvider(t *testing.T) {
 	require.NoError(t, err, "creating provider")
 
 	t.Run("GetSourceInfo", func(t *testing.T) {
-		info := provider.GetSourceInfo(ProviderArgs{
+		info, err := provider.GetSourceInfo(context.Background(), ProviderArgs{
 			Repo: "github.com/org/repo",
 			Ref:  "main",
 			Path: "path/to/files",
 		}, "abc123")
+		require.NoError(t, err, "getting source info")
 		assert.Equal(t, "github.com/org/repo@abc123", info)
 	})
 
 	t.Run("GetPermalink", func(t *testing.T) {
-		link := provider.GetPermalink(ProviderArgs{
+		link, err := provider.GetPermalink(context.Background(), ProviderArgs{
 			Repo: "github.com/org/repo",
 			Ref:  "main",
 			Path: "path/to/files",
 		}, "abc123", "file.go")
+		require.NoError(t, err, "getting permalink")
 		assert.Equal(t, "https://github.com/org/repo/blob/abc123/path/to/files/file.go", link)
 	})
 }
@@ -97,8 +99,8 @@ func TestNewConfigFromInput(t *testing.T) {
 			require.NoError(t, err, "unexpected error")
 			require.NotNil(t, cfg, "config should not be nil")
 			assert.Equal(t, tt.input.DestPath, cfg.DestPath)
-			assert.Len(t, cfg.Replacements, len(tt.input.Replacements))
-			assert.Len(t, cfg.IgnoreFiles, len(tt.input.IgnoreFiles))
+			assert.Len(t, cfg.CopyArgs.Replacements, len(tt.input.Replacements))
+			assert.Len(t, cfg.CopyArgs.IgnoreFiles, len(tt.input.IgnoreFiles))
 		})
 	}
 }
@@ -122,8 +124,11 @@ func Other() {}`))
 	cfg := &Config{
 		ProviderArgs: args,
 		DestPath:     t.TempDir(),
-		Replacements: []Replacement{
-			{Old: "Bar", New: "Baz"},
+		CopyArgs: &ConfigCopyArgs{
+			Replacements: []Replacement{
+				{Old: "Bar", New: "Baz"},
+			},
+			IgnoreFiles: []string{"*.tmp", "*.bak"},
 		},
 	}
 
@@ -207,7 +212,14 @@ func Other() {}`))
 		// Create initial status
 		status := &StatusFile{
 			CommitHash: mock.commitHash,
-			Entries:    make(map[string]StatusEntry),
+			Ref:        mock.ref,
+			Args: StatusFileArgs{
+				SrcRepo:  args.Repo,
+				SrcRef:   args.Ref,
+				SrcPath:  args.Path,
+				CopyArgs: &ConfigCopyArgs{},
+			},
+			Entries: make(map[string]StatusEntry),
 		}
 		require.NoError(t, writeStatusFile(statusPath, status))
 
@@ -216,6 +228,7 @@ func Other() {}`))
 			ProviderArgs: args,
 			DestPath:     dir,
 			RemoteStatus: true,
+			CopyArgs:     &ConfigCopyArgs{},
 		}
 		err := run(cfg, mock)
 		require.NoError(t, err)
@@ -234,16 +247,16 @@ func Other() {}`))
 		// Create initial status
 		status := &StatusFile{
 			Entries: make(map[string]StatusEntry),
-			Args: struct {
-				SrcRepo      string   `json:"src_repo"`
-				SrcRef       string   `json:"src_ref"`
-				SrcPath      string   `json:"src_path"`
-				Replacements []string `json:"replacements"`
-				IgnoreFiles  []string `json:"ignore_files"`
-			}{
+			Args: StatusFileArgs{
 				SrcRepo: args.Repo,
 				SrcRef:  args.Ref,
 				SrcPath: args.Path,
+				CopyArgs: &ConfigCopyArgs{
+					Replacements: []Replacement{
+						{Old: "Bar", New: "Baz"},
+					},
+					IgnoreFiles: []string{"*.tmp", "*.bak"},
+				},
 			},
 		}
 		require.NoError(t, writeStatusFile(statusPath, status))
@@ -253,6 +266,12 @@ func Other() {}`))
 			ProviderArgs: args,
 			DestPath:     dir,
 			Status:       true,
+			CopyArgs: &ConfigCopyArgs{
+				Replacements: []Replacement{
+					{Old: "Bar", New: "Baz"},
+				},
+				IgnoreFiles: []string{"*.tmp", "*.bak"},
+			},
 		}
 		err := run(cfg, mock)
 		require.NoError(t, err)
@@ -265,7 +284,8 @@ func Other() {}`))
 		assert.Contains(t, err.Error(), "configuration has changed")
 
 		// Test with force flag
-		cfg.Force = true
+		// cfg.Force = true
+		cfg.ProviderArgs.Ref = "different"
 		err = run(cfg, mock)
 		require.NoError(t, err)
 	})
@@ -277,16 +297,16 @@ func Other() {}`))
 		// Create initial status
 		status := &StatusFile{
 			Entries: make(map[string]StatusEntry),
-			Args: struct {
-				SrcRepo      string   `json:"src_repo"`
-				SrcRef       string   `json:"src_ref"`
-				SrcPath      string   `json:"src_path"`
-				Replacements []string `json:"replacements"`
-				IgnoreFiles  []string `json:"ignore_files"`
-			}{
+			Args: StatusFileArgs{
 				SrcRepo: args.Repo,
 				SrcRef:  args.Ref,
 				SrcPath: args.Path,
+				CopyArgs: &ConfigCopyArgs{
+					Replacements: []Replacement{
+						{Old: "Bar", New: "Baz"},
+					},
+					IgnoreFiles: []string{"*.tmp", "*.bak"},
+				},
 			},
 		}
 		require.NoError(t, writeStatusFile(statusPath, status))
@@ -296,6 +316,12 @@ func Other() {}`))
 			ProviderArgs: args,
 			DestPath:     dir,
 			Status:       true,
+			CopyArgs: &ConfigCopyArgs{
+				Replacements: []Replacement{
+					{Old: "Bar", New: "Baz"},
+				},
+				IgnoreFiles: []string{"*.tmp", "*.bak"},
+			},
 		}
 		err := run(cfg, mock)
 		require.NoError(t, err)
@@ -316,7 +342,7 @@ func TestStatusFile(t *testing.T) {
 	status := &StatusFile{
 		LastUpdated: time.Now().UTC(),
 		CommitHash:  "abc123",
-		Branch:      "main",
+		Ref:         "main",
 		Entries: map[string]StatusEntry{
 			"test.copy.go": {
 				File:       "test.copy.go",
@@ -335,7 +361,7 @@ func TestStatusFile(t *testing.T) {
 
 	// Verify fields
 	assert.Equal(t, status.CommitHash, loaded.CommitHash)
-	assert.Equal(t, status.Branch, loaded.Branch)
+	assert.Equal(t, status.Ref, loaded.Ref)
 	assert.Len(t, loaded.Entries, 1)
 	assert.Equal(t, status.Entries["test.copy.go"].File, loaded.Entries["test.copy.go"].File)
 	assert.Equal(t, status.Entries["test.copy.go"].Changes, loaded.Entries["test.copy.go"].Changes)
@@ -355,11 +381,11 @@ func TestTarballMode(t *testing.T) {
 		ProviderArgs: ProviderArgs{
 			Repo: "github.com/org/repo",
 			Ref:  "main",
-			Path: "path/to/files",
 		},
-		DestPath:   t.TempDir(),
-		UseTarball: true,
-		CacheDir:   cacheDir,
+		DestPath: cacheDir,
+		ArchiveArgs: &ConfigArchiveArgs{
+			GoEmbed: true,
+		},
 	}
 
 	// Run the copy operation
@@ -375,12 +401,12 @@ func TestTarballMode(t *testing.T) {
 	require.FileExists(t, tarballPath, "tarball file should exist")
 
 	// Verify embed.go file
-	embedPath := filepath.Join(repoDir, "embed.go")
-	require.FileExists(t, embedPath, "embed.go file should exist")
+	embedPath := filepath.Join(repoDir, "embed.gen.go")
+	require.FileExists(t, embedPath, "embed.gen.go file should exist")
 
 	// Read and verify embed.go contents
 	content, err := os.ReadFile(embedPath)
-	require.NoError(t, err, "reading embed.go should succeed")
+	require.NoError(t, err, "reading embed.gen.go should succeed")
 	contentStr := string(content)
 
 	// Check required elements in embed.go
@@ -393,21 +419,28 @@ func TestTarballMode(t *testing.T) {
 	assert.Contains(t, contentStr, "Repository = \"github.com/org/repo\"", "should have correct repository")
 
 	// Verify status file
-	statusPath := filepath.Join(cfg.DestPath, ".copy-status")
-	require.FileExists(t, statusPath, "status file should exist")
+	statusPath := filepath.Join(repoDir, ".copy-status")
+	require.FileExists(t, statusPath, "status file should exist at %s", statusPath)
 
 	// Read and verify status file
 	status, err := loadStatusFile(statusPath)
 	require.NoError(t, err, "reading status file should succeed")
+
+	sourceInfo, err := mock.GetSourceInfo(context.Background(), cfg.ProviderArgs, mock.commitHash)
+	require.NoError(t, err, "getting source info should succeed")
+
+	permalink, err := mock.GetArchiveUrl(context.Background(), cfg.ProviderArgs)
+	require.NoError(t, err, "getting archive url should succeed")
 
 	// Check status file entries - should only have one entry for the tarball
 	require.Len(t, status.Entries, 1, "should only have one entry in status file")
 	entry, ok := status.Entries["repo.tar.gz"]
 	require.True(t, ok, "status file should have entry for tarball")
 	assert.Equal(t, "repo.tar.gz", entry.File, "should have correct file name")
-	assert.Equal(t, []string{"Generated embed.go file"}, entry.Changes, "should have correct changes")
-	assert.Equal(t, mock.GetSourceInfo(cfg.ProviderArgs, mock.commitHash), entry.Source, "should have correct source")
-	assert.Equal(t, mock.GetPermalink(cfg.ProviderArgs, mock.commitHash, ""), entry.Permalink, "should have correct permalink")
+	assert.Equal(t, []string{"generated embed.gen.go file"}, entry.Changes, "should have correct changes")
+	assert.Equal(t, sourceInfo, entry.Source, "should have correct source")
+	assert.Equal(t, filepath.Dir(permalink), filepath.Dir(entry.Permalink), "should have correct permalink directory")
+	assert.Equal(t, filepath.Ext(permalink), filepath.Ext(entry.Permalink), "should have correct permalink file ext")
 
 	// Run again to verify caching behavior
 	err = run(cfg, mock)

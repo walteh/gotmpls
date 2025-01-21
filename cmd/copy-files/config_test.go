@@ -20,7 +20,6 @@ func TestLoadConfig(t *testing.T) {
 		{
 			name: "valid_config",
 			config: `
-default_branch: main
 status_file: .copy-status
 copies:
   - source:
@@ -31,13 +30,12 @@ copies:
       path: /dest
     options:
       replacements:
-        - "foo:bar"
-        - "xyz:yyz"
+        - {old: "foo", new: "bar"}
+        - {old: "xyz", new: "yyz"}
       ignore_files:
         - "*.txt"
 `,
 			validate: func(t *testing.T, cfg *CopyConfig) {
-				require.Equal(t, "main", cfg.DefaultBranch)
 				require.Equal(t, ".copy-status", cfg.StatusFile)
 				require.Len(t, cfg.Copies, 1)
 				require.Equal(t, "org/repo", cfg.Copies[0].Source.Repo)
@@ -46,43 +44,15 @@ copies:
 				require.Equal(t, "/dest", cfg.Copies[0].Destination.Path)
 				require.NotNil(t, cfg.Copies[0].Options)
 				require.Len(t, cfg.Copies[0].Options.Replacements, 2)
-				require.Equal(t, "foo:bar", cfg.Copies[0].Options.Replacements[0])
-				require.Equal(t, "xyz:yyz", cfg.Copies[0].Options.Replacements[1])
+				require.Equal(t, "foo", cfg.Copies[0].Options.Replacements[0].Old)
+				require.Equal(t, "bar", cfg.Copies[0].Options.Replacements[0].New)
+				require.Equal(t, "xyz", cfg.Copies[0].Options.Replacements[1].Old)
+				require.Equal(t, "yyz", cfg.Copies[0].Options.Replacements[1].New)
 				require.Len(t, cfg.Copies[0].Options.IgnoreFiles, 1)
 				require.Equal(t, "*.txt", cfg.Copies[0].Options.IgnoreFiles[0])
 			},
 		},
-		{
-			name: "valid_config_with_fallback",
-			config: `
-default_branch: main
-fallback_branch: develop
-copies:
-  - source:
-      repo: org/repo
-      path: /src
-      fallback_branch: master
-    destination:
-      path: /dest
-`,
-			validate: func(t *testing.T, cfg *CopyConfig) {
-				require.Equal(t, "main", cfg.DefaultBranch)
-				require.Equal(t, "develop", cfg.FallbackBranch)
-				require.Len(t, cfg.Copies, 1)
-				require.Equal(t, "master", cfg.Copies[0].Source.FallbackBranch)
-			},
-		},
-		{
-			name: "no_copies",
-			config: `
-default_branch: main
-copies: []
-`,
-			expectError: true,
-			validate: func(t *testing.T, cfg *CopyConfig) {
-				require.Error(t, errors.New("no copy entries defined"))
-			},
-		},
+
 		{
 			name: "invalid_replacement_format",
 			config: `
@@ -152,10 +122,8 @@ func Other() {}`))
 
 	// Create config
 	cfg := &CopyConfig{
-		DefaultBranch:  "main",
-		FallbackBranch: "master",
-		StatusFile:     ".copy-status",
-		Defaults:       &DefaultsBlock{},
+		StatusFile: ".copy-status",
+		Defaults:   &DefaultsBlock{},
 		Copies: []*CopyEntry{
 			{
 				Source: CopyEntry_Source{
@@ -166,16 +134,18 @@ func Other() {}`))
 				Destination: CopyEntry_Destination{
 					Path: dest1,
 				},
-				Options: &CopyEntry_Options{
-					Replacements: []string{
-						"Bar:Baz",
-						"foo:bar",
+				Options: CopyEntry_Options{
+					Replacements: []Replacement{
+						{Old: "Bar", New: "Baz"},
+						{Old: "foo", New: "bar"},
 					},
+					IgnoreFiles: []string{"*.tmp", "*.bak"},
 				},
 			},
 			{
 				Source: CopyEntry_Source{
 					Repo: mock.GetFullRepo(),
+					Ref:  mock.ref,
 					Path: mock.path,
 				},
 				Destination: CopyEntry_Destination{
@@ -227,14 +197,10 @@ func TestLoadHCLConfig(t *testing.T) {
 			name: "valid_hcl_config",
 			config: `
 # Global settings
-default_branch = "main"
 status_file = ".copy-status"
 
 # Default settings
 defaults {
-  source {
-    fallback_branch = "develop"
-  }
 }
 
 # Copy configuration
@@ -249,8 +215,8 @@ copy {
   }
   options {
     replacements = [
-      "foo:bar",
-      "xyz:yyz"
+		{old: "foo", new: "bar"},
+		{old: "xyz", new: "yyz"},
     ]
     ignore_files = [
       "*.txt"
@@ -259,10 +225,8 @@ copy {
 }
 `,
 			validate: func(t *testing.T, cfg *CopyConfig) {
-				require.Equal(t, "main", cfg.DefaultBranch)
 				require.Equal(t, ".copy-status", cfg.StatusFile)
 				require.NotNil(t, cfg.Defaults)
-				require.Equal(t, "develop", cfg.Defaults.Source.FallbackBranch)
 				require.Len(t, cfg.Copies, 1)
 				require.Equal(t, "org/repo", cfg.Copies[0].Source.Repo)
 				require.Equal(t, "main", cfg.Copies[0].Source.Ref)
@@ -270,8 +234,10 @@ copy {
 				require.Equal(t, "/dest", cfg.Copies[0].Destination.Path)
 				require.NotNil(t, cfg.Copies[0].Options)
 				require.Len(t, cfg.Copies[0].Options.Replacements, 2)
-				require.Equal(t, "foo:bar", cfg.Copies[0].Options.Replacements[0])
-				require.Equal(t, "xyz:yyz", cfg.Copies[0].Options.Replacements[1])
+				require.Equal(t, "foo", cfg.Copies[0].Options.Replacements[0].Old)
+				require.Equal(t, "bar", cfg.Copies[0].Options.Replacements[0].New)
+				require.Equal(t, "xyz", cfg.Copies[0].Options.Replacements[1].Old)
+				require.Equal(t, "yyz", cfg.Copies[0].Options.Replacements[1].New)
 				require.Len(t, cfg.Copies[0].Options.IgnoreFiles, 1)
 				require.Equal(t, "*.txt", cfg.Copies[0].Options.IgnoreFiles[0])
 			},
@@ -309,9 +275,8 @@ copy {
 		{
 			name: "no_copies",
 			config: `
-default_branch = "main"
 `,
-			expectError: true,
+			expectError: false,
 		},
 		{
 			name: "invalid_replacement_format",
