@@ -23,7 +23,7 @@ func OpenDocument(ctx context.Context, t *testing.T, server *lsp.Server, uri pro
 	})
 }
 
-func TestServer(t *testing.T) {
+func TestNvimServer(t *testing.T) {
 	t.Parallel()
 
 	t.Run("server_initialization", func(t *testing.T) {
@@ -337,7 +337,7 @@ type Person struct {
 	})
 }
 
-func TestDiagnosticsAfterFileChange(t *testing.T) {
+func TestNvimDiagnosticsAfterFileChange(t *testing.T) {
 	t.Parallel()
 
 	files := map[string]string{
@@ -388,7 +388,7 @@ type Person struct {
 	require.Contains(t, diags[0].Message, "AnotherInvalidField", "diagnostic should mention the new invalid field")
 }
 
-func TestDiagnosticHarness(t *testing.T) {
+func TestNvimDiagnosticHarness(t *testing.T) {
 
 	files := map[string]string{
 		"test.tmpl": "{{- /*gotype: test.Person*/ -}}\n{{ .Name }}",
@@ -482,7 +482,7 @@ type Person struct {
 	require.Empty(t, diags, "diagnostics should be cleared after fixing errors")
 }
 
-func TestSemanticTokens(t *testing.T) {
+func TestNvimSemanticTokens(t *testing.T) {
 	t.Parallel()
 
 	// t.Skip("skipping semantic tokens test")
