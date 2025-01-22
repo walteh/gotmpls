@@ -21,6 +21,7 @@ require (
 	github.com/oligot/go-mod-upgrade v0.10.0
 	github.com/srikrsna/protoc-gen-gotag v1.0.2
 	github.com/vektra/mockery/v2 v2.51.0
+	github.com/walteh/copyrc v0.0.2
 	github.com/walteh/gotmpls v0.0.0-00010101000000-000000000000
 	github.com/walteh/retab/v2 v2.1.0
 	gotest.tools/gotestsum v1.12.0
@@ -148,7 +149,7 @@ require (
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/blizzy78/varnamelen v0.8.0 // indirect
 	github.com/bluesky-social/indigo v0.0.0-20240813042137-4006c0eca043 // indirect
-	github.com/bmatcuk/doublestar/v4 v4.7.1 // indirect
+	github.com/bmatcuk/doublestar/v4 v4.8.0 // indirect
 	github.com/bombsimon/wsl/v4 v4.5.0 // indirect
 	github.com/breml/bidichk v0.3.2 // indirect
 	github.com/breml/errchkjson v0.4.0 // indirect
@@ -529,7 +530,7 @@ require (
 	github.com/yagipy/maintidx v1.0.0 // indirect
 	github.com/yeya24/promlinter v0.3.0 // indirect
 	github.com/ykadowak/zerologlint v0.1.5 // indirect
-	github.com/zclconf/go-cty v1.13.0 // indirect
+	github.com/zclconf/go-cty v1.16.2 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	gitlab.com/bosi/decorder v0.4.2 // indirect
 	gitlab.com/digitalxero/go-conventional-commit v1.0.7 // indirect

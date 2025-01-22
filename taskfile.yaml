@@ -89,13 +89,13 @@ tasks:
     copyrc:
         desc: copyrc
         cmds:
-            - go run ./cmd/copyrc -config=.copyrc.hcl
+            - ./scripts/run-tool.sh copyrc -config=.copyrc.hcl -force
         sources:
             - .copyrc.hcl
         generates:
             - "**/*.copyrc.lock"
         status:
-            - go run ./cmd/copyrc -config=.copyrc.hcl -status
+            - ./scripts/run-tool.sh copyrc -config=.copyrc.hcl -status
 
     generate-lsp-protocol:
         deps: [copyrc]
