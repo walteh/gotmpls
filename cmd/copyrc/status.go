@@ -1,9 +1,10 @@
 package main
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"time"
 
 	"gitlab.com/tozd/go/errors"
@@ -69,30 +70,24 @@ func loadStatusFile(path string) (*StatusFile, error) {
 }
 
 // 📝 Write status file
-func writeStatusFile(path string, status *StatusFile) error {
-	// read the current status file json
-	currentStatus, err := os.ReadFile(path)
-	if err != nil {
-		currentStatus = []byte("invalid")
-	}
+func writeStatusFile(ctx context.Context, status *StatusFile, destPath string) error {
+	statusPath := filepath.Join(destPath, ".copyrc.lock")
 
+	// Marshal status data
 	data, err := json.MarshalIndent(status, "", "\t")
 	if err != nil {
 		return errors.Errorf("marshaling status: %w", err)
 	}
 
-	// if the current status file is the same as the new status file, return
-	if bytes.Equal(currentStatus, data) {
-		return nil
-	}
-
-	status.LastUpdated = time.Now().UTC()
-	data, err = json.MarshalIndent(status, "", "\t")
+	// Write status file if changed
+	_, err = writeFile(ctx, WriteFileOpts{
+		Path:         statusPath,
+		Contents:     data,
+		StatusFile:   status,
+		IsStatusFile: true,
+		IsManaged:    true,
+	})
 	if err != nil {
-		return errors.Errorf("marshaling status: %w", err)
-	}
-
-	if err := os.WriteFile(path, data, 0644); err != nil {
 		return errors.Errorf("writing status file: %w", err)
 	}
 

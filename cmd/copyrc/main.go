@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"gitlab.com/tozd/go/errors"
 )
@@ -109,7 +108,9 @@ type ProviderArgs struct {
 }
 
 func main() {
-	logger := NewLogger(os.Stdout)
+	ctx := context.Background()
+	logger := NewDiscardDebugLogger(os.Stdout)
+	ctx = NewLoggerInContext(ctx, logger)
 
 	// 🎯 Parse command line flags
 	var input Input
@@ -143,7 +144,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		if err := cfg.RunAll(input.Clean, input.Status, input.RemoteStatus, input.Force, gh); err != nil {
+		if err := cfg.RunAll(ctx, input.Clean, input.Status, input.RemoteStatus, input.Force, gh); err != nil {
 			logger.Error(err.Error())
 			os.Exit(1)
 		}
@@ -175,26 +176,37 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := run(cfg, gh); err != nil {
+	if err := run(ctx, cfg, gh); err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
 }
 
-func run(cfg *Config, provider RepoProvider) error {
-	logger := NewLogger(os.Stdout)
+func run(ctx context.Context, cfg *Config, provider RepoProvider) error {
+	logger := loggerFromContext(ctx)
+
+	logger.formatRepoDisplay(RepoDisplay{
+		Name:        cfg.ProviderArgs.Repo,
+		Ref:         cfg.ProviderArgs.Ref,
+		Destination: cfg.DestPath,
+		IsArchive:   cfg.ArchiveArgs != nil,
+	})
+
+	destPath := cfg.DestPath
+	if cfg.ArchiveArgs != nil {
+		destPath = filepath.Join(destPath, filepath.Base(cfg.ProviderArgs.Repo))
+	}
 
 	// Determine status file location based on mode
 	var statusFile string
 	if cfg.ArchiveArgs != nil {
-		repoDir := filepath.Join(cfg.DestPath, filepath.Base(cfg.ProviderArgs.Repo))
-		statusFile = filepath.Join(repoDir, ".copyrc.lock")
+		statusFile = filepath.Join(destPath, ".copyrc.lock")
 		// Create repo directory if it doesn't exist
-		if err := os.MkdirAll(repoDir, 0755); err != nil {
+		if err := os.MkdirAll(destPath, 0755); err != nil {
 			return errors.Errorf("creating repo directory: %w", err)
 		}
 	} else {
-		statusFile = filepath.Join(cfg.DestPath, ".copyrc.lock")
+		statusFile = filepath.Join(destPath, ".copyrc.lock")
 	}
 
 	status, err := loadStatusFile(statusFile)
@@ -255,19 +267,14 @@ func run(cfg *Config, provider RepoProvider) error {
 	}
 
 	if cfg.Clean {
-		for _, entry := range status.CoppiedFiles {
-			logger.Operation(fmt.Sprintf("  Removing %s", entry.File))
-		}
-		for _, entry := range status.GeneratedFiles {
-			logger.Operation(fmt.Sprintf("  Removing %s", entry.File))
-		}
-		if err := cleanDestination(status, cfg.DestPath); err != nil {
+
+		if err := cleanDestination(ctx, status, destPath); err != nil {
 			return errors.Errorf("cleaning destination: %w", err)
 		}
 		return nil
 	}
 
-	commitHash, err := provider.GetCommitHash(context.Background(), cfg.ProviderArgs)
+	commitHash, err := provider.GetCommitHash(ctx, cfg.ProviderArgs)
 	if err != nil {
 		return errors.Errorf("getting commit hash: %w", err)
 	}
@@ -285,11 +292,10 @@ func run(cfg *Config, provider RepoProvider) error {
 	processedFiles = sync.Map{}
 
 	var mu sync.Mutex
-	if err := processDirectory(context.Background(), provider, cfg, commitHash, status, &mu); err != nil {
+	if err := processDirectory(ctx, provider, cfg, commitHash, status, &mu, destPath); err != nil {
 		return errors.Errorf("processing directory: %w", err)
 	}
 
-	status.LastUpdated = time.Now()
 	status.CommitHash = commitHash
 	status.Ref = cfg.ProviderArgs.Ref
 	status.Args = StatusFileArgs{
@@ -300,7 +306,12 @@ func run(cfg *Config, provider RepoProvider) error {
 		ArchiveArgs: cfg.ArchiveArgs,
 	}
 
-	if err := writeStatusFile(statusFile, status); err != nil {
+	dest := cfg.DestPath
+	if cfg.ArchiveArgs != nil {
+		dest = filepath.Join(dest, filepath.Base(cfg.ProviderArgs.Repo))
+	}
+
+	if err := writeStatusFile(ctx, status, dest); err != nil {
 		return errors.Errorf("writing status file: %w", err)
 	}
 

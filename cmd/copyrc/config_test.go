@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -107,16 +108,16 @@ func Bar() {}`))
 
 func Other() {}`))
 
+	ctx := context.Background()
+	logger := newTestLogger(t)
+	ctx = NewLoggerInContext(ctx, logger)
+
 	// Create test directories
 	dir := t.TempDir()
 	dest1 := filepath.Join(dir, "dest1")
 	dest2 := filepath.Join(dir, "dest2")
 	require.NoError(t, os.MkdirAll(dest1, 0755))
 	require.NoError(t, os.MkdirAll(dest2, 0755))
-
-	// Create cache directory
-	cacheDir := filepath.Join(dir, "cache")
-	require.NoError(t, os.MkdirAll(cacheDir, 0755))
 
 	// Create config
 	cfg := &CopyConfig{
@@ -153,42 +154,55 @@ func Other() {}`))
 	}
 
 	// Run all copies
-	require.NoError(t, cfg.RunAll(false, false, false, false, mock))
+	require.NoError(t, cfg.RunAll(ctx, false, false, false, false, mock))
+
+	// list out files in tmp dir
+	files, err := os.ReadDir(dest1)
+	t.Logf("files: %+v", files)
+	require.NoError(t, err)
 
 	// Verify first copy
-	content, err := os.ReadFile(filepath.Join(dest1, "test.copy.go"))
+	p1 := filepath.Join(dest1, "test.copy.go")
+	require.FileExists(t, p1)
+	content, err := os.ReadFile(p1)
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "func Baz()")
 
 	// Verify second copy
-	content, err = os.ReadFile(filepath.Join(dest2, "test.copy.go"))
+	p2 := filepath.Join(dest2, "test.copy.go")
+	require.FileExists(t, p2)
+	content, err = os.ReadFile(p2)
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "func Bar()")
 
 	// Test status check
-	require.NoError(t, cfg.RunAll(false, true, false, false, mock))
+	require.NoError(t, cfg.RunAll(ctx, false, true, false, false, mock))
 
 	// Test remote status check
-	require.NoError(t, cfg.RunAll(false, false, true, false, mock))
+	require.NoError(t, cfg.RunAll(ctx, false, false, true, false, mock))
 
 	// Create a patch file to test clean behavior
 	patchPath := filepath.Join(dest1, "test.copy.patch.go")
 	require.NoError(t, os.WriteFile(patchPath, []byte("patch content"), 0644))
 
-	// write a status file to dest1
-	statusPath := filepath.Join(dest1, ".copyrc.lock")
-	require.NoError(t, writeStatusFile(statusPath, &StatusFile{
-		CoppiedFiles: map[string]StatusEntry{
-			"test.copy.go": {
-				File: "test.copy.go",
-			},
+	// Create initial status
+	status := &StatusFile{
+		CommitHash: mock.commitHash,
+		Ref:        mock.ref,
+		Args: StatusFileArgs{
+			SrcRepo:  mock.GetFullRepo(),
+			SrcRef:   mock.ref,
+			SrcPath:  mock.path,
+			CopyArgs: &ConfigCopyArgs{},
 		},
-	}))
+		CoppiedFiles: make(map[string]StatusEntry),
+	}
+	require.NoError(t, writeStatusFile(ctx, status, dir))
 
 	// Test clean
-	require.NoError(t, cfg.RunAll(true, false, false, false, mock))
+	require.NoError(t, cfg.RunAll(ctx, true, false, false, false, mock))
 	require.NoFileExists(t, filepath.Join(dest1, "test.copy.go"))
-	require.NoFileExists(t, statusPath)
+	require.NoFileExists(t, filepath.Join(dest1, ".copyrc.lock"))
 	require.FileExists(t, patchPath)
 }
 

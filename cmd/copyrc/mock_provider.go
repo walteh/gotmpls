@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,7 +52,8 @@ func (m *MockProvider) ListFiles(ctx context.Context, args ProviderArgs) ([]stri
 	for f := range m.files {
 		files = append(files, f)
 	}
-	fmt.Printf("🧪 Mock provider listing %d files: %v\n", len(files), files)
+	logger := loggerFromContext(ctx)
+	logger.zlog.Debug().Msgf("🧪 Mock provider listing %d files: %v", len(files), files)
 	return files, nil
 }
 
@@ -62,21 +62,14 @@ func (m *MockProvider) GetCommitHash(ctx context.Context, args ProviderArgs) (st
 }
 
 func (m *MockProvider) GetPermalink(ctx context.Context, args ProviderArgs, commitHash string, file string) (string, error) {
-
-	if m.files[file] == nil {
+	// Remove the path prefix if it exists
+	cleanFile := strings.TrimPrefix(file, m.path+"/")
+	if m.files[cleanFile] == nil {
 		return "", errors.Errorf("file not found: %s", file)
 	}
 
-	// Create a temporary file
-	f := m.t.TempDir()
-
-	err := os.WriteFile(filepath.Join(f, file), m.files[file], 0644)
-	if err != nil {
-		return "", errors.Errorf("writing file: %w", err)
-	}
-
-	// Return a file:// URL to the temporary file
-	return "file://" + filepath.Join(f, file), nil
+	// Return a mock permalink that includes the file path
+	return "mock://" + cleanFile, nil
 }
 
 func (m *MockProvider) GetSourceInfo(ctx context.Context, args ProviderArgs, commitHash string) (string, error) {
@@ -159,18 +152,6 @@ func (m *MockProvider) GetFile(ctx context.Context, args ProviderArgs, file stri
 		return nil, errors.Errorf("file not found: %s", file)
 	}
 
-	// Create a temporary file
-	f, err := os.CreateTemp("", "mock-file-*.txt")
-	if err != nil {
-		return nil, errors.Errorf("creating temp file: %w", err)
-	}
-	defer f.Close()
-
-	// Write the content
-	if _, err := f.Write(content); err != nil {
-		return nil, errors.Errorf("writing file content: %w", err)
-	}
-
-	// Read back the file
-	return os.ReadFile(f.Name())
+	// Return the content directly
+	return content, nil
 }

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -22,44 +23,36 @@ var (
 	loggerMu       sync.Mutex
 )
 
-func logFileOperation(logger *Logger, file string, status FileStatus, replacementCount int) {
-	if _, loaded := processedFiles.LoadOrStore(file, true); !loaded {
-		loggerMu.Lock()
-		defer loggerMu.Unlock()
-		var replacements *int
-		if replacementCount > 0 {
-			replacements = &replacementCount
-		}
-		op := FileInfo{
-			Name:         file,
-			Status:       status,
-			IsSpecial:    strings.HasSuffix(file, ".copyrc.lock"),
-			IsUntracked:  !strings.HasSuffix(file, ".copyrc.lock") && strings.HasSuffix(file, ".go") && !strings.HasSuffix(file, ".copy.go") && file != "embed.gen.go",
-			Replacements: replacements,
-		}
-		logger.AddFileOperation(op)
-	}
+func logFileOperation(ctx context.Context, opts FileInfo) {
+	logger := loggerFromContext(ctx)
+	logger.LogFileOperation(opts)
+	// if _, loaded := processedFiles.LoadOrStore(opts.Name, true); !loaded {
+	// 	loggerMu.Lock()
+	// 	defer loggerMu.Unlock()
+
+	// 	logger.LogFileOperation(opts)
+	// }
 }
 
 // 🧹 Clean destination directory
-func cleanDestination(status *StatusFile, destPath string) error {
-	logger := NewLogger(os.Stdout)
+func cleanDestination(ctx context.Context, status *StatusFile, destPath string) error {
+	logger := loggerFromContext(ctx)
 
 	for _, entry := range status.CoppiedFiles {
-		logger.Operation(fmt.Sprintf("Removing %s", entry.File))
+		logger.AddFileOperation(FileInfo{Name: entry.File, IsRemoved: true})
 		if err := os.Remove(filepath.Join(destPath, entry.File)); err != nil {
 			return errors.Errorf("removing file: %w", err)
 		}
 	}
 
 	for _, entry := range status.GeneratedFiles {
-		logger.Operation(fmt.Sprintf("Removing %s", entry.File))
+		logger.AddFileOperation(FileInfo{Name: entry.File, IsRemoved: true})
 		if err := os.Remove(filepath.Join(destPath, entry.File)); err != nil {
 			return errors.Errorf("removing file: %w", err)
 		}
 	}
 
-	logger.Operation("Removing status file")
+	logger.AddFileOperation(FileInfo{Name: ".copyrc.lock", IsRemoved: true})
 	if err := os.Remove(filepath.Join(destPath, ".copyrc.lock")); err != nil {
 		if !os.IsNotExist(err) {
 			return errors.Errorf("removing status file: %w", err)
@@ -69,8 +62,7 @@ func cleanDestination(status *StatusFile, destPath string) error {
 	return nil
 }
 
-func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, commitHash string, status *StatusFile, mu *sync.Mutex) error {
-	logger := NewLogger(os.Stdout)
+func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, commitHash string, status *StatusFile, mu *sync.Mutex, destPath string) error {
 
 	if cfg.ArchiveArgs != nil {
 		if cfg.ProviderArgs.Path != "" {
@@ -79,8 +71,7 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 
 		// Ensure cache directory exists
 		repoName := filepath.Base(cfg.ProviderArgs.Repo)
-		repoDir := filepath.Join(cfg.DestPath, repoName)
-		if err := os.MkdirAll(repoDir, 0755); err != nil {
+		if err := os.MkdirAll(destPath, 0755); err != nil {
 			return errors.Errorf("creating repo directory: %w", err)
 		}
 
@@ -89,18 +80,9 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 		if err != nil {
 			return errors.Errorf("getting file from tarball: %w", err)
 		}
-		tarballPath := filepath.Join(repoDir, repoName+".tar.gz")
-
-		preTarball, err := os.ReadFile(tarballPath)
-		if err != nil && !os.IsNotExist(err) {
-			return errors.Errorf("reading existing tarball: %w", err)
-		}
+		tarballPath := filepath.Join(destPath, repoName+".tar.gz")
 
 		// Save tarball
-		if err := os.WriteFile(tarballPath, data, 0644); err != nil {
-			return errors.Errorf("writing tarball: %w", err)
-		}
-
 		sourceInfo, err := provider.GetSourceInfo(ctx, cfg.ProviderArgs, commitHash)
 		if err != nil {
 			return errors.Errorf("getting source info: %w", err)
@@ -111,31 +93,27 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 			return errors.Errorf("getting permalink: %w", err)
 		}
 
-		entry := StatusEntry{
-			File:      repoName + ".tar.gz",
-			Source:    sourceInfo,
-			Permalink: permalink,
-			Changes:   []string{},
-		}
-
-		mu.Lock()
-		_, hasOldStatus := status.CoppiedFiles[entry.File]
-		mu.Unlock()
-
-		if len(preTarball) > 0 && bytes.Equal(preTarball, data) && hasOldStatus {
-			mu.Lock()
-			entry.LastUpdated = status.CoppiedFiles[entry.File].LastUpdated
-			mu.Unlock()
-			logFileOperation(logger, entry.File, RegularFile, 0)
-		} else {
-			entry.LastUpdated = time.Now().UTC()
-			logFileOperation(logger, entry.File, UpdatedFile, 0)
+		// Let writeFile handle status determination
+		if _, err := writeFile(ctx, WriteFileOpts{
+			Path:        tarballPath,
+			Contents:    data,
+			StatusFile:  status,
+			StatusMutex: mu,
+			Source:      sourceInfo,
+			Permalink:   permalink,
+		}); err != nil {
+			return errors.Errorf("writing tarball: %w", err)
 		}
 
 		if cfg.ArchiveArgs.GoEmbed {
+
+			mu.Lock()
+			tarStatus := status.CoppiedFiles[filepath.Base(tarballPath)]
+			mu.Unlock()
+
 			// Create embed.go file
 			pkgName := strings.ReplaceAll(repoName, "-", "")
-			embedPath := filepath.Join(repoDir, "embed.gen.go")
+			embedPath := filepath.Join(destPath, "embed.gen.go")
 			var buf bytes.Buffer
 
 			fmt.Fprintf(&buf, "// 📦 generated by copyrc. DO NOT EDIT.\n")
@@ -150,48 +128,22 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 			fmt.Fprintf(&buf, "\tCommit     = %q\n", commitHash)
 			fmt.Fprintf(&buf, "\tRepository = %q\n", cfg.ProviderArgs.Repo)
 			fmt.Fprintf(&buf, "\tPermalink  = %q\n", permalink)
-			fmt.Fprintf(&buf, "\tDownloaded = %q\n", entry.LastUpdated.Format(time.RFC3339))
+			fmt.Fprintf(&buf, "\tDownloaded = %q\n", tarStatus.LastUpdated.Format(time.RFC3339))
 			fmt.Fprintf(&buf, ")\n")
 
-			mu.Lock()
-			_, hasOldStatus := status.GeneratedFiles["embed.gen.go"]
-			mu.Unlock()
-
-			byt := buf.Bytes()
-			if hasOldStatus {
-				curr, err := os.ReadFile(embedPath)
-				if err != nil && !os.IsNotExist(err) {
-					return errors.Errorf("reading existing embed.gen.go: %w", err)
-				}
-				if len(curr) > 0 && bytes.Equal(curr, byt) {
-					logFileOperation(logger, "embed.gen.go", RegularFile, 0)
-				} else {
-					logFileOperation(logger, "embed.gen.go", UpdatedFile, 0)
-					if err := os.WriteFile(embedPath, byt, 0644); err != nil {
-						return errors.Errorf("writing embed.gen.go: %w", err)
-					}
-				}
-			} else {
-				logFileOperation(logger, "embed.gen.go", NewFile, 0)
-				if err := os.WriteFile(embedPath, byt, 0644); err != nil {
-					return errors.Errorf("writing embed.gen.go: %w", err)
-				}
+			// Let writeFile handle status determination
+			if _, err := writeFile(ctx, WriteFileOpts{
+				Path:          embedPath,
+				Contents:      buf.Bytes(),
+				IsManaged:     true,
+				StatusFile:    status,
+				StatusMutex:   mu,
+				EnsureNewline: true,
+			}); err != nil {
+				return errors.Errorf("writing embed.gen.go: %w", err)
 			}
 
-			entry.Changes = []string{"generated embed.gen.go file"}
-			mu.Lock()
-			status.GeneratedFiles["embed.gen.go"] = GeneratedFileEntry{
-				File:        "embed.gen.go",
-				LastUpdated: entry.LastUpdated,
-			}
-			mu.Unlock()
 		}
-
-		// just in case
-		mu.Lock()
-		delete(status.GeneratedFiles, entry.File)
-		status.CoppiedFiles[entry.File] = entry
-		mu.Unlock()
 
 		return nil
 	}
@@ -211,7 +163,13 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 	}
 
 	var contentz []byte
-	if strings.HasPrefix(permalink, "file://") {
+	if mockProvider, ok := provider.(*MockProvider); ok {
+		// For mock provider, use GetFile directly
+		contentz, err = mockProvider.GetFile(ctx, cfg.ProviderArgs, file)
+		if err != nil {
+			return errors.Errorf("getting file content: %w", err)
+		}
+	} else if strings.HasPrefix(permalink, "file://") {
 		contentz, err = os.ReadFile(strings.TrimPrefix(permalink, "file://"))
 		if err != nil {
 			return errors.Errorf("reading file: %w", err)
@@ -242,14 +200,6 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 	ext := filepath.Ext(file)
 	base := strings.TrimSuffix(filepath.Base(file), ext)
 
-	// Create status entry
-	entry := StatusEntry{
-		File:        base + ".copy" + ext,
-		Source:      sourceInfo,
-		Permalink:   permalink,
-		LastUpdated: time.Now().UTC(),
-	}
-
 	// Process content
 	var buf bytes.Buffer
 
@@ -276,6 +226,7 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 
 	// Apply replacements
 	var replacementCount int
+	var changes []string
 	for _, r := range cfg.CopyArgs.Replacements {
 		if r.File != nil && *r.File != "" {
 			matched, err := doublestar.Match(*r.File, file)
@@ -295,7 +246,7 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 			for i, line := range lines {
 				if bytes.Contains(line, []byte(r.Old)) {
 					change := fmt.Sprintf("Line %d: Replaced '%s' with '%s'", i+1, r.Old, r.New)
-					entry.Changes = append(entry.Changes, change)
+					changes = append(changes, change)
 				}
 			}
 
@@ -307,80 +258,41 @@ func processFile(ctx context.Context, provider RepoProvider, cfg *Config, file, 
 	}
 
 	// Check if file exists and has .patch suffix
-	outPath := filepath.Join(cfg.DestPath, entry.File)
+	outPath := filepath.Join(cfg.DestPath, base+".copy"+ext)
 
-	mu.Lock()
-	_, hasOldStatus := status.CoppiedFiles[entry.File]
-	mu.Unlock()
-
-	currFile, err := os.ReadFile(outPath)
-	// if the current and new file are the same, skip
-	if err == nil && bytes.Equal(currFile, buf.Bytes()) && hasOldStatus {
-		entry.LastUpdated = status.CoppiedFiles[entry.File].LastUpdated
-		logFileOperation(logger, entry.File, RegularFile, replacementCount)
-	} else if os.IsNotExist(err) {
-		if err := os.WriteFile(outPath, buf.Bytes(), 0644); err != nil {
-			return errors.Errorf("writing file: %w", err)
-		}
-		logFileOperation(logger, entry.File, NewFile, replacementCount)
-	} else {
-		if err := os.WriteFile(outPath, buf.Bytes(), 0644); err != nil {
-			return errors.Errorf("writing file: %w", err)
-		}
-		logFileOperation(logger, entry.File, UpdatedFile, replacementCount)
+	// Let writeFile handle all status management and logging
+	if _, err := writeFile(ctx, WriteFileOpts{
+		Path:             outPath,
+		Contents:         buf.Bytes(),
+		StatusFile:       status,
+		StatusMutex:      mu,
+		Source:           sourceInfo,
+		Permalink:        permalink,
+		Changes:          changes,
+		ReplacementCount: replacementCount,
+		EnsureNewline:    true,
+	}); err != nil {
+		return errors.Errorf("writing file: %w", err)
 	}
-
-	// Update status file (with mutex for concurrent access)
-	mu.Lock()
-	status.CoppiedFiles[entry.File] = entry
-	mu.Unlock()
 
 	return nil
 }
 
-func processDirectory(ctx context.Context, provider RepoProvider, cfg *Config, commitHash string, status *StatusFile, mu *sync.Mutex) error {
-	logger := NewLogger(os.Stdout)
-
-	// Get list of files from provider
-	files, err := provider.ListFiles(ctx, cfg.ProviderArgs)
-	if err != nil {
-		return errors.Errorf("listing files: %w", err)
+func processDirectory(ctx context.Context, provider RepoProvider, cfg *Config, commitHash string, status *StatusFile, mu *sync.Mutex, destPath string) error {
+	var files []string
+	var err error
+	if cfg.ArchiveArgs == nil {
+		// Get list of files from provider
+		files, err = provider.ListFiles(ctx, cfg.ProviderArgs)
+		if err != nil {
+			return errors.Errorf("listing files: %w", err)
+		}
+	} else {
+		files = []string{""}
 	}
 
 	// Sort files by name
 	sort.Strings(files)
-
-	// Add untracked files from local directory
-	if cfg.DestPath != "" {
-		var dirPath string
-		if cfg.ArchiveArgs != nil {
-			dirPath = filepath.Join(cfg.DestPath, filepath.Base(cfg.ProviderArgs.Repo))
-		} else {
-			dirPath = cfg.DestPath
-		}
-
-		entries, err := os.ReadDir(dirPath)
-		if err == nil {
-			// Sort entries by name
-			sortedEntries := make([]os.DirEntry, len(entries))
-			copy(sortedEntries, entries)
-			sort.Slice(sortedEntries, func(i, j int) bool {
-				return sortedEntries[i].Name() < sortedEntries[j].Name()
-			})
-
-			for _, entry := range sortedEntries {
-				if !entry.IsDir() {
-					name := entry.Name()
-					// Show .copyrc.lock files and untracked .go files
-					if strings.HasSuffix(name, ".copyrc.lock") {
-						logFileOperation(logger, name, SpecialFile, 0)
-					} else if strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, ".copy.go") && name != "embed.gen.go" {
-						logFileOperation(logger, name, UntrackedFile, 0)
-					}
-				}
-			}
-		}
-	}
 
 	// Process each file
 	if cfg.Async {
@@ -391,7 +303,7 @@ func processDirectory(ctx context.Context, provider RepoProvider, cfg *Config, c
 			wg.Add(1)
 			go func(f string) {
 				defer wg.Done()
-				if err := processFile(ctx, provider, cfg, f, commitHash, status, mu); err != nil {
+				if err := processFile(ctx, provider, cfg, f, commitHash, status, mu, destPath); err != nil {
 					errChan <- errors.Errorf("processing file %s: %w", f, err)
 				}
 			}(file)
@@ -409,26 +321,43 @@ func processDirectory(ctx context.Context, provider RepoProvider, cfg *Config, c
 		}
 	} else {
 		for _, file := range files {
-			if file == "" {
+			if file == "" && cfg.ArchiveArgs == nil {
 				continue
 			}
-			if err := processFile(ctx, provider, cfg, file, commitHash, status, mu); err != nil {
+			if err := processFile(ctx, provider, cfg, file, commitHash, status, mu, destPath); err != nil {
 				return errors.Errorf("processing file %s: %w", file, err)
 			}
 		}
 	}
 
-	// Add existing files from status
-	if status != nil {
-		for name := range status.CoppiedFiles {
-			if _, exists := processedFiles.Load(name); !exists {
-				logFileOperation(logger, name, RegularFile, 0)
-			}
-		}
-		for name := range status.GeneratedFiles {
-			if _, exists := processedFiles.Load(name); !exists {
-				logFileOperation(logger, name, RegularFile, 0)
-			}
+	var dirPath string
+	if cfg.ArchiveArgs != nil {
+		dirPath = filepath.Join(cfg.DestPath, filepath.Base(cfg.ProviderArgs.Repo))
+	} else {
+		dirPath = cfg.DestPath
+	}
+
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return errors.Errorf("reading directory: %w", err)
+	}
+
+	entries = slices.DeleteFunc(entries, func(entry os.DirEntry) bool {
+		_, genStatus := status.GeneratedFiles[entry.Name()]
+		_, copyStatus := status.CoppiedFiles[entry.Name()]
+		return genStatus || copyStatus || entry.IsDir() || entry.Name() == ".copyrc.lock" || entry.Name() == ".git" || entry.Name() == ".DS_Store"
+	})
+
+	slices.SortFunc(entries, func(a, b os.DirEntry) int {
+		return strings.Compare(a.Name(), b.Name())
+	})
+
+	for _, entry := range entries {
+		if _, err := writeFile(ctx, WriteFileOpts{
+			Path:        filepath.Join(dirPath, entry.Name()),
+			IsUntracked: true,
+		}); err != nil {
+			return errors.Errorf("writing untracked file: %w", err)
 		}
 	}
 

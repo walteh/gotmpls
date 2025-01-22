@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -15,35 +14,33 @@ import (
 
 func TestEnhancedLogging(t *testing.T) {
 	// Create a buffer to capture output
-	var buf bytes.Buffer
-	logger := NewLogger(&buf)
 
 	t.Run("success_message", func(t *testing.T) {
-		buf.Reset()
+		logger := newTestLogger(t)
 		logger.Success("Operation completed")
-		assert.Contains(t, buf.String(), "✅")
-		assert.Contains(t, buf.String(), "Operation completed")
+		assert.Contains(t, logger.CopyOfCurrentConsoleOutputInTest(), "✅")
+		assert.Contains(t, logger.CopyOfCurrentConsoleOutputInTest(), "Operation completed")
 	})
 
 	t.Run("info_message", func(t *testing.T) {
-		buf.Reset()
+		logger := newTestLogger(t)
 		logger.Info("Processing files")
-		assert.Contains(t, buf.String(), "ℹ️")
-		assert.Contains(t, buf.String(), "Processing files")
+		assert.Contains(t, logger.CopyOfCurrentConsoleOutputInTest(), "ℹ️")
+		assert.Contains(t, logger.CopyOfCurrentConsoleOutputInTest(), "Processing files")
 	})
 
 	t.Run("warning_message", func(t *testing.T) {
-		buf.Reset()
+		logger := newTestLogger(t)
 		logger.Warning("Proceed with caution")
-		assert.Contains(t, buf.String(), "⚠️")
-		assert.Contains(t, buf.String(), "Proceed with caution")
+		assert.Contains(t, logger.CopyOfCurrentConsoleOutputInTest(), "⚠️")
+		assert.Contains(t, logger.CopyOfCurrentConsoleOutputInTest(), "Proceed with caution")
 	})
 
 	t.Run("error_message", func(t *testing.T) {
-		buf.Reset()
+		logger := newTestLogger(t)
 		logger.Error("Something went wrong")
-		assert.Contains(t, buf.String(), "❌")
-		assert.Contains(t, buf.String(), "Something went wrong")
+		assert.Contains(t, logger.CopyOfCurrentConsoleOutputInTest(), "❌")
+		assert.Contains(t, logger.CopyOfCurrentConsoleOutputInTest(), "Something went wrong")
 	})
 }
 
@@ -172,9 +169,13 @@ func Other() {}`))
 	}
 
 	t.Run("normal file", func(t *testing.T) {
+		ctx := context.Background()
+		logger := newTestLogger(t)
+		ctx = NewLoggerInContext(ctx, logger)
+
 		// Process the file
 		var mu sync.Mutex
-		err := processFile(context.Background(), mock, cfg, "test.go", mock.commitHash, status, &mu)
+		err := processFile(ctx, mock, cfg, "test.go", mock.commitHash, status, &mu, cfg.DestPath)
 		require.NoError(t, err)
 
 		// Verify the output file
@@ -191,14 +192,28 @@ func Other() {}`))
 	})
 
 	t.Run("clean destination", func(t *testing.T) {
+		ctx := context.Background()
+		logger := newTestLogger(t)
+		ctx = NewLoggerInContext(ctx, logger)
+
 		// Create test files
 		dir := t.TempDir()
 		files := []string{
 			"test.copy.go",
 			"regular.go",
 		}
+
+		st := &StatusFile{
+			CoppiedFiles:   make(map[string]StatusEntry),
+			GeneratedFiles: make(map[string]GeneratedFileEntry),
+		}
 		for _, f := range files {
-			require.NoError(t, os.WriteFile(filepath.Join(dir, f), []byte("content"), 0644))
+			_, err := writeFile(ctx, WriteFileOpts{
+				Path:       filepath.Join(dir, f),
+				Contents:   []byte("content"),
+				StatusFile: st,
+			})
+			require.NoError(t, err)
 		}
 
 		status.CoppiedFiles["test.copy.go"] = StatusEntry{
@@ -210,7 +225,7 @@ func Other() {}`))
 		}
 
 		// Clean the directory
-		err := cleanDestination(status, dir)
+		err := cleanDestination(ctx, status, dir)
 		require.NoError(t, err)
 
 		require.NoFileExists(t, filepath.Join(dir, "test.copy.go"))
@@ -220,7 +235,9 @@ func Other() {}`))
 
 	t.Run("status check", func(t *testing.T) {
 		dir := t.TempDir()
-		statusPath := filepath.Join(dir, ".copyrc.lock")
+		ctx := context.Background()
+		logger := newTestLogger(t)
+		ctx = NewLoggerInContext(ctx, logger)
 
 		// Create initial status
 		status := &StatusFile{
@@ -234,7 +251,7 @@ func Other() {}`))
 			},
 			CoppiedFiles: make(map[string]StatusEntry),
 		}
-		require.NoError(t, writeStatusFile(statusPath, status))
+		require.NoError(t, writeStatusFile(ctx, status, dir))
 
 		// Test with same commit hash
 		cfg := &Config{
@@ -243,19 +260,21 @@ func Other() {}`))
 			RemoteStatus: true,
 			CopyArgs:     &ConfigCopyArgs{},
 		}
-		err := run(cfg, mock)
+		err := run(ctx, cfg, mock)
 		require.NoError(t, err)
 
 		// Test with different commit hash
 		status.CommitHash = "different"
-		require.NoError(t, writeStatusFile(statusPath, status))
-		err = run(cfg, mock)
+		require.NoError(t, writeStatusFile(ctx, status, dir))
+		err = run(ctx, cfg, mock)
 		assert.Error(t, err)
 	})
 
 	t.Run("local_status_check", func(t *testing.T) {
 		dir := t.TempDir()
-		statusPath := filepath.Join(dir, ".copyrc.lock")
+		ctx := context.Background()
+		logger := newTestLogger(t)
+		ctx = NewLoggerInContext(ctx, logger)
 
 		// Create initial status
 		status := &StatusFile{
@@ -272,7 +291,7 @@ func Other() {}`))
 				},
 			},
 		}
-		require.NoError(t, writeStatusFile(statusPath, status))
+		require.NoError(t, writeStatusFile(ctx, status, dir))
 
 		// Test with same arguments
 		cfg := &Config{
@@ -286,12 +305,12 @@ func Other() {}`))
 				IgnoreFiles: []string{"*.tmp", "*.bak"},
 			},
 		}
-		err := run(cfg, mock)
+		err := run(ctx, cfg, mock)
 		require.NoError(t, err)
 
 		// Test with different arguments
 		cfg.CopyArgs.Replacements[0].New = "Different"
-		err = run(cfg, mock)
+		err = run(ctx, cfg, mock)
 		assert.Error(t, err, "should error when configuration changes")
 	})
 }

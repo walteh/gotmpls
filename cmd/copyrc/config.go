@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"fmt"
+	"context"
 	"os"
 	"strings"
 
@@ -108,13 +108,13 @@ func LoadConfig(path string) (*CopyConfig, error) {
 }
 
 // 🏃 Run all copy operations
-func (cfg *CopyConfig) RunAll(clean, status, remoteStatus, force bool, provider RepoProvider) error {
-	logger := NewLogger(os.Stdout)
+func (cfg *CopyConfig) RunAll(ctx context.Context, clean, status, remoteStatus, force bool, provider RepoProvider) error {
+	logger := loggerFromContext(ctx)
 	logger.Header("Copying files from repositories")
 
 	// Process copies
 	for _, copy := range cfg.Copies {
-		logger.Operation(fmt.Sprintf("Repository: %s (ref: %s -> %s)", copy.Source.Repo, copy.Source.Ref, copy.Destination.Path))
+
 		config := &Config{
 			ProviderArgs: ProviderArgs{
 				Repo: copy.Source.Repo,
@@ -132,14 +132,13 @@ func (cfg *CopyConfig) RunAll(clean, status, remoteStatus, force bool, provider 
 			Force:        force,
 		}
 
-		if err := run(config, provider); err != nil {
+		if err := run(ctx, config, provider); err != nil {
 			return errors.Errorf("running copy %s: %w", copy.Destination.Path, err)
 		}
 	}
 
 	// Process archives
 	for _, archive := range cfg.Archives {
-		logger.Operation(fmt.Sprintf("Repository: %s (ref: %s -> %s) [archive]", archive.Source.Repo, archive.Source.Ref, archive.Destination.Path))
 		config := &Config{
 			ProviderArgs: ProviderArgs{
 				Repo: archive.Source.Repo,
@@ -155,7 +154,7 @@ func (cfg *CopyConfig) RunAll(clean, status, remoteStatus, force bool, provider 
 			Force:        force,
 		}
 
-		if err := run(config, provider); err != nil {
+		if err := run(ctx, config, provider); err != nil {
 			return errors.Errorf("running archive %s: %w", archive.Destination.Path, err)
 		}
 	}
