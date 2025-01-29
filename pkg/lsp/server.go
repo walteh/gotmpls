@@ -111,71 +111,114 @@ func (s *Server) Exit(ctx context.Context) error {
 }
 
 func (s *Server) Initialize(ctx context.Context, params *protocol.ParamInitialize) (*protocol.InitializeResult, error) {
-	return &protocol.InitializeResult{
-		Capabilities: protocol.ServerCapabilities{
-			HoverProvider: &protocol.Or_ServerCapabilities_hoverProvider{
-				Value: true,
-			},
-			TextDocumentSync: &protocol.Or_ServerCapabilities_textDocumentSync{
-				Value: protocol.Incremental,
-			},
+	logger := zerolog.Ctx(ctx)
+	logger.Debug().Msg("initializing server")
 
-			CompletionProvider: &protocol.CompletionOptions{
-				WorkDoneProgressOptions: protocol.WorkDoneProgressOptions{
-					WorkDoneProgress: true,
-				},
-				TriggerCharacters: []string{".", ":", " "},
-			},
-			SemanticTokensProvider: &protocol.SemanticTokensOptions{
-				Legend: protocol.SemanticTokensLegend{
-					TokenTypes: []string{
-						string(protocol.NamespaceType),
-						string(protocol.TypeType),
-						string(protocol.ClassType),
-						string(protocol.EnumType),
-						string(protocol.InterfaceType),
-						string(protocol.StructType),
-						string(protocol.TypeParameterType),
-						string(protocol.ParameterType),
-						string(protocol.VariableType),
-						string(protocol.PropertyType),
-						string(protocol.EnumMemberType),
-						string(protocol.EventType),
-						string(protocol.FunctionType),
-						string(protocol.MethodType),
-						string(protocol.MacroType),
-						string(protocol.KeywordType),
-						string(protocol.ModifierType),
-						string(protocol.CommentType),
-						string(protocol.StringType),
-						string(protocol.NumberType),
-						string(protocol.RegexpType),
-						string(protocol.OperatorType),
-						string(protocol.DecoratorType),
-						string(protocol.LabelType),
-					},
-					TokenModifiers: []string{
-						string(protocol.ModDeclaration),
-						string(protocol.ModDefinition),
-						string(protocol.ModReadonly),
-						string(protocol.ModStatic),
-						string(protocol.ModAbstract),
-						string(protocol.ModAsync),
-						string(protocol.ModDefaultLibrary),
-						string(protocol.ModDeprecated),
-						string(protocol.ModDocumentation),
-						string(protocol.ModModification),
-					},
-				},
-				Full:  &protocol.Or_SemanticTokensOptions_full{Value: true},
-				Range: &protocol.Or_SemanticTokensOptions_range{Value: true},
+	// Store client capabilities
+	s.clientCapabilities = params.Capabilities
+	logger.Debug().
+		Interface("semantic_tokens", s.clientCapabilities.TextDocument.SemanticTokens).
+		Interface("workspace_semantic_tokens", s.clientCapabilities.Workspace.SemanticTokens).
+		Msg("received client capabilities")
+
+	// Store server capabilities
+	s.serverCapabilities = protocol.ServerCapabilities{
+		TextDocumentSync: &protocol.Or_ServerCapabilities_textDocumentSync{
+			Value: protocol.TextDocumentSyncOptions{
+				OpenClose: true,
+				Change:    protocol.Incremental,
 			},
 		},
+		HoverProvider: &protocol.Or_ServerCapabilities_hoverProvider{
+			Value: true,
+		},
+		CompletionProvider: &protocol.CompletionOptions{
+			WorkDoneProgressOptions: protocol.WorkDoneProgressOptions{
+				WorkDoneProgress: true,
+			},
+			TriggerCharacters: []string{".", ":", " "},
+		},
+	}
+
+	return &protocol.InitializeResult{
+		Capabilities: s.serverCapabilities,
 	}, nil
 }
 
 func (s *Server) Initialized(ctx context.Context, params *protocol.InitializedParams) error {
-	return nil // Not implemented yet
+	logger := zerolog.Ctx(ctx)
+	logger.Debug().Msg("server initialized")
+
+	// Only register semantic tokens if the client supports dynamic registration
+	if s.clientCapabilities.TextDocument.SemanticTokens.DynamicRegistration {
+		logger.Debug().Msg("client supports dynamic registration of semantic tokens")
+
+		// Register semantic tokens provider dynamically
+		err := s.callbackClient.RegisterCapability(ctx, &protocol.RegistrationParams{
+			Registrations: []protocol.Registration{
+				{
+					ID:     "semantic-tokens",
+					Method: "textDocument/semanticTokens",
+					RegisterOptions: &protocol.SemanticTokensRegistrationOptions{
+						TextDocumentRegistrationOptions: protocol.TextDocumentRegistrationOptions{
+							DocumentSelector: []protocol.DocumentFilter{
+								{
+									Value: protocol.Or_TextDocumentFilter{
+										Value: protocol.TextDocumentFilterLanguage{
+											Language: "gotmpl",
+										},
+									},
+								},
+							},
+						},
+						SemanticTokensOptions: protocol.SemanticTokensOptions{
+							Legend: protocol.SemanticTokensLegend{
+								TokenTypes: []string{
+									"variable",      // 0
+									"function",      // 1
+									"keyword",       // 2
+									"string",        // 3
+									"number",        // 4
+									"comment",       // 5
+									"operator",      // 6
+									"macro",         // 7
+									"namespace",     // 8
+									"parameter",     // 9
+									"type",          // 10
+									"typeParameter", // 11
+									"method",        // 12
+									"label",         // 13
+								},
+								TokenModifiers: []string{
+									"declaration",    // 1 << 0
+									"definition",     // 1 << 1
+									"readonly",       // 1 << 2
+									"static",         // 1 << 3
+									"deprecated",     // 1 << 4
+									"abstract",       // 1 << 5
+									"async",          // 1 << 6
+									"modification",   // 1 << 7
+									"documentation",  // 1 << 8
+									"defaultLibrary", // 1 << 9
+								},
+							},
+							Full:  &protocol.Or_SemanticTokensOptions_full{Value: true},
+							Range: &protocol.Or_SemanticTokensOptions_range{Value: true},
+						},
+					},
+				},
+			},
+		})
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to register semantic tokens provider")
+			return errors.Errorf("registering semantic tokens provider: %w", err)
+		}
+		logger.Debug().Msg("successfully registered semantic tokens provider")
+	} else {
+		logger.Debug().Msg("client does not support dynamic registration of semantic tokens, using static registration")
+	}
+
+	return nil
 }
 
 func (s *Server) Resolve(ctx context.Context, params *protocol.InlayHint) (*protocol.InlayHint, error) {
@@ -517,7 +560,10 @@ func (s *Server) SelectionRange(ctx context.Context, params *protocol.SelectionR
 
 func (s *Server) SemanticTokensFull(ctx context.Context, params *protocol.SemanticTokensParams) (*protocol.SemanticTokens, error) {
 	logger := zerolog.Ctx(ctx)
-	logger.Debug().Str("uri", string(params.TextDocument.URI)).Msg("getting semantic tokens")
+	logger.Debug().
+		Str("uri", string(params.TextDocument.URI)).
+		Str("method", "textDocument/semanticTokens/full").
+		Msg("semantic tokens request received")
 
 	doc, ok := s.documents.Get(params.TextDocument.URI)
 	if !ok {
@@ -533,6 +579,17 @@ func (s *Server) SemanticTokensFull(ctx context.Context, params *protocol.Semant
 	}
 
 	logger.Debug().Int("token_count", len(tokens)).Msg("generated semantic tokens")
+	for i, tok := range tokens {
+		rng := tok.Range.GetRange(doc.Content)
+		logger.Debug().
+			Int("index", i).
+			Str("type", string(tok.Type)).
+			Str("modifier", string(tok.Modifier)).
+			Int("line", rng.Start.Line).
+			Int("char", rng.Start.Character).
+			Int("end_char", rng.End.Character).
+			Msg("token details")
+	}
 
 	// Convert to LSP format
 	result := s.convertToLSPTokens(tokens, doc.Content)
@@ -542,6 +599,13 @@ func (s *Server) SemanticTokensFull(ctx context.Context, params *protocol.Semant
 }
 
 func (s *Server) SemanticTokensFullDelta(ctx context.Context, params *protocol.SemanticTokensDeltaParams) (any, error) {
+	logger := zerolog.Ctx(ctx)
+	logger.Debug().
+		Str("uri", string(params.TextDocument.URI)).
+		Str("method", "textDocument/semanticTokens/full/delta").
+		Str("previous_result_id", params.PreviousResultID).
+		Msg("semantic tokens delta request received")
+
 	// We don't support delta updates yet, fallback to full
 	doc, ok := s.documents.Get(params.TextDocument.URI)
 	if !ok {
@@ -560,7 +624,11 @@ func (s *Server) SemanticTokensFullDelta(ctx context.Context, params *protocol.S
 
 func (s *Server) SemanticTokensRange(ctx context.Context, params *protocol.SemanticTokensRangeParams) (*protocol.SemanticTokens, error) {
 	logger := zerolog.Ctx(ctx)
-	logger.Debug().Str("uri", string(params.TextDocument.URI)).Msg("getting semantic tokens for range")
+	logger.Debug().
+		Str("uri", string(params.TextDocument.URI)).
+		Str("method", "textDocument/semanticTokens/range").
+		Interface("range", params.Range).
+		Msg("semantic tokens range request received")
 
 	doc, ok := s.documents.Get(params.TextDocument.URI)
 	if !ok {
@@ -758,6 +826,38 @@ func (s *Server) convertToLSPTokens(tokens []semtok.Token, content string) *prot
 	data := make([]uint32, 0, len(tokens)*5)
 	var prevLine, prevChar uint32
 
+	// Map our token types to LSP token type indices
+	tokenTypeMap := map[semtok.TokenType]uint32{
+		semtok.TokenVariable:  0,
+		semtok.TokenFunction:  1,
+		semtok.TokenKeyword:   2,
+		semtok.TokenString:    3,
+		semtok.TokenNumber:    4,
+		semtok.TokenComment:   5,
+		semtok.TokenOperator:  6,
+		semtok.TokenMacro:     7,
+		semtok.TokenNamespace: 8,
+		semtok.TokenParameter: 9,
+		semtok.TokenTypeKind:  10,
+		semtok.TokenTypeParam: 11,
+		semtok.TokenMethod:    12,
+		semtok.TokenLabel:     13,
+	}
+
+	// Map our token modifiers to LSP token modifier bit positions
+	tokenModifierMap := map[semtok.TokenModifier]uint32{
+		semtok.ModifierDeclaration:    1 << 0,
+		semtok.ModifierDefinition:     1 << 1,
+		semtok.ModifierReadonly:       1 << 2,
+		semtok.ModifierStatic:         1 << 3,
+		semtok.ModifierDeprecated:     1 << 4,
+		semtok.ModifierAbstract:       1 << 5,
+		semtok.ModifierAsync:          1 << 6,
+		semtok.ModifierModification:   1 << 7,
+		semtok.ModifierDocumentation:  1 << 8,
+		semtok.ModifierDefaultLibrary: 1 << 9,
+	}
+
 	for _, tok := range tokens {
 		// Get token range
 		rng := tok.Range.GetRange(content)
@@ -772,36 +872,11 @@ func (s *Server) convertToLSPTokens(tokens []semtok.Token, content string) *prot
 			deltaChar = char - prevChar
 		}
 
-		// Map token type to LSP token type
-		tokenType := uint32(0)
-		switch tok.Type {
-		case semtok.TokenVariable:
-			tokenType = uint32(tokenTypeVariable)
-		case semtok.TokenFunction:
-			tokenType = uint32(tokenTypeFunction)
-		case semtok.TokenKeyword:
-			tokenType = uint32(tokenTypeKeyword)
-		case semtok.TokenString:
-			tokenType = uint32(tokenTypeString)
-		case semtok.TokenNumber:
-			tokenType = uint32(tokenTypeNumber)
-		case semtok.TokenComment:
-			tokenType = uint32(tokenTypeComment)
-		case semtok.TokenOperator:
-			tokenType = uint32(tokenTypeOperator)
-		}
+		// Get token type index
+		tokenType := tokenTypeMap[tok.Type]
 
-		// Map token modifiers to LSP token modifiers
-		tokenModifiers := uint32(0)
-		if tok.Modifier&semtok.ModifierDeclaration != 0 {
-			tokenModifiers |= tokenModDeclaration
-		}
-		if tok.Modifier&semtok.ModifierDefinition != 0 {
-			tokenModifiers |= tokenModDefinition
-		}
-		if tok.Modifier&semtok.ModifierReadonly != 0 {
-			tokenModifiers |= tokenModReadonly
-		}
+		// Get token modifiers
+		tokenModifiers := tokenModifierMap[tok.Modifier]
 
 		// Add token data in LSP format:
 		// [deltaLine, deltaChar, length, tokenType, tokenModifiers]

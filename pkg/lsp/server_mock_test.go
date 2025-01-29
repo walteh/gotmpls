@@ -334,3 +334,63 @@ func TestMockServerLifecycle(t *testing.T) {
 		require.NoError(t, err, "exit should succeed")
 	})
 }
+
+func TestMockServerSemanticTokenRegistration(t *testing.T) {
+	t.Run("semantic_token_registration", func(t *testing.T) {
+		ctx := context.Background()
+		server := lsp.NewServer(ctx)
+
+		// Create mock client
+		mockClient := mockery.NewMockClient_protocol(t)
+		server.SetCallbackClient(mockClient)
+
+		// Set up expectations for registration
+		mockClient.EXPECT().RegisterCapability(ctx, mock.MatchedBy(func(params *protocol.RegistrationParams) bool {
+			if len(params.Registrations) != 1 {
+				return false
+			}
+			reg := params.Registrations[0]
+			if reg.ID != "semantic-tokens" || reg.Method != "textDocument/semanticTokens" {
+				return false
+			}
+			opts, ok := reg.RegisterOptions.(*protocol.SemanticTokensRegistrationOptions)
+			if !ok {
+				return false
+			}
+			if len(opts.DocumentSelector) != 1 {
+				return false
+			}
+			filter := opts.DocumentSelector[0]
+			filterLang, ok := filter.Value.(protocol.TextDocumentFilterLanguage)
+			return ok && filterLang.Language == "gotmpl"
+		})).Return(nil).Once()
+
+		// Initialize server with client capabilities
+		initResult, err := server.Initialize(ctx, &protocol.ParamInitialize{
+			XInitializeParams: protocol.XInitializeParams{
+				Capabilities: protocol.ClientCapabilities{
+					TextDocument: protocol.TextDocumentClientCapabilities{
+						SemanticTokens: protocol.SemanticTokensClientCapabilities{
+							DynamicRegistration: true,
+							Requests: protocol.ClientSemanticTokensRequestOptions{
+								Range: &protocol.Or_ClientSemanticTokensRequestOptions_range{Value: true},
+								Full:  &protocol.Or_ClientSemanticTokensRequestOptions_full{Value: true},
+							},
+							TokenTypes:     []string{"namespace", "type", "class", "enum", "interface", "struct", "typeParameter", "parameter", "variable", "property", "enumMember", "event", "function", "method", "macro", "keyword", "modifier", "comment", "string", "number", "regexp", "operator", "decorator"},
+							TokenModifiers: []string{"declaration", "definition", "readonly", "static", "deprecated", "abstract", "async", "modification", "documentation", "defaultLibrary"},
+							Formats:        []protocol.TokenFormat{protocol.Relative},
+						},
+					},
+				},
+			},
+		})
+		require.NoError(t, err, "initialize should succeed")
+		require.NotNil(t, initResult, "initialize result should not be nil")
+
+		// Call Initialized which should trigger registration
+		err = server.Initialized(ctx, &protocol.InitializedParams{})
+		require.NoError(t, err, "initialized should succeed")
+
+		mockClient.AssertExpectations(t)
+	})
+}

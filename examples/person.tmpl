@@ -8,8 +8,8 @@ Address:
 
 {{if .HasJob}} 
 Job: {{.GetJob | upper}}
-JobZ: {{prindtf "%s" .GetJob | uppder}}
-JobZ: {{printf "hi" | upper | printf "%s" | upperg}}
+JobZ: {{printf "%s" .GetJob | upper}}
+JobZ: {{printf "hi" | upper | printf "%s" | upper}}
 
 {{end}}
 
