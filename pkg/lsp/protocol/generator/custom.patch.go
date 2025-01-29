@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	vscodelanguageservernode "github.com/walteh/gotmpls/gen/git-repo-tarballs/vscode-languageserver-node"
-	"github.com/walteh/gotmpls/pkg/archive"
+	"github.com/walteh/gotmpls/pkg/targz"
 )
 
 //go:generate go run . -o ../
@@ -66,7 +66,7 @@ func build_tmp_dir() string {
 		panic(err)
 	}
 
-	err = archive.ExtractTarGz(repo, tmpDir)
+	err = targz.ExtractTarGz(repo, tmpDir)
 	if err != nil {
 		panic(err)
 	}
