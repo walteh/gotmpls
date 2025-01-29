@@ -8,7 +8,7 @@ if [ "${1:-}" == "test" ]; then
 		--format pkgname \
 		--format-icons hivis \
 		--hide-summary=skipped \
-		--raw-command -- go test -json -cover "$@"
+		--raw-command -- go test -count=1 -v -vet=all -json -cover "$@"
 	exit $?
 fi
 
