@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"unicode"
 )
@@ -96,6 +97,123 @@ func (g *Generator) processReference(schema *Schema) (string, error) {
 
 // returns the type refered to by schema after resolving all dependencies
 func (g *Generator) processSchema(schemaName string, schema *Schema) (typ string, err error) {
+	// Save the generated type name in the schema for future use
+	defer func() {
+		if err == nil {
+			schema.GeneratedType = typ
+		}
+	}()
+
+	// If there's a reference, process it first
+	if schema.Reference != "" {
+		return g.processReference(schema)
+	}
+
+	// Handle AnyOf
+	if len(schema.AnyOf) > 0 {
+		structName := "Root_AnyOf"
+		if schemaName != "" && schemaName != "Root" {
+			structName = schemaName + "_AnyOf"
+		}
+		
+		s := Struct{
+			Name:         structName,
+			Fields:      make(map[string]Field),
+			Description: "AnyOf type that can be any of the specified schemas",
+			GenerateCode: true,
+		}
+
+		// Add a single Value field that can hold any type
+		s.Fields["Value"] = Field{
+			Name:     "Value",
+			JSONName: "-", // Hide from JSON as we'll handle marshaling
+			Type:     "interface{}",
+		}
+
+		g.Structs[structName] = s
+		return "*" + structName, nil
+	}
+
+	// Handle OneOf
+	if len(schema.OneOf) > 0 {
+		structName := "Root_OneOf"
+		if schemaName != "" && schemaName != "Root" {
+			structName = schemaName + "_OneOf"
+		}
+		
+		s := Struct{
+			Name:         structName,
+			Fields:      make(map[string]Field),
+			Description: "OneOf type that must match exactly one of the specified schemas",
+			GenerateCode: true,
+		}
+
+		// Add a single Value field that can hold any type
+		s.Fields["Value"] = Field{
+			Name:     "Value",
+			JSONName: "-", // Hide from JSON as we'll handle marshaling
+			Type:     "interface{}",
+		}
+
+		g.Structs[structName] = s
+		return "*" + structName, nil
+	}
+
+	// Handle AllOf
+	if len(schema.AllOf) > 0 {
+		structName := "Root_AllOf"
+		if schemaName != "" && schemaName != "Root" {
+			structName = schemaName + "_AllOf"
+		}
+		
+		s := Struct{
+			Name:         structName,
+			Fields:      make(map[string]Field),
+			Description: "AllOf type that must match all of the specified schemas",
+			GenerateCode: true,
+		}
+
+		// Collect all properties first to ensure consistent order
+		allProps := make(map[string]*Schema)
+		for _, subSchema := range schema.AllOf {
+			if subSchema.Properties != nil {
+				for propName, propSchema := range subSchema.Properties {
+					allProps[propName] = propSchema
+				}
+			}
+		}
+
+		// Add fields in sorted order
+		propNames := make([]string, 0, len(allProps))
+		for propName := range allProps {
+			propNames = append(propNames, propName)
+		}
+		sort.Strings(propNames)
+
+		for _, propName := range propNames {
+			propSchema := allProps[propName]
+			fieldName := getGolangName(propName)
+			fieldType, err := g.processSchema(fieldName, propSchema)
+			if err != nil {
+				return "", err
+			}
+			
+			// Make all fields optional pointers since they're merged
+			if !strings.HasPrefix(fieldType, "*") {
+				fieldType = "*" + fieldType
+			}
+
+			s.Fields[fieldName] = Field{
+				Name:     fieldName,
+				JSONName: propName,
+				Type:     fieldType,
+			}
+		}
+
+		g.Structs[structName] = s
+		return "*" + structName, nil
+	}
+
 	if len(schema.Definitions) > 0 {
 		g.processDefinitions(schema)
 	}
@@ -135,10 +253,6 @@ func (g *Generator) processSchema(schemaName string, schema *Schema) (typ string
 					return rv, nil
 				}
 			}
-		}
-	} else {
-		if schema.Reference != "" {
-			return g.processReference(schema)
 		}
 	}
 	return // return interface{}
@@ -183,6 +297,7 @@ func (g *Generator) processObject(name string, schema *Schema) (typ string, err 
 		Name:        name,
 		Description: schema.Description,
 		Fields:      make(map[string]Field, len(schema.Properties)),
+		GenerateCode: true,
 	}
 	// cache the object name in case any sub-schemas recursively reference it
 	schema.GeneratedType = "*" + name
@@ -242,7 +357,7 @@ func (g *Generator) processObject(name string, schema *Schema) (typ string, err 
 	}
 	// additionalProperties as either true (everything) or false (nothing)
 	if schema.AdditionalProperties != nil && schema.AdditionalProperties.AdditionalPropertiesBool != nil {
-		if *schema.AdditionalProperties.AdditionalPropertiesBool == true {
+		if *schema.AdditionalProperties.AdditionalPropertiesBool {
 			// everything is valid additional
 			subTyp := "map[string]interface{}"
 			f := Field{

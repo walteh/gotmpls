@@ -10,7 +10,7 @@ Generates Go (golang) Structs and Validation code from JSON schema.
 
 # Requirements
 
-* Go 1.8+
+-   Go 1.8+
 
 # Usage
 
@@ -40,55 +40,51 @@ This schema
 
 ```json
 {
-  "$schema": "http://json-schema.org/draft-04/schema#",
-  "title": "Example",
-  "id": "http://example.com/exampleschema.json",
-  "type": "object",
-  "description": "An example JSON Schema",
-  "properties": {
-    "name": {
-      "type": "string"
-    },
-    "address": {
-      "$ref": "#/definitions/address"
-    },
-    "status": {
-      "$ref": "#/definitions/status"
-    }
-  },
-  "definitions": {
-    "address": {
-      "id": "address",
-      "type": "object",
-      "description": "Address",
-      "properties": {
-        "street": {
-          "type": "string",
-          "description": "Address 1",
-          "maxLength": 40
-        },
-        "houseNumber": {
-          "type": "integer",
-          "description": "House Number"
-        }
-      }
-    },
-    "status": {
-      "type": "object",
-      "properties": {
-        "favouritecat": {
-          "enum": [
-            "A",
-            "B",
-            "C"
-          ],
-          "type": "string",
-          "description": "The favourite cat.",
-          "maxLength": 1
-        }
-      }
-    }
-  }
+	"$schema": "http://json-schema.org/draft-04/schema#",
+	"title": "Example",
+	"id": "http://example.com/exampleschema.json",
+	"type": "object",
+	"description": "An example JSON Schema",
+	"properties": {
+		"name": {
+			"type": "string"
+		},
+		"address": {
+			"$ref": "#/definitions/address"
+		},
+		"status": {
+			"$ref": "#/definitions/status"
+		}
+	},
+	"definitions": {
+		"address": {
+			"id": "address",
+			"type": "object",
+			"description": "Address",
+			"properties": {
+				"street": {
+					"type": "string",
+					"description": "Address 1",
+					"maxLength": 40
+				},
+				"houseNumber": {
+					"type": "integer",
+					"description": "House Number"
+				}
+			}
+		},
+		"status": {
+			"type": "object",
+			"properties": {
+				"favouritecat": {
+					"enum": ["A", "B", "C"],
+					"type": "string",
+					"description": "The favourite cat.",
+					"maxLength": 1
+				}
+			}
+		}
+	}
 }
 ```
 
@@ -114,3 +110,105 @@ type Status struct {
 ```
 
 See the [test/](./test/) directory for more examples.
+
+## JSON Schema Validation Types
+
+This package supports the following JSON Schema validation types:
+
+```ascii
+                JSON Schema Validation Types
+                           |
+            +-------------+-------------+
+            |             |             |
+          AnyOf         OneOf         AllOf
+            |             |             |
+    Match any one    Match exactly   Match all
+    of the schemas   one schema      schemas
+```
+
+### AnyOf
+
+The `AnyOf` type allows a value to match any of the specified schemas. For example:
+
+```json
+{
+	"anyOf": [{ "type": "string" }, { "type": "number" }]
+}
+```
+
+This will generate a type like:
+
+```go
+type _AnyOf struct {
+    Type1 *string  `json:"-"`
+    Type2 *float64 `json:"-"`
+}
+```
+
+The value can be either a string or a number. The UnmarshalJSON method will try each type in sequence and store the first successful match.
+
+### OneOf
+
+The `OneOf` type requires that a value matches exactly one of the specified schemas. For example:
+
+```json
+{
+	"oneOf": [{ "type": "string" }, { "type": "number" }]
+}
+```
+
+This will generate a type like:
+
+```go
+type _OneOf struct {
+    Type1 *string  `json:"-"`
+    Type2 *float64 `json:"-"`
+}
+```
+
+The value must match exactly one schema - either a string or a number, but not both. The UnmarshalJSON method will verify that exactly one type matches.
+
+### AllOf
+
+The `AllOf` type requires that a value matches all of the specified schemas. For example:
+
+```json
+{
+	"allOf": [
+		{
+			"type": "object",
+			"properties": {
+				"name": { "type": "string" }
+			}
+		},
+		{
+			"type": "object",
+			"properties": {
+				"age": { "type": "number" }
+			}
+		}
+	]
+}
+```
+
+This will generate a type like:
+
+```go
+type _AllOf struct {
+    Name *string  `json:"name,omitempty"`
+    Age  *float64 `json:"age,omitempty"`
+}
+```
+
+The value must satisfy all the schemas - in this case, it must be an object with both a name string and an age number.
+
+### Implementation Details
+
+-   Each possible type in AnyOf/OneOf is stored as a separate pointer field
+-   Fields are named Type1, Type2, etc. to maintain order
+-   JSON tags are omitted (-) for AnyOf/OneOf fields since marshaling is handled by custom methods
+-   UnmarshalJSON methods handle validation and type matching
+-   MarshalJSON methods output the first non-nil value
+-   AllOf types merge all properties into a single struct
+-   All fields are pointers to allow for optional values
+-   Type names are prefixed with an underscore to avoid conflicts
