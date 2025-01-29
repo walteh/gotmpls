@@ -1,0 +1,26 @@
+{
+	"last_updated": "0001-01-01T00:00:00Z",
+	"commit_hash": "11c43d8d41eefac79c5314f63ded09ef17d83245",
+	"branch": "11c43d8d41eefac79c5314f63ded09ef17d83245",
+	"coppied_files": {
+		"textmate-grammars-themes.tar.gz": {
+			"file": "textmate-grammars-themes.tar.gz",
+			"source": "github.com/shikijs/textmate-grammars-themes@11c43d8d41eefac79c5314f63ded09ef17d83245",
+			"permalink": "https://github.com/shikijs/textmate-grammars-themes/archive/11c43d8d41eefac79c5314f63ded09ef17d83245.tar.gz",
+			"last_updated": "2025-01-29T14:51:30.719843Z"
+		}
+	},
+	"generated_files": {
+		"embed.gen.go": {
+			"file": "embed.gen.go",
+			"last_updated": "2025-01-29T14:51:30.720496Z"
+		}
+	},
+	"args": {
+		"src_repo": "github.com/shikijs/textmate-grammars-themes",
+		"src_ref": "11c43d8d41eefac79c5314f63ded09ef17d83245",
+		"archive_args": {
+			"GoEmbed": true
+		}
+	}
+}

@@ -1320,8 +1320,8 @@ github.com/wagoodman/go-partybus v0.0.0-20230516145632-8ccac152c651 h1:jIVmlAFIq
 github.com/wagoodman/go-partybus v0.0.0-20230516145632-8ccac152c651/go.mod h1:b26F2tHLqaoRQf8DywqzVaV1MQ9yvjb0OMcNl7Nxu20=
 github.com/wagoodman/go-progress v0.0.0-20220614130704-4b1c25a33c7c h1:gFwUKtkv6QzQsFdIjvPqd0Qdw42DHUEbbUdiUTI1uco=
 github.com/wagoodman/go-progress v0.0.0-20220614130704-4b1c25a33c7c/go.mod h1:jLXFoL31zFaHKAAyZUh+sxiTDFe1L1ZHrcK2T1itVKA=
-github.com/walteh/copyrc v0.0.2 h1:HViT1T5/c6pZsSpVbWP2OBEWF1+b42wh5CVsnwd/HEM=
-github.com/walteh/copyrc v0.0.2/go.mod h1:yL7cvvP3Rl5pEgtfoxAast4mzMxKJrf7snXRBOX1Hj4=
+github.com/walteh/copyrc v0.0.5 h1:qdvFN5FqHMSio4sFwWHCeSW6V5Ixm2cYviHmg/T2afg=
+github.com/walteh/copyrc v0.0.5/go.mod h1:ABbiE75e1QGeQJNBD7Ah9WCJh7hNRRoWUZoYNA4K0+k=
 github.com/walteh/retab/v2 v2.1.0 h1:0VYReFnuldXd/pvCW4fqKVh4RcAXHa+Zj/DjOEVM/jA=
 github.com/walteh/retab/v2 v2.1.0/go.mod h1:OzlxHNaaDJRcc5CpiJwDXlHXvFvbJb6Y21b3T27fvL4=
 github.com/warpfork/go-wish v0.0.0-20220906213052-39a1cc7a02d0 h1:GDDkbFiaK8jsSDJfjId/PEGEShv6ugrt4kYsC5UIDaQ=

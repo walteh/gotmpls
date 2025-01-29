@@ -21,7 +21,7 @@ require (
 	github.com/oligot/go-mod-upgrade v0.10.0
 	github.com/srikrsna/protoc-gen-gotag v1.0.2
 	github.com/vektra/mockery/v2 v2.51.0
-	github.com/walteh/copyrc v0.0.2
+	github.com/walteh/copyrc v0.0.5
 	github.com/walteh/gotmpls v0.0.0-00010101000000-000000000000
 	github.com/walteh/retab/v2 v2.1.0
 	gotest.tools/gotestsum v1.12.0

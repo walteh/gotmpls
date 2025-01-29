@@ -1,8 +1,9 @@
 copy {
 	source {
-		repo = "github.com/golang/tools"
-		ref  = "master"
-		path = "gopls/internal/protocol/generate"
+		repo     = "github.com/golang/tools"
+		ref      = "master"
+		path     = "gopls/internal/protocol/generate"
+		ref_type = "branch"
 	}
 	destination {
 		path = "./pkg/lsp/protocol/generator"
@@ -94,3 +95,16 @@ archive {
 	}
 }
 
+archive {
+	source {
+		repo     = "github.com/shikijs/textmate-grammars-themes"
+		ref      = "11c43d8d41eefac79c5314f63ded09ef17d83245"
+		ref_type = "commit"
+	}
+	destination {
+		path = "./gen/git-repo-tarballs"
+	}
+	options {
+		go_embed = true
+	}
+}

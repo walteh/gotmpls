@@ -87,6 +87,7 @@ tasks:
             - bun run build
 
     copyrc:
+        deps: [local-setup-tools]
         desc: copyrc
         cmds:
             - ./scripts/run-tool.sh copyrc -config=.copyrc.hcl -force
