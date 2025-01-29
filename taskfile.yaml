@@ -86,8 +86,18 @@ tasks:
             - bun install
             - bun run build
 
+    jsonschema-generate:
+        run: once
+        deps: [copyrc]
+        cmds:
+            - mkdir -p ./gen/jsonschema/tmlanguage
+            - ./scripts/run-tool.sh jsonschema-generate -i=./gen/schemastore/tmlanguage.copy.json -o=./gen/jsonschema/tmlanguage/tmlanguage.go -p=tmlanguage
+        generates:
+            - ./gen/jsonschema-generate/*.go
+        sources:
+            - ./gen/schemastore/tmlanguage.copy.json
+
     copyrc:
-        deps: [local-setup-tools]
         desc: copyrc
         cmds:
             - ./scripts/run-tool.sh copyrc -config=.copyrc.hcl -force

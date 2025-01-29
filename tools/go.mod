@@ -10,7 +10,9 @@ replace github.com/ProtonMail/go-crypto v1.1.0-alpha.2-proton => github.com/Prot
 
 require (
 	connectrpc.com/connect v1.18.1
+	github.com/a-h/generate v0.0.0-20220105161013-96c14dfdfb60
 	github.com/alecthomas/participle/v2 v2.1.1
+	github.com/atombender/go-jsonschema v0.17.0
 	github.com/bufbuild/buf v1.50.0
 	github.com/bufbuild/plugins v0.0.0-20250117170400-2b3d27dcd92d
 	github.com/go-task/task/v3 v3.41.0
@@ -21,7 +23,7 @@ require (
 	github.com/oligot/go-mod-upgrade v0.10.0
 	github.com/srikrsna/protoc-gen-gotag v1.0.2
 	github.com/vektra/mockery/v2 v2.51.0
-	github.com/walteh/copyrc v0.0.5
+	github.com/walteh/copyrc v0.0.10
 	github.com/walteh/gotmpls v0.0.0-00010101000000-000000000000
 	github.com/walteh/retab/v2 v2.1.0
 	gotest.tools/gotestsum v1.12.0
@@ -273,6 +275,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/go-xmlfmt/xmlfmt v1.1.3 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
+	github.com/goccy/go-yaml v1.12.0 // indirect
 	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.1 // indirect
@@ -464,6 +467,7 @@ require (
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d // indirect
 	github.com/sajari/fuzzy v1.0.0 // indirect
+	github.com/sanity-io/litter v1.5.5 // indirect
 	github.com/sanposhiho/wastedassign/v2 v2.1.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.1 // indirect
 	github.com/sashamelentyev/interfacebloat v1.1.0 // indirect
@@ -571,7 +575,7 @@ require (
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.6.0 // indirect
 	golang.org/x/tools v0.29.0 // indirect
-	golang.org/x/xerrors v0.0.0-20240716161551-93cc26a95ae9 // indirect
+	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/api v0.198.0 // indirect
 	google.golang.org/genproto v0.0.0-20240903143218-8af14fe29dc1 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250106144421-5f5ef82da422 // indirect

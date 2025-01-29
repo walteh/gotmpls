@@ -148,7 +148,8 @@
 			],
 			"ignore_files": [
 				"*.txt"
-			]
+			],
+			"file_patterns": null
 		}
 	}
 }

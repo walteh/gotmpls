@@ -21,8 +21,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	nvimlspconfig "github.com/walteh/gotmpls/gen/git-repo-tarballs/nvim-lspconfig"
-	"github.com/walteh/gotmpls/pkg/archive"
 	"github.com/walteh/gotmpls/pkg/lsp/protocol"
+	"github.com/walteh/gotmpls/pkg/targz"
 	"gitlab.com/tozd/go/errors"
 )
 
@@ -265,7 +265,7 @@ func NewNvimIntegrationTestRunner(t *testing.T, files map[string]string, si *pro
 func setupNeovimConfig(t *testing.T, tmpDir string, socketPath string, config NeovimConfig) (string, error) {
 	lspConfigDir := filepath.Join(tmpDir, "nvim-lspconfig")
 	t.Log("Extracting nvim-lspconfig files...")
-	err := archive.ExtractTarGzWithOptions(nvimlspconfig.Data, lspConfigDir, archive.ExtractOptions{
+	err := targz.ExtractTarGzWithOptions(nvimlspconfig.Data, lspConfigDir, targz.ExtractOptions{
 		StripComponents: 1, // Remove the "nvim-lspconfig-master" prefix
 		Filter: func(header *tar.Header) bool {
 			return header.Name != "" // Skip empty paths

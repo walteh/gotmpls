@@ -1,0 +1,26 @@
+{
+	"last_updated": "0001-01-01T00:00:00Z",
+	"commit_hash": "022c82bdf96a5844c867ddcfc45ce1fbc41c3ecc",
+	"branch": "022c82bdf96a5844c867ddcfc45ce1fbc41c3ecc",
+	"coppied_files": {
+		"tmlanguage.copy.json": {
+			"file": "tmlanguage.copy.json",
+			"source": "github.com/SchemaStore/schemastore@022c82bdf96a5844c867ddcfc45ce1fbc41c3ecc",
+			"permalink": "https://raw.githubusercontent.com/SchemaStore/schemastore/022c82bdf96a5844c867ddcfc45ce1fbc41c3ecc/src/schemas/json/tmlanguage.json",
+			"last_updated": "2025-01-29T16:45:33.603297Z"
+		}
+	},
+	"generated_files": {},
+	"args": {
+		"src_repo": "github.com/SchemaStore/schemastore",
+		"src_ref": "022c82bdf96a5844c867ddcfc45ce1fbc41c3ecc",
+		"src_path": "src/schemas/json",
+		"copy_args": {
+			"replacements": null,
+			"ignore_files": null,
+			"file_patterns": [
+				"**/tmlanguage.json"
+			]
+		}
+	}
+}

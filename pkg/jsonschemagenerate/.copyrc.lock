@@ -1,0 +1,80 @@
+{
+	"last_updated": "0001-01-01T00:00:00Z",
+	"commit_hash": "96c14dfdfb601f0f624e776e44ced4aa3dadf8d9",
+	"branch": "master",
+	"coppied_files": {
+		"README.copy.md": {
+			"file": "README.copy.md",
+			"source": "github.com/a-h/generate@96c14dfdfb601f0f624e776e44ced4aa3dadf8d9",
+			"permalink": "https://raw.githubusercontent.com/a-h/generate/96c14dfdfb601f0f624e776e44ced4aa3dadf8d9/README.md",
+			"last_updated": "2025-01-29T17:50:26.34748Z"
+		},
+		"generator.copy.go": {
+			"file": "generator.copy.go",
+			"source": "github.com/a-h/generate@96c14dfdfb601f0f624e776e44ced4aa3dadf8d9",
+			"permalink": "https://raw.githubusercontent.com/a-h/generate/96c14dfdfb601f0f624e776e44ced4aa3dadf8d9/generator.go",
+			"last_updated": "2025-01-29T17:50:26.716584Z"
+		},
+		"generator_test.copy.go": {
+			"file": "generator_test.copy.go",
+			"source": "github.com/a-h/generate@96c14dfdfb601f0f624e776e44ced4aa3dadf8d9",
+			"permalink": "https://raw.githubusercontent.com/a-h/generate/96c14dfdfb601f0f624e776e44ced4aa3dadf8d9/generator_test.go",
+			"last_updated": "2025-01-29T17:50:27.124743Z"
+		},
+		"input.copy.go": {
+			"file": "input.copy.go",
+			"source": "github.com/a-h/generate@96c14dfdfb601f0f624e776e44ced4aa3dadf8d9",
+			"permalink": "https://raw.githubusercontent.com/a-h/generate/96c14dfdfb601f0f624e776e44ced4aa3dadf8d9/input.go",
+			"last_updated": "2025-01-29T17:50:27.233493Z"
+		},
+		"jsonschema.copy.go": {
+			"file": "jsonschema.copy.go",
+			"source": "github.com/a-h/generate@96c14dfdfb601f0f624e776e44ced4aa3dadf8d9",
+			"permalink": "https://raw.githubusercontent.com/a-h/generate/96c14dfdfb601f0f624e776e44ced4aa3dadf8d9/jsonschema.go",
+			"last_updated": "2025-01-29T17:50:27.533535Z"
+		},
+		"jsonschemaparse_test.copy.go": {
+			"file": "jsonschemaparse_test.copy.go",
+			"source": "github.com/a-h/generate@96c14dfdfb601f0f624e776e44ced4aa3dadf8d9",
+			"permalink": "https://raw.githubusercontent.com/a-h/generate/96c14dfdfb601f0f624e776e44ced4aa3dadf8d9/jsonschemaparse_test.go",
+			"last_updated": "2025-01-29T17:50:27.864309Z"
+		},
+		"output.copy.go": {
+			"file": "output.copy.go",
+			"source": "github.com/a-h/generate@96c14dfdfb601f0f624e776e44ced4aa3dadf8d9",
+			"permalink": "https://raw.githubusercontent.com/a-h/generate/96c14dfdfb601f0f624e776e44ced4aa3dadf8d9/output.go",
+			"last_updated": "2025-01-29T17:50:28.249046Z"
+		},
+		"output_test.copy.go": {
+			"file": "output_test.copy.go",
+			"source": "github.com/a-h/generate@96c14dfdfb601f0f624e776e44ced4aa3dadf8d9",
+			"permalink": "https://raw.githubusercontent.com/a-h/generate/96c14dfdfb601f0f624e776e44ced4aa3dadf8d9/output_test.go",
+			"last_updated": "2025-01-29T17:50:28.556529Z"
+		},
+		"refresolver.copy.go": {
+			"file": "refresolver.copy.go",
+			"source": "github.com/a-h/generate@96c14dfdfb601f0f624e776e44ced4aa3dadf8d9",
+			"permalink": "https://raw.githubusercontent.com/a-h/generate/96c14dfdfb601f0f624e776e44ced4aa3dadf8d9/refresolver.go",
+			"last_updated": "2025-01-29T17:50:28.674159Z"
+		}
+	},
+	"generated_files": {},
+	"args": {
+		"src_repo": "github.com/a-h/generate",
+		"src_ref": "master",
+		"src_path": ".",
+		"copy_args": {
+			"replacements": [],
+			"ignore_files": [
+				".gitignore",
+				".gitattributes",
+				".github",
+				"*.txt",
+				"Makefile",
+				"*.json",
+				".travis.yml"
+			],
+			"file_patterns": null
+		}
+	}
+}

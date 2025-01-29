@@ -3,7 +3,7 @@
 package main
 
 import (
-	_ "cmd/test2json" //export
+	_ "cmd/test2json" // export
 
 	_ "gotest.tools/gotestsum" //export
 
@@ -21,7 +21,9 @@ import (
 	_ "github.com/vektra/mockery/v2"
 	_ "github.com/walteh/retab/v2/cmd/retab"
 
+	_ "github.com/a-h/generate/cmd/schema-generate" //name: jsonschema-generate
 	_ "github.com/alecthomas/participle/v2/cmd/railroad"
+	_ "github.com/atombender/go-jsonschema"
 	_ "github.com/ianlewis/todos/internal/cmd/todos"
 	_ "github.com/walteh/copyrc/cmd/copyrc"
 	_ "github.com/walteh/gotmpls/gen/participle"

@@ -919,8 +919,8 @@ github.com/vmihailenco/msgpack/v5 v5.4.1 h1:cQriyiUvjTwOHg8QZaPihLWeRAAVoCpE00IU
 github.com/vmihailenco/msgpack/v5 v5.4.1/go.mod h1:GaZTsDaehaPpQVyxrf5mtQlH+pc21PIudVV/E3rRQok=
 github.com/vmihailenco/tagparser/v2 v2.0.0 h1:y09buUbR+b5aycVFQs/g70pqKVZNBmxwAhO7/IwNM9g=
 github.com/vmihailenco/tagparser/v2 v2.0.0/go.mod h1:Wri+At7QHww0WTrCBeu4J6bNtoV6mEfg5OIWRZA9qds=
-github.com/walteh/copyrc v0.0.5 h1:qdvFN5FqHMSio4sFwWHCeSW6V5Ixm2cYviHmg/T2afg=
-github.com/walteh/copyrc v0.0.5/go.mod h1:ABbiE75e1QGeQJNBD7Ah9WCJh7hNRRoWUZoYNA4K0+k=
+github.com/walteh/copyrc v0.0.10 h1:P+2yuOs5GzA76GLEg7lGkxlKu/S1LLeRfbQp/gB16q8=
+github.com/walteh/copyrc v0.0.10/go.mod h1:ABbiE75e1QGeQJNBD7Ah9WCJh7hNRRoWUZoYNA4K0+k=
 github.com/weppos/publicsuffix-go v0.30.3-0.20240510084413-5f1d03393b3d h1:q80YKUcDWRNvvQcziH63e3ammTWARwrhohBCunHaYAg=
 github.com/weppos/publicsuffix-go v0.30.3-0.20240510084413-5f1d03393b3d/go.mod h1:vLdXKydr/OJssAXmjY0XBgLXUfivBMrNRIBljgtqCnw=
 github.com/whyrusleeping/cbor v0.0.0-20171005072247-63513f603b11 h1:5HZfQkwe0mIfyDmc1Em5GqlNRzcdtlv4HTNmdpt7XH0=

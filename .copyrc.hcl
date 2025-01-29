@@ -108,3 +108,58 @@ archive {
 		go_embed = true
 	}
 }
+
+archive {
+	source {
+		repo = "github.com/microsoft/vscode"
+		ref  = "tags/1.96.4"
+	}
+	destination {
+		path = "./gen/git-repo-tarballs"
+	}
+	options {
+		go_embed = true
+	}
+}
+
+copy {
+	source {
+		repo     = "github.com/SchemaStore/schemastore"
+		ref      = "022c82bdf96a5844c867ddcfc45ce1fbc41c3ecc"
+		ref_type = "commit"
+		path     = "src/schemas/json"
+	}
+	destination {
+		path = "./gen/schemastore"
+	}
+	options {
+		file_patterns = [
+			"**/tmlanguage.json",
+		]
+	}
+}
+
+copy {
+	source {
+		repo = "github.com/a-h/generate"
+		ref  = "master"
+		path = "."
+	}
+	destination {
+		path = "./pkg/jsonschemagenerate"
+	}
+	options {
+		replacements = [
+
+		]
+		ignore_files = [
+			".gitignore",
+			".gitattributes",
+			".github",
+			"*.txt",
+			"Makefile",
+			"*.json",
+			".travis.yml",
+		]
+	}
+}

@@ -8,6 +8,7 @@ if [ "${1:-}" == "test" ]; then
 	cc=0
 	ff=0
 	real_args=()
+	extra_args=""
 
 	# Handle each argument
 	for arg in "$@"; do

@@ -38,8 +38,11 @@ set -euo pipefail
 # 📝 Extract tool name from path
 tool_name=$(basename "$TOOL_MODULE_PATH")
 
-# 🔄 Handle versioned modules (v* directories)
-if [[ $tool_name == v* ]]; then
+resetr=$(cat ./tools/tools.go | grep "$TOOL_MODULE_PATH" | grep -o -E 'name:\s*(\S*)' | cut -d ":" -f 2 | xargs || true)
+
+if [ -n "$resetr" ]; then
+	tool_name=$resetr
+elif [[ $tool_name == v* ]]; then
 	tool_name=$(basename "$(dirname "$TOOL_MODULE_PATH")")
 fi
 
