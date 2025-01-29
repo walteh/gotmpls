@@ -292,11 +292,13 @@ type Person struct {
 }
 
 func TestMockServerLifecycle(t *testing.T) {
-
 	t.Run("server_lifecycle", func(t *testing.T) {
-
 		ctx := context.Background()
 		server := lsp.NewServer(ctx)
+
+		// Create mock client
+		mockClient := mockery.NewMockClient_protocol(t)
+		server.SetCallbackClient(mockClient)
 
 		// Initialize server
 		params := &protocol.ParamInitialize{
@@ -323,7 +325,20 @@ func TestMockServerLifecycle(t *testing.T) {
 		require.NoError(t, err, "initialize should succeed")
 		require.NotNil(t, initResult, "initialize result should not be nil")
 		require.NotNil(t, initResult.Capabilities.HoverProvider, "hover should be supported")
-		require.NotNil(t, initResult.Capabilities.SemanticTokensProvider, "semantic tokens should be supported")
+		// We don't check for semantic tokens provider here since we're using dynamic registration
+
+		// Set up expectations for registration
+		mockClient.EXPECT().RegisterCapability(ctx, mock.MatchedBy(func(params *protocol.RegistrationParams) bool {
+			if len(params.Registrations) != 1 {
+				return false
+			}
+			reg := params.Registrations[0]
+			return reg.ID == "semantic-tokens" && reg.Method == "textDocument/semanticTokens"
+		})).Return(nil).Once()
+
+		// Call Initialized which should trigger registration
+		err = server.Initialized(ctx, &protocol.InitializedParams{})
+		require.NoError(t, err, "initialized should succeed")
 
 		// Shutdown server
 		err = server.Shutdown(ctx)
@@ -332,6 +347,8 @@ func TestMockServerLifecycle(t *testing.T) {
 		// Exit server
 		err = server.Exit(ctx)
 		require.NoError(t, err, "exit should succeed")
+
+		mockClient.AssertExpectations(t)
 	})
 }
 
@@ -361,8 +378,40 @@ func TestMockServerSemanticTokenRegistration(t *testing.T) {
 				return false
 			}
 			filter := opts.DocumentSelector[0]
-			filterLang, ok := filter.Value.(protocol.TextDocumentFilterLanguage)
-			return ok && filterLang.Language == "gotmpl"
+			filterValue, ok := filter.Value.(protocol.Or_TextDocumentFilter)
+			if !ok {
+				return false
+			}
+			filterLang, ok := filterValue.Value.(protocol.TextDocumentFilterLanguage)
+			if !ok {
+				return false
+			}
+			if filterLang.Language != "gotmpl" {
+				return false
+			}
+
+			// Verify semantic token options
+			if len(opts.Legend.TokenTypes) != 14 || len(opts.Legend.TokenModifiers) != 10 {
+				return false
+			}
+			if opts.Legend.TokenTypes[0] != "variable" || opts.Legend.TokenModifiers[0] != "declaration" {
+				return false
+			}
+
+			// Verify full and range support
+			if opts.Full == nil || opts.Range == nil {
+				return false
+			}
+			fullValue, ok := opts.Full.Value.(bool)
+			if !ok || !fullValue {
+				return false
+			}
+			rangeValue, ok := opts.Range.Value.(bool)
+			if !ok || !rangeValue {
+				return false
+			}
+
+			return true
 		})).Return(nil).Once()
 
 		// Initialize server with client capabilities
