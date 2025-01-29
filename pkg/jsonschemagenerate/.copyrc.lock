@@ -7,13 +7,13 @@
 			"file": "README.copy.md",
 			"source": "github.com/a-h/generate@96c14dfdfb601f0f624e776e44ced4aa3dadf8d9",
 			"permalink": "https://raw.githubusercontent.com/a-h/generate/96c14dfdfb601f0f624e776e44ced4aa3dadf8d9/README.md",
-			"last_updated": "2025-01-29T17:50:26.34748Z"
+			"last_updated": "2025-01-29T19:02:49.040821Z"
 		},
 		"generator.copy.go": {
 			"file": "generator.copy.go",
 			"source": "github.com/a-h/generate@96c14dfdfb601f0f624e776e44ced4aa3dadf8d9",
 			"permalink": "https://raw.githubusercontent.com/a-h/generate/96c14dfdfb601f0f624e776e44ced4aa3dadf8d9/generator.go",
-			"last_updated": "2025-01-29T17:50:26.716584Z"
+			"last_updated": "2025-01-29T19:02:49.35127Z"
 		},
 		"generator_test.copy.go": {
 			"file": "generator_test.copy.go",
@@ -72,7 +72,11 @@
 				"*.txt",
 				"Makefile",
 				"*.json",
-				".travis.yml"
+				".travis.yml",
+				"**/*_test.go",
+				"**/output.go",
+				"**/generator.go",
+				"**/README.md"
 			],
 			"file_patterns": null
 		}

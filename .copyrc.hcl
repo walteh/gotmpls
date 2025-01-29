@@ -160,6 +160,11 @@ copy {
 			"Makefile",
 			"*.json",
 			".travis.yml",
+			"**/*_test.go",
+			"**/output.go",
+			"**/generator.go",
+			"**/README.md",
 		]
 	}
 }
+
