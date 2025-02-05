@@ -77,8 +77,10 @@ tasks:
         deps: [copyrc]
         cmds:
             - mkdir -p ./gen/jsonschema/go/tmlanguage ./gen/jsonschema/go/vscodemetamodel
-            - ./go tool go-jsonschema ./gen/jsonschema/json/vscodemetamodel/metaModel.schema.json -o=./gen/jsonschema/go/vscodemetamodel -p=vscodemetamodel
-            - ./go tool go-jsonschema ./gen/jsonschema/json/schemastore/tmlanguage.schema.json -o=./gen/jsonschema/go/tmlanguage -p=tmlanguage
+            - ./go tool go-jsonschema ./gen/jsonschema/json/vscodemetamodel/metaModel.schema.json -o=./gen/jsonschema/go/vscodemetamodel/model.go -p=vscodemetamodel
+            - ./go tool go-jsonschema ./gen/jsonschema/json/schemastore/tmlanguage.json -o=./gen/jsonschema/go/tmlanguage/model.go -p=tmlanguage -v
+            # - bunx quicktype ./gen/jsonschema/json/vscodemetamodel/metaModel.json --out gen/jsonschema/go/vscodemetamodel/model.go --package vscodemetamodel
+            # - bunx quicktype -s schema ./gen/jsonschema/json/schemastore/tmlanguage.json --out gen/jsonschema/go/tmlanguage/model.go --package tmlanguage
         generates:
             - ./gen/jsonschema/go/*.go
         sources:

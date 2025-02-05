@@ -1,5 +1,5 @@
 // 📦 originally copied by copyrc
-// 🔗 source: https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/main.go
+// 🔗 source: https://raw.githubusercontent.com/golang/tools/8e4c84189edf4f6d01107d2bca211e079539e472/gopls/internal/protocol/generate/main.go
 // 📝 license: BSD-3-Clause
 // ℹ️ see .copyrc.lock for more details
 

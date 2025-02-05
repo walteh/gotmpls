@@ -7,3 +7,4 @@ out
 
 vscode-languageserver-node-release-jsonrpc-9.0.0-next.6
 tmp
+.cursor

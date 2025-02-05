@@ -131,7 +131,7 @@ copy {
 		path     = "src/schemas/json"
 	}
 	destination {
-		path = "./gen/jsonschemas/schemastore"
+		path = "./gen/jsonschema/json/schemastore"
 	}
 	options {
 		file_patterns = [
@@ -147,7 +147,7 @@ copy {
 		path = "protocol"
 	}
 	destination {
-		path = "./gen/jsonschemas/vscode-languageserver-node"
+		path = "./gen/jsonschema/json/vscodemetamodel"
 	}
 	options {
 		file_patterns = [

@@ -43,7 +43,7 @@ if [ "${1:-}" == "test" ]; then
 	fi
 
 	# Use our truncation wrapper
-	./scripts/truncate-test-logs.sh "$max_lines" -- ./go tool gotestsum \
+	./scripts/truncate-test-logs.sh "$max_lines" -- ./go tool gotest.tools/gotestsum \
 		--format pkgname \
 		--format-icons hivis \
 		--hide-summary=skipped \
@@ -58,7 +58,7 @@ if [ "${1:-}" == "tool" ]; then
 	}
 	errors_to_suppress=(
 		# https://github.com/protocolbuffers/protobuf-javascript/issues/148
-		"reference https://github.com/protocolbuffers/protobuf/blob/95e6c5b4746dd7474d540ce4fb375e3f79a086f8/src/google/protobuf/compiler/plugin.proto#L122"
+		"plugin.proto#L122"
 	)
 	# 🔧 Build regex for suppressing errors
 	errors_to_suppress_regex=""

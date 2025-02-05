@@ -12,14 +12,14 @@
 			"file": "metaModel.json",
 			"source": "github.com/microsoft/vscode-languageserver-node@795aa54071f4f1e3ad7d95ba815fd286cfafab5e",
 			"permalink": "https://raw.githubusercontent.com/microsoft/vscode-languageserver-node/795aa54071f4f1e3ad7d95ba815fd286cfafab5e/protocol/metaModel.json",
-			"last_updated": "2025-02-05T13:52:00.101936Z",
+			"last_updated": "2025-02-05T20:17:39.475001Z",
 			"remote_hash": "G6sBqyjGGGV1vkZo3IRJdRAmkFVjutDEMiqQapF4bJw="
 		},
 		"metaModel.schema.json": {
 			"file": "metaModel.schema.json",
 			"source": "github.com/microsoft/vscode-languageserver-node@795aa54071f4f1e3ad7d95ba815fd286cfafab5e",
 			"permalink": "https://raw.githubusercontent.com/microsoft/vscode-languageserver-node/795aa54071f4f1e3ad7d95ba815fd286cfafab5e/protocol/metaModel.schema.json",
-			"last_updated": "2025-02-05T13:52:00.239587Z",
+			"last_updated": "2025-02-05T20:17:39.515965Z",
 			"remote_hash": "6ohOKpjNn064fur6NjtDYKx0JFgpaByZgwGJ2qKavlY="
 		}
 	},

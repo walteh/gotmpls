@@ -1,9 +1,9 @@
 {
 	"last_updated": "2025-01-22T06:32:25.490025-05:00",
-	"commit_hash": "33e624fee8130c31e07a78698cd87013bf884a8d",
+	"commit_hash": "8e4c84189edf4f6d01107d2bca211e079539e472",
 	"license": {
 		"spdx": "BSD-3-Clause",
-		"permalink": "https://api.github.com/repos/golang/tools/contents/LICENSE?ref=33e624fee8130c31e07a78698cd87013bf884a8d",
+		"permalink": "https://api.github.com/repos/golang/tools/contents/LICENSE?ref=8e4c84189edf4f6d01107d2bca211e079539e472",
 		"name": "BSD-3-Clause License"
 	},
 	"branch": "master",
@@ -25,9 +25,9 @@
 		},
 		"README.md": {
 			"file": "README.md",
-			"source": "github.com/golang/tools@33e624fee8130c31e07a78698cd87013bf884a8d",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/README.md",
-			"last_updated": "2025-02-05T14:57:19.049804Z",
+			"source": "github.com/golang/tools@8e4c84189edf4f6d01107d2bca211e079539e472",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/8e4c84189edf4f6d01107d2bca211e079539e472/gopls/internal/protocol/generate/README.md",
+			"last_updated": "2025-02-05T20:15:59.671242Z",
 			"changes": [
 				"Line 91: Replaced 'tsprotocol.go' with 'tsprotocol.gen.go'",
 				"Line 130: Replaced 'tsprotocol.go' with 'tsprotocol.gen.go'",
@@ -37,7 +37,7 @@
 				"Line 128: Replaced 'tsclient.go' with 'tsclient.gen.go'",
 				"Line 90: Replaced 'tsjson.go' with 'tsjson.gen.go'"
 			],
-			"remote_hash": "d9BjNPvU2abDJL79MEBtBG3Pvan3UZfCaS2Jyq4mx-Y="
+			"remote_hash": "bam5oCNTSm26KMqIccrDpbfPG9Ia62CbTY6xMNLvKY4="
 		},
 		"generate.copy.go": {
 			"file": "generate.copy.go",
@@ -47,10 +47,10 @@
 		},
 		"generate.go": {
 			"file": "generate.go",
-			"source": "github.com/golang/tools@33e624fee8130c31e07a78698cd87013bf884a8d",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/generate.go",
-			"last_updated": "2025-02-05T14:57:19.205404Z",
-			"remote_hash": "2JdXGEJaeS5zneYTwwsFAZuCVKx00AC-V6vjCin8RBc="
+			"source": "github.com/golang/tools@8e4c84189edf4f6d01107d2bca211e079539e472",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/8e4c84189edf4f6d01107d2bca211e079539e472/gopls/internal/protocol/generate/generate.go",
+			"last_updated": "2025-02-05T20:15:59.835077Z",
+			"remote_hash": "WGjDxwMuO5pzZFH91vp6nxijt_UbtAOPgJWkPS5vKxM="
 		},
 		"main.copy.go": {
 			"file": "main.copy.go",
@@ -73,9 +73,9 @@
 		},
 		"main.go": {
 			"file": "main.go",
-			"source": "github.com/golang/tools@33e624fee8130c31e07a78698cd87013bf884a8d",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/main.go",
-			"last_updated": "2025-02-05T14:57:19.738573Z",
+			"source": "github.com/golang/tools@8e4c84189edf4f6d01107d2bca211e079539e472",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/8e4c84189edf4f6d01107d2bca211e079539e472/gopls/internal/protocol/generate/main.go",
+			"last_updated": "2025-02-05T20:15:59.991017Z",
 			"changes": [
 				"Line 57: Replaced 'func processinline()' with 'func processinline_old()'",
 				"Line 106: Replaced 'golang.org/x/tools/internal/jsonrpc2' with 'github.com/creachadair/jrpc2'",
@@ -89,7 +89,7 @@
 				"Line 125: Replaced 'tsclient.go' with 'tsclient.gen.go'",
 				"Line 213: Replaced 'tsjson.go' with 'tsjson.gen.go'"
 			],
-			"remote_hash": "oQkxcY9EE7agIaN4CNHp4MI47yq1-ePc1HXrG7jL11M="
+			"remote_hash": "GwsZUmlOpVvrLeruFY9tOEO7FaYKYjCCxTCOK8oZgxI="
 		},
 		"main_test.copy.go": {
 			"file": "main_test.copy.go",
@@ -99,10 +99,10 @@
 		},
 		"main_test.go": {
 			"file": "main_test.go",
-			"source": "github.com/golang/tools@33e624fee8130c31e07a78698cd87013bf884a8d",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/main_test.go",
-			"last_updated": "2025-02-05T14:57:19.88001Z",
-			"remote_hash": "n6V0-gG8ASe9JkotaZ-uC0xqfegKz_nm0ahw2dQEIYA="
+			"source": "github.com/golang/tools@8e4c84189edf4f6d01107d2bca211e079539e472",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/8e4c84189edf4f6d01107d2bca211e079539e472/gopls/internal/protocol/generate/main_test.go",
+			"last_updated": "2025-02-05T20:16:00.18615Z",
+			"remote_hash": "oNI5AGPJ1vLERMldF9sMB_Qak5ojhQeTXdgXrcBqIUo="
 		},
 		"output.copy.go": {
 			"file": "output.copy.go",
@@ -124,9 +124,9 @@
 		},
 		"output.go": {
 			"file": "output.go",
-			"source": "github.com/golang/tools@33e624fee8130c31e07a78698cd87013bf884a8d",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/output.go",
-			"last_updated": "2025-02-05T14:57:20.250565Z",
+			"source": "github.com/golang/tools@8e4c84189edf4f6d01107d2bca211e079539e472",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/8e4c84189edf4f6d01107d2bca211e079539e472/gopls/internal/protocol/generate/output.go",
+			"last_updated": "2025-02-05T20:16:00.492329Z",
 			"changes": [
 				"Line 95: Replaced 'func genCase(' with 'func genCase_old('",
 				"Line 137: Replaced 'func genFunc(' with 'func genFunc_old('",
@@ -139,7 +139,7 @@
 				"Line 26: Replaced 'tsserver.go' with 'tsserver.gen.go'",
 				"Line 22: Replaced 'tsclient.go' with 'tsclient.gen.go'"
 			],
-			"remote_hash": "V1f0WgKrScTKp96yNxpkrUijGiuwOGiP-GXvOvvo_sE="
+			"remote_hash": "Lp2Wpr8B2U1lABgYJkxVyciC4jRTV5P_m-fHCt5SaoE="
 		},
 		"tables.copy.go": {
 			"file": "tables.copy.go",
@@ -149,10 +149,10 @@
 		},
 		"tables.go": {
 			"file": "tables.go",
-			"source": "github.com/golang/tools@33e624fee8130c31e07a78698cd87013bf884a8d",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/tables.go",
-			"last_updated": "2025-02-05T14:57:20.67305Z",
-			"remote_hash": "edkoYVCXe4FkN4zqEwSk7MSCNx4UvcAlOq9iGE3eu4I="
+			"source": "github.com/golang/tools@8e4c84189edf4f6d01107d2bca211e079539e472",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/8e4c84189edf4f6d01107d2bca211e079539e472/gopls/internal/protocol/generate/tables.go",
+			"last_updated": "2025-02-05T20:16:00.707049Z",
+			"remote_hash": "yN6LTSVuqvIJGsCYGrZVeG8jsQTkBLkXDcJaR6nBcN4="
 		},
 		"typenames.copy.go": {
 			"file": "typenames.copy.go",
@@ -162,10 +162,10 @@
 		},
 		"typenames.go": {
 			"file": "typenames.go",
-			"source": "github.com/golang/tools@33e624fee8130c31e07a78698cd87013bf884a8d",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/typenames.go",
-			"last_updated": "2025-02-05T14:57:21.183593Z",
-			"remote_hash": "QClvq-sGoamlauujXGkso8OMsGOHDPgNvdssu4DuvS8="
+			"source": "github.com/golang/tools@8e4c84189edf4f6d01107d2bca211e079539e472",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/8e4c84189edf4f6d01107d2bca211e079539e472/gopls/internal/protocol/generate/typenames.go",
+			"last_updated": "2025-02-05T20:16:00.858707Z",
+			"remote_hash": "S8u2Xb9K382AWyMCrigY3wtZg63AHETJBWKCai5I79I="
 		},
 		"types.copy.go": {
 			"file": "types.copy.go",
@@ -175,10 +175,10 @@
 		},
 		"types.go": {
 			"file": "types.go",
-			"source": "github.com/golang/tools@33e624fee8130c31e07a78698cd87013bf884a8d",
-			"permalink": "https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/types.go",
-			"last_updated": "2025-02-05T14:57:22.023112Z",
-			"remote_hash": "pcFnzKfB_RxWYQWQRABQiM6Qvyg3dl_-payrYadflGw="
+			"source": "github.com/golang/tools@8e4c84189edf4f6d01107d2bca211e079539e472",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/8e4c84189edf4f6d01107d2bca211e079539e472/gopls/internal/protocol/generate/types.go",
+			"last_updated": "2025-02-05T20:16:01.229279Z",
+			"remote_hash": "05uBsnfjodRZHifmkh36775jKcX467IKic43VERURw8="
 		}
 	},
 	"generated_files": {},
