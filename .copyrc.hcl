@@ -130,7 +130,7 @@ copy {
 		path     = "src/schemas/json"
 	}
 	destination {
-		path = "./gen/schemastore"
+		path = "./gen/jsonschemas/schemastore"
 	}
 	options {
 		file_patterns = [
@@ -141,30 +141,17 @@ copy {
 
 copy {
 	source {
-		repo = "github.com/a-h/generate"
-		ref  = "master"
-		path = "."
+		repo = "github.com/microsoft/vscode"
+		ref  = "tags/1.96.4"
+		path = "protocol"
 	}
 	destination {
-		path = "./pkg/jsonschemagenerate"
+		path = "./gen/jsonschemas/vscode"
 	}
 	options {
-		replacements = [
-
-		]
-		ignore_files = [
-			".gitignore",
-			".gitattributes",
-			".github",
-			"*.txt",
-			"Makefile",
-			"*.json",
-			".travis.yml",
-			"**/*_test.go",
-			"**/output.go",
-			"**/generator.go",
-			"**/README.md",
+		file_patterns = [
+			"**/metaModel.schema.json",
+			"**/metaModel.json",
 		]
 	}
 }
-

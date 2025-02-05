@@ -9,6 +9,7 @@ if [ "${1:-}" == "test" ]; then
 	ff=0
 	real_args=()
 	extra_args=""
+	max_lines=1000 # Default to 1000 lines
 
 	# Handle each argument
 	for arg in "$@"; do
@@ -16,6 +17,8 @@ if [ "${1:-}" == "test" ]; then
 			cc=1
 		elif [ "$arg" = "-force" ]; then
 			ff=1
+		elif [[ "$arg" =~ ^-max-lines=(.*)$ ]]; then
+			max_lines="${BASH_REMATCH[1]}"
 		else
 			real_args+=("$arg")
 		fi
@@ -39,7 +42,8 @@ if [ "${1:-}" == "test" ]; then
 		extra_args="$extra_args -count=1 "
 	fi
 
-	./scripts/run-tool.sh gotestsum \
+	# Use our truncation wrapper
+	./scripts/truncate-test-logs.sh "$max_lines" -- ./scripts/run-tool.sh gotestsum \
 		--format pkgname \
 		--format-icons hivis \
 		--hide-summary=skipped \

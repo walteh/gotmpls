@@ -10,7 +10,6 @@ replace github.com/ProtonMail/go-crypto v1.1.0-alpha.2-proton => github.com/Prot
 
 require (
 	connectrpc.com/connect v1.18.1
-	github.com/a-h/generate v0.0.0-20220105161013-96c14dfdfb60
 	github.com/alecthomas/participle/v2 v2.1.1
 	github.com/atombender/go-jsonschema v0.17.0
 	github.com/bufbuild/buf v1.50.0

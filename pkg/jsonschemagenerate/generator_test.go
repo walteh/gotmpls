@@ -1003,3 +1003,59 @@ func TestTypes(t *testing.T) {
 		})
 	}
 }
+
+func TestTMLLanguageSchemaGeneration(t *testing.T) {
+	// Read the schema file
+	schemaBytes, err := os.ReadFile("../../gen/schemastore/tmlanguage.copy.json")
+	require.NoError(t, err, "should read schema file")
+
+	schema := &Schema{}
+	err = json.Unmarshal(schemaBytes, schema)
+	require.NoError(t, err, "schema should parse successfully")
+
+	// Initialize the schema
+	schema.Init()
+
+	// Create a slice of all definition schemas
+	// schemas := make([]*Schema, 0)
+	// for name, def := range schema.Definitions {
+	// 	def.PathElement = "definitions/" + name
+	// 	def.Parent = schema
+	// 	def.Init()
+	// 	schemas = append(schemas, def)
+	// }
+
+	// Create the generator with all schemas
+	g := New(schema)
+	err = g.CreateTypes()
+	require.NoError(t, err, "types should be generated successfully")
+
+	// Verify the Pattern struct was generated
+	patternStruct, ok := g.Structs["Pattern"]
+	require.True(t, ok, "Pattern struct should exist")
+
+	// Verify the fields
+	expectedPatternFields := map[string]string{
+		"EndCaptures":         "*Captures",
+		"Include":             "string",
+		"Match":               "string",
+		"Name":                "interface{}",
+		"Patterns":            "[]*Pattern",
+		"While":               "string",
+		"Begin":               "string",
+		"Comment":             "string",
+		"Captures":            "*Captures",
+		"End":                 "string",
+		"ContentName":         "interface{}",
+		"Disabled":            "int",
+		"BeginCaptures":       "*Captures",
+		"ApplyEndPatternLast": "int",
+		"WhileCaptures":       "*Captures",
+	}
+
+	for fieldName, expectedType := range expectedPatternFields {
+		field, ok := patternStruct.Fields[fieldName]
+		assert.True(t, ok, "Pattern struct should have field %s", fieldName)
+		assert.Equal(t, expectedType, field.Type, "Pattern field %s should have type %s", fieldName, expectedType)
+	}
+}

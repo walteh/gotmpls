@@ -60,7 +60,12 @@ tasks:
             - ./**/*.go
 
     test:
-        cmd: go test ./...
+        cmd: ./go test ./...
+        env:
+            MAX_LINES: '{{.MAX_LINES | default "1000"}}'
+
+    test-all:
+        cmd: ./go test -max-lines=all ./...
 
     install-executables:
         cmds:
@@ -90,12 +95,14 @@ tasks:
         run: once
         deps: [copyrc]
         cmds:
-            - mkdir -p ./gen/jsonschema/tmlanguage
-            - ./scripts/run-tool.sh jsonschema-generate -i=./gen/schemastore/tmlanguage.copy.json -o=./gen/jsonschema/tmlanguage/tmlanguage.go -p=tmlanguage
+            - mkdir -p ./gen/jsonschema/go/tmlanguage ./gen/jsonschema/go/vscodemetamodel
+            - ./scripts/run-tool.sh go-jsonschema ./gen/jsonschema/json/vscodemetamodel/metaModel.schema.json -o=./gen/jsonschema/go/vscodemetamodel -p=vscodemetamodel
+            - ./scripts/run-tool.sh go-jsonschema ./gen/jsonschema/json/schemastore/tmlanguage.schema.json -o=./gen/jsonschema/go/tmlanguage -p=tmlanguage
         generates:
-            - ./gen/jsonschema-generate/*.go
+            - ./gen/jsonschema/go/*.go
         sources:
-            - ./gen/schemastore/tmlanguage.copy.json
+            - ./gen/jsonschemas/vscode/metaModel.schema.json
+            - ./gen/jsonschemas/schemastore/tmlanguage.schema.json
 
     copyrc:
         desc: copyrc
