@@ -43,11 +43,34 @@ if [ "${1:-}" == "test" ]; then
 	fi
 
 	# Use our truncation wrapper
-	./scripts/truncate-test-logs.sh "$max_lines" -- ./scripts/run-tool.sh gotestsum \
+	./scripts/truncate-test-logs.sh "$max_lines" -- ./go tool gotestsum \
 		--format pkgname \
 		--format-icons hivis \
 		--hide-summary=skipped \
 		--raw-command -- go test -v -vet=all -json -cover $extra_args "${real_args[@]}"
+	exit $?
+fi
+
+if [ "${1:-}" == "tool" ]; then
+	shift
+	escape_regex() {
+		printf '%s\n' "$1" | sed 's/[][(){}.*+?^$|\\]/\\&/g'
+	}
+	errors_to_suppress=(
+		# https://github.com/protocolbuffers/protobuf-javascript/issues/148
+		"reference https://github.com/protocolbuffers/protobuf/blob/95e6c5b4746dd7474d540ce4fb375e3f79a086f8/src/google/protobuf/compiler/plugin.proto#L122"
+	)
+	# 🔧 Build regex for suppressing errors
+	errors_to_suppress_regex=""
+	for phrase in "${errors_to_suppress[@]}"; do
+		escaped_phrase=$(escape_regex "$phrase")
+		if [[ -n "$errors_to_suppress_regex" ]]; then
+			errors_to_suppress_regex+="|"
+		fi
+		errors_to_suppress_regex+="$escaped_phrase"
+	done
+	go tool "$@" <&0 >&1 2> >(grep -Ev "$errors_to_suppress_regex" >&2)
+
 	exit $?
 fi
 

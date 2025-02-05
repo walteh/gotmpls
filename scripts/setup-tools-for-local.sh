@@ -31,10 +31,6 @@ GENERATE_TASKFILES="false"
 # 🔄 Parse command line flags
 while [[ "$#" -gt 0 ]]; do
 	case $1 in
-	--skip-build)
-		SKIP_BUILD="true"
-		shift
-		;;
 	--generate-taskfiles)
 		GENERATE_TASKFILES="true"
 		shift
@@ -51,16 +47,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 : ${TASKFILE_OUTPUT_DIR:="./out/taskfiles"}
 : ${TOOLS_OUTPUT_DIR:="./out/tools"}
 
-# 🧹 Clean and create tools directory if building
-if [ "$SKIP_BUILD" = "false" ]; then
-	echo "🔧 Setting up tools directory..."
-	rm -rf "$TOOLS_OUTPUT_DIR"
-	mkdir -p "$TOOLS_OUTPUT_DIR"
-fi
-
 # 📝 Generate taskfiles if requested
 if [ "$GENERATE_TASKFILES" = "true" ]; then
-	echo "📝 Generating taskfiles..."
 	rm -rf "$TASKFILE_OUTPUT_DIR"
 	mkdir -p "$TASKFILE_OUTPUT_DIR"
 
@@ -75,44 +63,43 @@ tasks:
 EOF
 fi
 
-# 🛠️ Build tool function
+get_tool_module_name() {
+	# 📝 Extract tool name from path
+	tool_name=$(basename "$1")
+
+	resetr=$(cat ./tools/go.mod | grep "$1" | grep -o -E 'name:\s*(\S*)' | cut -d ":" -f 2 | xargs || true)
+
+	if [ -n "$resetr" ]; then
+		tool_name=$resetr
+	elif [[ $tool_name == v* ]]; then
+		tool_name=$(basename "$(dirname "$1")")
+	fi
+
+	echo "$tool_name"
+}
+
 build_tool() {
-	local import_path="$1"
-	echo "🔨 Building tool from $import_path..."
-
-	export TOOL_MODULE_PATH="$import_path"
-	export OUTPUT_DIR="$TOOLS_OUTPUT_DIR"
-	export GOOS=$(go env GOOS)
-	export GOARCH=$(go env GOARCH)
-	export SKIP_BUILD="$SKIP_BUILD"
-
-	# Build tool (failures allowed)
-	source "$ROOT_DIR/scripts/build-tool.sh" || true
+	local tool_module_path="$1"
+	tool_name=$(get_tool_module_name "$tool_module_path")
 
 	# Add task definition if generating taskfiles
 	if [ "$GENERATE_TASKFILES" = "true" ]; then
-		echo "📝 Adding task for $TOOL_NAME..."
 		cat <<EOF >>$output_taskfile
-  ${TOOL_NAME}:
-    desc: run ${TOOL_NAME} - built from ${TOOL_MODULE_PATH}
-    cmds:
-      - ${SCRIPTS_DIR}/run-tool.sh ${TOOL_NAME} {{.CLI_ARGS}}
+
+    ${tool_name}:
+        desc: run ${tool_name} - built from ${tool_module_path}
+        cmds:
+            - ./go tool ${tool_module_path} {{.CLI_ARGS}}
 EOF
 	fi
 }
 
-# 🔍 Parse and build tools
-echo "🔍 Scanning tools.go for imports..."
-while IFS= read -r line; do
-	if [[ $line =~ ^[[:space:]]*_[[:space:]]*\"(.+)\" ]]; then
-		import_path="${BASH_REMATCH[1]}"
-		build_tool "$import_path"
-	fi
-done <"$ROOT_DIR/tools/tools.go"
+for tool in $(go list tool); do
+	build_tool "$tool"
+done
 
 # 📋 Generate scripts taskfile if requested
 if [ "$GENERATE_TASKFILES" = "true" ]; then
-	echo "📝 Generating scripts taskfile..."
 	output_file="${TASKFILE_OUTPUT_DIR}/Taskfile.scripts.yml"
 	rm -f "$output_file"
 
@@ -134,17 +121,16 @@ EOF
 		if [[ $script == *.sh ]]; then
 			# Ensure script is executable
 			if [[ ! -x ${SCRIPTS_DIR}/${script} ]]; then
-				echo "🔧 Making ${script} executable..."
 				chmod +x ${SCRIPTS_DIR}/${script}
 			fi
 
 			script_name=${script%.sh}
-			echo "📝 Adding task for $script_name..."
 			cat <<EOF >>$output_file
-  ${script_name}:
-    desc: run $SCRIPTS_DIR/${script_name}.sh
-    cmds:
-      - $SCRIPTS_DIR/${script_name}.sh {{.CLI_ARGS}}
+
+    ${script_name}:
+        desc: run $SCRIPTS_DIR/${script_name}.sh
+        cmds:
+            - $SCRIPTS_DIR/${script_name}.sh {{.CLI_ARGS}}
 EOF
 		fi
 	done

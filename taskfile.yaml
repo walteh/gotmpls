@@ -24,35 +24,16 @@ tasks:
                 TASKFILE_OUTPUT_DIR: "./gen/taskfiles",
             }
         cmds:
-            - ./scripts/setup-tools-for-local.sh --generate-taskfiles --skip-build
+            - ./scripts/setup-tools-for-local.sh --generate-taskfiles
         sources:
             - ./tools/**/*
             - ./scripts/**/*
         generates:
             - "./gen/taskfiles/**/*"
 
-    setup-tools-for-local:
-        run: once
-        deps: [generate-taskfiles]
-        env:
-            {
-                SCRIPTS_DIR: "./scripts",
-                TASKFILE_OUTPUT_DIR: "./gen/taskfiles",
-                TOOLS_OUTPUT_DIR: "./out/tools",
-            }
-        cmds:
-            - ./scripts/setup-tools-for-local.sh
-        sources:
-            - ./tools/**/*
-            - ./scripts/setup-tools-for-local.sh
-            - ./scripts/build-tool.sh
-            - go.work.sum
-        generates:
-            - ./out/tools/**/*
-
     mockery:
         cmds:
-            - ./scripts/run-tool.sh mockery
+            - ./go tool mockery
             - find ./gen/mockery -type f -not -mmin -1 -delete
         generates:
             - ./gen/mockery/*.go
@@ -69,7 +50,7 @@ tasks:
 
     install-executables:
         cmds:
-            - go install ./cmd/gotmpls
+            - ./go install ./cmd/gotmpls
 
     package-extension:
         dir: code-extension
@@ -96,8 +77,8 @@ tasks:
         deps: [copyrc]
         cmds:
             - mkdir -p ./gen/jsonschema/go/tmlanguage ./gen/jsonschema/go/vscodemetamodel
-            - ./scripts/run-tool.sh go-jsonschema ./gen/jsonschema/json/vscodemetamodel/metaModel.schema.json -o=./gen/jsonschema/go/vscodemetamodel -p=vscodemetamodel
-            - ./scripts/run-tool.sh go-jsonschema ./gen/jsonschema/json/schemastore/tmlanguage.schema.json -o=./gen/jsonschema/go/tmlanguage -p=tmlanguage
+            - ./go tool go-jsonschema ./gen/jsonschema/json/vscodemetamodel/metaModel.schema.json -o=./gen/jsonschema/go/vscodemetamodel -p=vscodemetamodel
+            - ./go tool go-jsonschema ./gen/jsonschema/json/schemastore/tmlanguage.schema.json -o=./gen/jsonschema/go/tmlanguage -p=tmlanguage
         generates:
             - ./gen/jsonschema/go/*.go
         sources:
@@ -107,13 +88,13 @@ tasks:
     copyrc:
         desc: copyrc
         cmds:
-            - ./scripts/run-tool.sh copyrc -config=.copyrc.hcl -force
+            - ./go tool copyrc -config=.copyrc.hcl -force
         sources:
             - .copyrc.hcl
         generates:
             - "**/*.copyrc.lock"
         status:
-            - ./scripts/run-tool.sh copyrc -config=.copyrc.hcl -status
+            - ./go tool copyrc -config=.copyrc.hcl -status
 
     generate-lsp-protocol:
         deps: [copyrc]
@@ -122,7 +103,7 @@ tasks:
         generates:
             - "./pkg/lsp/protocol/*.gen.go"
         cmds:
-            - go generate ./pkg/lsp/protocol/generator
+            - ./go generate ./pkg/lsp/protocol/generator
 
     go-mod-tidy:
         env:
@@ -138,7 +119,6 @@ tasks:
 
     go-mod-upgrade:
         run: once
-        # deps: [setup-tools-for-local]
         env:
             {
                 GOPROXY: https://proxy.golang.org,
@@ -146,9 +126,4 @@ tasks:
                 GOPRIVATE: github.com/walteh,
             }
         cmds:
-            - go tool go-mod-upgrade --force
-
-    sync-aliasrc:
-        desc: sync aliasrc system
-        cmds:
-            - ./scripts/sync-aliasrc.sh
+            - .go tool go-mod-upgrade --force

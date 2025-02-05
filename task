@@ -2,4 +2,4 @@
 
 export TASK_X_ENV_PRECEDENCE=1 # https://github.com/go-task/task/issues/1038
 
-./scripts/run-tool.sh task "$@"
+./go tool task "$@"
