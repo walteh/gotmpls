@@ -169,8 +169,6 @@ github.com/alecthomas/chroma/v2 v2.14.0 h1:R3+wzpnUArGcQz7fCETQBzO5n9IMNi13iIs46
 github.com/alecthomas/chroma/v2 v2.14.0/go.mod h1:QolEbTfmUHIMVpBqxeDnNBj2uoeI4EbYP4i6n68SG4I=
 github.com/alecthomas/go-check-sumtype v0.3.1 h1:u9aUvbGINJxLVXiFvHUlPEaD7VDULsrxJb4Aq31NLkU=
 github.com/alecthomas/go-check-sumtype v0.3.1/go.mod h1:A8TSiN3UPRw3laIgWEUOHHLPa6/r9MtoigdlP5h3K/E=
-github.com/alecthomas/kong v1.6.1 h1:/7bVimARU3uxPD0hbryPE8qWrS3Oz3kPQoxA/H2NKG8=
-github.com/alecthomas/kong v1.6.1/go.mod h1:p2vqieVMeTAnaC83txKtXe8FLke2X07aruPWXyMPQrU=
 github.com/alecthomas/participle/v2 v2.1.1 h1:hrjKESvSqGHzRb4yW1ciisFJ4p3MGYih6icjJvbsmV8=
 github.com/alecthomas/participle/v2 v2.1.1/go.mod h1:Y1+hAs8DHPmc3YUFzqllV+eSQ9ljPTk0ZkPMtEdAx2c=
 github.com/alecthomas/repr v0.4.0 h1:GhI2A8MACjfegCPVq9f1FLvIBS+DrQ2KQBFZP1iFzXc=
@@ -1337,10 +1335,8 @@ github.com/wagoodman/go-partybus v0.0.0-20230516145632-8ccac152c651 h1:jIVmlAFIq
 github.com/wagoodman/go-partybus v0.0.0-20230516145632-8ccac152c651/go.mod h1:b26F2tHLqaoRQf8DywqzVaV1MQ9yvjb0OMcNl7Nxu20=
 github.com/wagoodman/go-progress v0.0.0-20220614130704-4b1c25a33c7c h1:gFwUKtkv6QzQsFdIjvPqd0Qdw42DHUEbbUdiUTI1uco=
 github.com/wagoodman/go-progress v0.0.0-20220614130704-4b1c25a33c7c/go.mod h1:jLXFoL31zFaHKAAyZUh+sxiTDFe1L1ZHrcK2T1itVKA=
-github.com/walteh/copyrc v0.0.10 h1:P+2yuOs5GzA76GLEg7lGkxlKu/S1LLeRfbQp/gB16q8=
-github.com/walteh/copyrc v0.0.10/go.mod h1:ABbiE75e1QGeQJNBD7Ah9WCJh7hNRRoWUZoYNA4K0+k=
-github.com/walteh/copyrc v0.0.14 h1:A1OucB4/3AwpAKMrDcTQKQFjwJhtdyvwVIFQysFJK6M=
-github.com/walteh/copyrc v0.0.14/go.mod h1:ABbiE75e1QGeQJNBD7Ah9WCJh7hNRRoWUZoYNA4K0+k=
+github.com/walteh/copyrc v0.0.16 h1:HnV6ovFQ/0PTmNMukf3YpJQvZUxT7uG5usoTOLsOkuA=
+github.com/walteh/copyrc v0.0.16/go.mod h1:ABbiE75e1QGeQJNBD7Ah9WCJh7hNRRoWUZoYNA4K0+k=
 github.com/walteh/retab/v2 v2.1.0 h1:0VYReFnuldXd/pvCW4fqKVh4RcAXHa+Zj/DjOEVM/jA=
 github.com/walteh/retab/v2 v2.1.0/go.mod h1:OzlxHNaaDJRcc5CpiJwDXlHXvFvbJb6Y21b3T27fvL4=
 github.com/warpfork/go-wish v0.0.0-20220906213052-39a1cc7a02d0 h1:GDDkbFiaK8jsSDJfjId/PEGEShv6ugrt4kYsC5UIDaQ=

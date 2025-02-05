@@ -1,12 +1,8 @@
 module github.com/walteh/gotmpls
 
-go 1.23.1
-
-toolchain go1.23.5
+go 1.24rc2
 
 require (
-	github.com/alecthomas/kong v1.6.1
-	github.com/alecthomas/participle/v2 v2.1.1
 	github.com/creachadair/jrpc2 v1.3.0
 	github.com/fatih/color v1.18.0
 	github.com/k0kubun/pp/v3 v3.4.1

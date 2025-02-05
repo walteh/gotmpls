@@ -1,6 +1,6 @@
-module github.com/walteh/minute-api/tools
+module github.com/walteh/gotmpls/tools
 
-go 1.23.5
+go 1.24rc2
 
 replace github.com/walteh/gotmpls => ../
 
@@ -23,7 +23,6 @@ require (
 	github.com/srikrsna/protoc-gen-gotag v1.0.2
 	github.com/vektra/mockery/v2 v2.51.0
 	github.com/walteh/copyrc v0.0.16
-	github.com/walteh/gotmpls v0.0.0-00010101000000-000000000000
 	github.com/walteh/retab/v2 v2.1.0
 	gotest.tools/gotestsum v1.12.0
 )
@@ -96,7 +95,6 @@ require (
 	github.com/agext/levenshtein v1.2.1 // indirect
 	github.com/alecthomas/chroma/v2 v2.14.0 // indirect
 	github.com/alecthomas/go-check-sumtype v0.3.1 // indirect
-	github.com/alecthomas/kong v1.6.1 // indirect
 	github.com/alecthomas/repr v0.4.0 // indirect
 	github.com/alessio/shellescape v1.4.2 // indirect
 	github.com/alexkohler/nakedret/v2 v2.0.5 // indirect
