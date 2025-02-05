@@ -1,0 +1,30 @@
+{
+	"last_updated": "0001-01-01T00:00:00Z",
+	"commit_hash": "022c82bdf96a5844c867ddcfc45ce1fbc41c3ecc",
+	"license": {
+		"spdx": "Apache-2.0",
+		"permalink": "https://api.github.com/repos/SchemaStore/schemastore/contents/LICENSE?ref=022c82bdf96a5844c867ddcfc45ce1fbc41c3ecc",
+		"name": "Apache License 2.0"
+	},
+	"branch": "022c82bdf96a5844c867ddcfc45ce1fbc41c3ecc",
+	"coppied_files": {
+		"tmlanguage.json": {
+			"file": "tmlanguage.json",
+			"source": "github.com/SchemaStore/schemastore@022c82bdf96a5844c867ddcfc45ce1fbc41c3ecc",
+			"permalink": "https://raw.githubusercontent.com/SchemaStore/schemastore/022c82bdf96a5844c867ddcfc45ce1fbc41c3ecc/src/schemas/json/tmlanguage.json",
+			"last_updated": "2025-02-05T13:46:33.202849Z",
+			"remote_hash": "YNI_mBzxCPxbYbKzxh-HxB0DuERnB1wMtc_N7Mov2rI="
+		}
+	},
+	"generated_files": {},
+	"args": {
+		"src_repo": "github.com/SchemaStore/schemastore",
+		"src_ref": "022c82bdf96a5844c867ddcfc45ce1fbc41c3ecc",
+		"src_path": "src/schemas/json",
+		"copy_args": {
+			"file_patterns": [
+				"**/tmlanguage.json"
+			]
+		}
+	}
+}

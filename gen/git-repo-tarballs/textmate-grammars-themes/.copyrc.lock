@@ -1,19 +1,25 @@
 {
 	"last_updated": "0001-01-01T00:00:00Z",
 	"commit_hash": "11c43d8d41eefac79c5314f63ded09ef17d83245",
+	"license": {
+		"spdx": "MIT",
+		"permalink": "https://api.github.com/repos/shikijs/textmate-grammars-themes/contents/LICENSE?ref=11c43d8d41eefac79c5314f63ded09ef17d83245",
+		"name": "MIT License"
+	},
 	"branch": "11c43d8d41eefac79c5314f63ded09ef17d83245",
 	"coppied_files": {
 		"textmate-grammars-themes.tar.gz": {
 			"file": "textmate-grammars-themes.tar.gz",
 			"source": "github.com/shikijs/textmate-grammars-themes@11c43d8d41eefac79c5314f63ded09ef17d83245",
 			"permalink": "https://github.com/shikijs/textmate-grammars-themes/archive/11c43d8d41eefac79c5314f63ded09ef17d83245.tar.gz",
-			"last_updated": "2025-01-29T14:51:30.719843Z"
+			"last_updated": "2025-02-05T14:01:15.876444Z",
+			"remote_hash": "0hz_10jnzTqdGKs0PWuP87oyWrLE6IY9_vgPFqAzoaU="
 		}
 	},
 	"generated_files": {
 		"embed.gen.go": {
 			"file": "embed.gen.go",
-			"last_updated": "2025-01-29T14:51:30.720496Z"
+			"last_updated": "2025-02-05T14:01:15.876632Z"
 		}
 	},
 	"args": {

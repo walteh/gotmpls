@@ -1339,6 +1339,8 @@ github.com/wagoodman/go-progress v0.0.0-20220614130704-4b1c25a33c7c h1:gFwUKtkv6
 github.com/wagoodman/go-progress v0.0.0-20220614130704-4b1c25a33c7c/go.mod h1:jLXFoL31zFaHKAAyZUh+sxiTDFe1L1ZHrcK2T1itVKA=
 github.com/walteh/copyrc v0.0.10 h1:P+2yuOs5GzA76GLEg7lGkxlKu/S1LLeRfbQp/gB16q8=
 github.com/walteh/copyrc v0.0.10/go.mod h1:ABbiE75e1QGeQJNBD7Ah9WCJh7hNRRoWUZoYNA4K0+k=
+github.com/walteh/copyrc v0.0.14 h1:A1OucB4/3AwpAKMrDcTQKQFjwJhtdyvwVIFQysFJK6M=
+github.com/walteh/copyrc v0.0.14/go.mod h1:ABbiE75e1QGeQJNBD7Ah9WCJh7hNRRoWUZoYNA4K0+k=
 github.com/walteh/retab/v2 v2.1.0 h1:0VYReFnuldXd/pvCW4fqKVh4RcAXHa+Zj/DjOEVM/jA=
 github.com/walteh/retab/v2 v2.1.0/go.mod h1:OzlxHNaaDJRcc5CpiJwDXlHXvFvbJb6Y21b3T27fvL4=
 github.com/warpfork/go-wish v0.0.0-20220906213052-39a1cc7a02d0 h1:GDDkbFiaK8jsSDJfjId/PEGEShv6ugrt4kYsC5UIDaQ=

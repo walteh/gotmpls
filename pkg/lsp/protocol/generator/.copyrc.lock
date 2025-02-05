@@ -1,6 +1,11 @@
 {
 	"last_updated": "2025-01-22T06:32:25.490025-05:00",
-	"commit_hash": "e4266160ff24673eb4644707c219806e916f77e6",
+	"commit_hash": "33e624fee8130c31e07a78698cd87013bf884a8d",
+	"license": {
+		"spdx": "BSD-3-Clause",
+		"permalink": "https://api.github.com/repos/golang/tools/contents/LICENSE?ref=33e624fee8130c31e07a78698cd87013bf884a8d",
+		"name": "BSD-3-Clause License"
+	},
 	"branch": "master",
 	"coppied_files": {
 		"README.copy.md": {
@@ -18,11 +23,34 @@
 				"Line 89: Replaced 'tsjson.go' with 'tsjson.gen.go'"
 			]
 		},
+		"README.md": {
+			"file": "README.md",
+			"source": "github.com/golang/tools@33e624fee8130c31e07a78698cd87013bf884a8d",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/README.md",
+			"last_updated": "2025-02-05T14:57:19.049804Z",
+			"changes": [
+				"Line 91: Replaced 'tsprotocol.go' with 'tsprotocol.gen.go'",
+				"Line 130: Replaced 'tsprotocol.go' with 'tsprotocol.gen.go'",
+				"Line 88: Replaced 'tsserver.go' with 'tsserver.gen.go'",
+				"Line 129: Replaced 'tsserver.go' with 'tsserver.gen.go'",
+				"Line 88: Replaced 'tsclient.go' with 'tsclient.gen.go'",
+				"Line 128: Replaced 'tsclient.go' with 'tsclient.gen.go'",
+				"Line 90: Replaced 'tsjson.go' with 'tsjson.gen.go'"
+			],
+			"remote_hash": "d9BjNPvU2abDJL79MEBtBG3Pvan3UZfCaS2Jyq4mx-Y="
+		},
 		"generate.copy.go": {
 			"file": "generate.copy.go",
 			"source": "github.com/golang/tools@e4266160ff24673eb4644707c219806e916f77e6",
 			"permalink": "https://raw.githubusercontent.com/golang/tools/e4266160ff24673eb4644707c219806e916f77e6/gopls/internal/protocol/generate/generate.go",
 			"last_updated": "2025-01-29T19:02:45.085757Z"
+		},
+		"generate.go": {
+			"file": "generate.go",
+			"source": "github.com/golang/tools@33e624fee8130c31e07a78698cd87013bf884a8d",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/generate.go",
+			"last_updated": "2025-02-05T14:57:19.205404Z",
+			"remote_hash": "2JdXGEJaeS5zneYTwwsFAZuCVKx00AC-V6vjCin8RBc="
 		},
 		"main.copy.go": {
 			"file": "main.copy.go",
@@ -43,11 +71,38 @@
 				"Line 212: Replaced 'tsjson.go' with 'tsjson.gen.go'"
 			]
 		},
+		"main.go": {
+			"file": "main.go",
+			"source": "github.com/golang/tools@33e624fee8130c31e07a78698cd87013bf884a8d",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/main.go",
+			"last_updated": "2025-02-05T14:57:19.738573Z",
+			"changes": [
+				"Line 57: Replaced 'func processinline()' with 'func processinline_old()'",
+				"Line 106: Replaced 'golang.org/x/tools/internal/jsonrpc2' with 'github.com/creachadair/jrpc2'",
+				"Line 135: Replaced 'golang.org/x/tools/internal/jsonrpc2' with 'github.com/creachadair/jrpc2'",
+				"Line 114: Replaced 'reply jsonrpc2.Replier, r jsonrpc2.Request' with 'conn *jrpc2.Server, r *jrpc2.Request'",
+				"Line 145: Replaced 'reply jsonrpc2.Replier, r jsonrpc2.Request' with 'conn *jrpc2.Server, r *jrpc2.Request'",
+				"Line 115: Replaced 'recoverHandlerPanic(r.Method())' with 'recoverHandlerPanic(r.Method)'",
+				"Line 146: Replaced 'recoverHandlerPanic(r.Method())' with 'recoverHandlerPanic(r.Method)'",
+				"Line 189: Replaced 'tsprotocol.go' with 'tsprotocol.gen.go'",
+				"Line 156: Replaced 'tsserver.go' with 'tsserver.gen.go'",
+				"Line 125: Replaced 'tsclient.go' with 'tsclient.gen.go'",
+				"Line 213: Replaced 'tsjson.go' with 'tsjson.gen.go'"
+			],
+			"remote_hash": "oQkxcY9EE7agIaN4CNHp4MI47yq1-ePc1HXrG7jL11M="
+		},
 		"main_test.copy.go": {
 			"file": "main_test.copy.go",
 			"source": "github.com/golang/tools@e4266160ff24673eb4644707c219806e916f77e6",
 			"permalink": "https://raw.githubusercontent.com/golang/tools/e4266160ff24673eb4644707c219806e916f77e6/gopls/internal/protocol/generate/main_test.go",
 			"last_updated": "2025-01-29T19:02:45.700738Z"
+		},
+		"main_test.go": {
+			"file": "main_test.go",
+			"source": "github.com/golang/tools@33e624fee8130c31e07a78698cd87013bf884a8d",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/main_test.go",
+			"last_updated": "2025-02-05T14:57:19.88001Z",
+			"remote_hash": "n6V0-gG8ASe9JkotaZ-uC0xqfegKz_nm0ahw2dQEIYA="
 		},
 		"output.copy.go": {
 			"file": "output.copy.go",
@@ -67,11 +122,37 @@
 				"Line 21: Replaced 'tsclient.go' with 'tsclient.gen.go'"
 			]
 		},
+		"output.go": {
+			"file": "output.go",
+			"source": "github.com/golang/tools@33e624fee8130c31e07a78698cd87013bf884a8d",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/output.go",
+			"last_updated": "2025-02-05T14:57:20.250565Z",
+			"changes": [
+				"Line 95: Replaced 'func genCase(' with 'func genCase_old('",
+				"Line 137: Replaced 'func genFunc(' with 'func genFunc_old('",
+				"Line 108: Replaced 'UnmarshalJSON(r.Params(), \u0026params)' with 'UnmarshalJSON(r, \u0026params)'",
+				"Line 115: Replaced 'reply(ctx, ' with 'reply_fwd(ctx, conn, r,'",
+				"Line 117: Replaced 'reply(ctx, ' with 'reply_fwd(ctx, conn, r,'",
+				"Line 120: Replaced 'reply(ctx, ' with 'reply_fwd(ctx, conn, r,'",
+				"Line 109: Replaced 'sendParseError(ctx, reply,' with 'sendParseError(ctx, conn, r,'",
+				"Line 30: Replaced 'tsprotocol.go' with 'tsprotocol.gen.go'",
+				"Line 26: Replaced 'tsserver.go' with 'tsserver.gen.go'",
+				"Line 22: Replaced 'tsclient.go' with 'tsclient.gen.go'"
+			],
+			"remote_hash": "V1f0WgKrScTKp96yNxpkrUijGiuwOGiP-GXvOvvo_sE="
+		},
 		"tables.copy.go": {
 			"file": "tables.copy.go",
 			"source": "github.com/golang/tools@e4266160ff24673eb4644707c219806e916f77e6",
 			"permalink": "https://raw.githubusercontent.com/golang/tools/e4266160ff24673eb4644707c219806e916f77e6/gopls/internal/protocol/generate/tables.go",
 			"last_updated": "2025-01-29T19:02:46.313683Z"
+		},
+		"tables.go": {
+			"file": "tables.go",
+			"source": "github.com/golang/tools@33e624fee8130c31e07a78698cd87013bf884a8d",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/tables.go",
+			"last_updated": "2025-02-05T14:57:20.67305Z",
+			"remote_hash": "edkoYVCXe4FkN4zqEwSk7MSCNx4UvcAlOq9iGE3eu4I="
 		},
 		"typenames.copy.go": {
 			"file": "typenames.copy.go",
@@ -79,11 +160,25 @@
 			"permalink": "https://raw.githubusercontent.com/golang/tools/e4266160ff24673eb4644707c219806e916f77e6/gopls/internal/protocol/generate/typenames.go",
 			"last_updated": "2025-01-29T19:02:46.720969Z"
 		},
+		"typenames.go": {
+			"file": "typenames.go",
+			"source": "github.com/golang/tools@33e624fee8130c31e07a78698cd87013bf884a8d",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/typenames.go",
+			"last_updated": "2025-02-05T14:57:21.183593Z",
+			"remote_hash": "QClvq-sGoamlauujXGkso8OMsGOHDPgNvdssu4DuvS8="
+		},
 		"types.copy.go": {
 			"file": "types.copy.go",
 			"source": "github.com/golang/tools@e4266160ff24673eb4644707c219806e916f77e6",
 			"permalink": "https://raw.githubusercontent.com/golang/tools/e4266160ff24673eb4644707c219806e916f77e6/gopls/internal/protocol/generate/types.go",
 			"last_updated": "2025-01-29T19:02:47.028395Z"
+		},
+		"types.go": {
+			"file": "types.go",
+			"source": "github.com/golang/tools@33e624fee8130c31e07a78698cd87013bf884a8d",
+			"permalink": "https://raw.githubusercontent.com/golang/tools/33e624fee8130c31e07a78698cd87013bf884a8d/gopls/internal/protocol/generate/types.go",
+			"last_updated": "2025-02-05T14:57:22.023112Z",
+			"remote_hash": "pcFnzKfB_RxWYQWQRABQiM6Qvyg3dl_-payrYadflGw="
 		}
 	},
 	"generated_files": {},
@@ -148,8 +243,7 @@
 			],
 			"ignore_files": [
 				"*.txt"
-			],
-			"file_patterns": null
+			]
 		}
 	}
 }

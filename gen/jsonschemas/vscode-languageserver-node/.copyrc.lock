@@ -1,0 +1,38 @@
+{
+	"last_updated": "0001-01-01T00:00:00Z",
+	"commit_hash": "795aa54071f4f1e3ad7d95ba815fd286cfafab5e",
+	"license": {
+		"spdx": "MIT",
+		"permalink": "https://api.github.com/repos/microsoft/vscode-languageserver-node/contents/License.txt?ref=795aa54071f4f1e3ad7d95ba815fd286cfafab5e",
+		"name": "MIT License"
+	},
+	"branch": "tags/release/jsonrpc/9.0.0-next.6",
+	"coppied_files": {
+		"metaModel.json": {
+			"file": "metaModel.json",
+			"source": "github.com/microsoft/vscode-languageserver-node@795aa54071f4f1e3ad7d95ba815fd286cfafab5e",
+			"permalink": "https://raw.githubusercontent.com/microsoft/vscode-languageserver-node/795aa54071f4f1e3ad7d95ba815fd286cfafab5e/protocol/metaModel.json",
+			"last_updated": "2025-02-05T13:52:00.101936Z",
+			"remote_hash": "G6sBqyjGGGV1vkZo3IRJdRAmkFVjutDEMiqQapF4bJw="
+		},
+		"metaModel.schema.json": {
+			"file": "metaModel.schema.json",
+			"source": "github.com/microsoft/vscode-languageserver-node@795aa54071f4f1e3ad7d95ba815fd286cfafab5e",
+			"permalink": "https://raw.githubusercontent.com/microsoft/vscode-languageserver-node/795aa54071f4f1e3ad7d95ba815fd286cfafab5e/protocol/metaModel.schema.json",
+			"last_updated": "2025-02-05T13:52:00.239587Z",
+			"remote_hash": "6ohOKpjNn064fur6NjtDYKx0JFgpaByZgwGJ2qKavlY="
+		}
+	},
+	"generated_files": {},
+	"args": {
+		"src_repo": "github.com/microsoft/vscode-languageserver-node",
+		"src_ref": "tags/release/jsonrpc/9.0.0-next.6",
+		"src_path": "protocol",
+		"copy_args": {
+			"file_patterns": [
+				"**/metaModel.schema.json",
+				"**/metaModel.json"
+			]
+		}
+	}
+}

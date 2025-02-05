@@ -14,5 +14,5 @@ var (
 	Commit     = "cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba"
 	Repository = "github.com/microsoft/vscode"
 	Permalink  = "https://github.com/microsoft/vscode/archive/refs/tags/1.96.4.tar.gz"
-	Downloaded = "2025-01-29T15:49:29Z"
+	Downloaded = "2025-02-05T14:01:18Z"
 )

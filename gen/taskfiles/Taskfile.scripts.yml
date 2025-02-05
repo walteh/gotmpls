@@ -21,3 +21,7 @@ tasks:
     desc: run ./scripts/sync-go-files.sh
     cmds:
       - ./scripts/sync-go-files.sh {{.CLI_ARGS}}
+  truncate-test-logs:
+    desc: run ./scripts/truncate-test-logs.sh
+    cmds:
+      - ./scripts/truncate-test-logs.sh {{.CLI_ARGS}}

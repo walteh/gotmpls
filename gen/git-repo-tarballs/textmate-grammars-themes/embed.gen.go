@@ -14,5 +14,5 @@ var (
 	Commit     = "11c43d8d41eefac79c5314f63ded09ef17d83245"
 	Repository = "github.com/shikijs/textmate-grammars-themes"
 	Permalink  = "https://github.com/shikijs/textmate-grammars-themes/archive/11c43d8d41eefac79c5314f63ded09ef17d83245.tar.gz"
-	Downloaded = "2025-01-29T14:51:30Z"
+	Downloaded = "2025-02-05T14:01:15Z"
 )

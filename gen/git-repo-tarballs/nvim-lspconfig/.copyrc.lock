@@ -1,22 +1,25 @@
 {
-	"last_updated": "2025-01-22T06:32:28.31217-05:00",
+	"last_updated": "0001-01-01T00:00:00Z",
 	"commit_hash": "343ac34abc7ab53fae33357f915024aaacb76a3e",
+	"license": {
+		"spdx": "Apache-2.0",
+		"permalink": "https://api.github.com/repos/neovim/nvim-lspconfig/contents/LICENSE.md?ref=343ac34abc7ab53fae33357f915024aaacb76a3e",
+		"name": "Apache License 2.0"
+	},
 	"branch": "tags/v1.3.0",
 	"coppied_files": {
 		"nvim-lspconfig.tar.gz": {
 			"file": "nvim-lspconfig.tar.gz",
 			"source": "github.com/neovim/nvim-lspconfig@343ac34abc7ab53fae33357f915024aaacb76a3e",
 			"permalink": "https://github.com/neovim/nvim-lspconfig/archive/refs/tags/v1.3.0.tar.gz",
-			"last_updated": "2025-01-21T21:20:20.847011Z",
-			"changes": [
-				"generated embed.gen.go file"
-			]
+			"last_updated": "2025-02-05T14:01:12.990333Z",
+			"remote_hash": "lI_gc7jAwg0u1bmS0qEQUweQVuUiOAOEOJaPExDPV3c="
 		}
 	},
 	"generated_files": {
 		"embed.gen.go": {
 			"file": "embed.gen.go",
-			"last_updated": "2025-01-21T21:20:20.847011Z"
+			"last_updated": "2025-02-05T14:01:12.993083Z"
 		}
 	},
 	"args": {

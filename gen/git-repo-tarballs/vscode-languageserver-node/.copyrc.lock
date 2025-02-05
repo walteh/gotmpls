@@ -1,22 +1,25 @@
 {
-	"last_updated": "2025-01-22T06:32:31.840644-05:00",
+	"last_updated": "0001-01-01T00:00:00Z",
 	"commit_hash": "795aa54071f4f1e3ad7d95ba815fd286cfafab5e",
+	"license": {
+		"spdx": "MIT",
+		"permalink": "https://api.github.com/repos/microsoft/vscode-languageserver-node/contents/License.txt?ref=795aa54071f4f1e3ad7d95ba815fd286cfafab5e",
+		"name": "MIT License"
+	},
 	"branch": "tags/release/jsonrpc/9.0.0-next.6",
 	"coppied_files": {
 		"vscode-languageserver-node.tar.gz": {
 			"file": "vscode-languageserver-node.tar.gz",
 			"source": "github.com/microsoft/vscode-languageserver-node@795aa54071f4f1e3ad7d95ba815fd286cfafab5e",
 			"permalink": "https://github.com/microsoft/vscode-languageserver-node/archive/refs/tags/release/jsonrpc/9.0.0-next.6.tar.gz",
-			"last_updated": "2025-01-21T21:20:22.339014Z",
-			"changes": [
-				"generated embed.gen.go file"
-			]
+			"last_updated": "2025-02-05T14:01:15.026016Z",
+			"remote_hash": "F5aJMkecYgmWPl660B54lwCD_S5KBxC-d4d-dHxjFvM="
 		}
 	},
 	"generated_files": {
 		"embed.gen.go": {
 			"file": "embed.gen.go",
-			"last_updated": "2025-01-21T21:20:22.339014Z"
+			"last_updated": "2025-02-05T14:01:15.026342Z"
 		}
 	},
 	"args": {

@@ -31,7 +31,7 @@ tasks:
         generates:
             - "./gen/taskfiles/**/*"
 
-    local-setup-tools:
+    setup-tools-for-local:
         run: once
         deps: [generate-taskfiles]
         env:

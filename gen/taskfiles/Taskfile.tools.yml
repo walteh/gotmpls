@@ -57,14 +57,14 @@ tasks:
     desc: run retab - built from github.com/walteh/retab/v2/cmd/retab
     cmds:
       - ./scripts/run-tool.sh retab {{.CLI_ARGS}}
-  jsonschema-generate:
-    desc: run jsonschema-generate - built from github.com/a-h/generate
-    cmds:
-      - ./scripts/run-tool.sh jsonschema-generate {{.CLI_ARGS}}
   railroad:
     desc: run railroad - built from github.com/alecthomas/participle/v2/cmd/railroad
     cmds:
       - ./scripts/run-tool.sh railroad {{.CLI_ARGS}}
+  go-jsonschema:
+    desc: run go-jsonschema - built from github.com/atombender/go-jsonschema
+    cmds:
+      - ./scripts/run-tool.sh go-jsonschema {{.CLI_ARGS}}
   todos:
     desc: run todos - built from github.com/ianlewis/todos/internal/cmd/todos
     cmds:
@@ -73,7 +73,3 @@ tasks:
     desc: run copyrc - built from github.com/walteh/copyrc/cmd/copyrc
     cmds:
       - ./scripts/run-tool.sh copyrc {{.CLI_ARGS}}
-  participle:
-    desc: run participle - built from ./gen/participle
-    cmds:
-      - ./scripts/run-tool.sh participle {{.CLI_ARGS}}

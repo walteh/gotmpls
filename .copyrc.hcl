@@ -1,9 +1,10 @@
 copy {
 	source {
-		repo     = "github.com/golang/tools"
-		ref      = "master"
-		path     = "gopls/internal/protocol/generate"
-		ref_type = "branch"
+		repo             = "github.com/golang/tools"
+		ref              = "master"
+		path             = "gopls/internal/protocol/generate"
+		ref_type         = "branch"
+		license_override = "BSD-3-Clause"
 	}
 	destination {
 		path = "./pkg/lsp/protocol/generator"
@@ -141,12 +142,12 @@ copy {
 
 copy {
 	source {
-		repo = "github.com/microsoft/vscode"
-		ref  = "tags/1.96.4"
+		repo = "github.com/microsoft/vscode-languageserver-node"
+		ref  = "tags/release/jsonrpc/9.0.0-next.6"
 		path = "protocol"
 	}
 	destination {
-		path = "./gen/jsonschemas/vscode"
+		path = "./gen/jsonschemas/vscode-languageserver-node"
 	}
 	options {
 		file_patterns = [
