@@ -8,8 +8,8 @@ require (
 	github.com/k0kubun/pp/v3 v3.4.1
 	github.com/neovim/go-client v1.2.1
 	github.com/pmezard/go-difflib v1.0.0
-	github.com/rogpeppe/go-internal v1.9.0
-	github.com/rs/xid v1.5.0
+	github.com/rogpeppe/go-internal v1.13.1
+	github.com/rs/xid v1.6.0
 	github.com/rs/zerolog v1.33.0
 	github.com/sergi/go-diff v1.3.1
 	github.com/spf13/cobra v1.8.1
