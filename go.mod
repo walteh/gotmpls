@@ -5,6 +5,7 @@ go 1.24rc2
 require (
 	github.com/creachadair/jrpc2 v1.3.0
 	github.com/fatih/color v1.18.0
+	github.com/google/go-cmp v0.6.0
 	github.com/k0kubun/pp/v3 v3.4.1
 	github.com/neovim/go-client v1.2.1
 	github.com/pmezard/go-difflib v1.0.0
@@ -14,7 +15,6 @@ require (
 	github.com/sergi/go-diff v1.3.1
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.10.0
-	github.com/tj/assert v0.0.3
 	github.com/walteh/yaml v0.0.0-20240906221017-df4c3eb1fe66
 	gitlab.com/tozd/go/errors v0.10.0
 	golang.org/x/tools v0.29.0

@@ -1,5 +1,5 @@
 // 📦 originally copied by copyrc
-// 🔗 source: https://raw.githubusercontent.com/golang/tools/8e4c84189edf4f6d01107d2bca211e079539e472/gopls/internal/protocol/generate/types.go
+// 🔗 source: https://raw.githubusercontent.com/golang/tools/74b5526d8b9d1f5c1020b68fe44365f34071cf3f/gopls/internal/protocol/generate/types.go
 // 📝 license: BSD-3-Clause
 // ℹ️ see .copyrc.lock for more details
 

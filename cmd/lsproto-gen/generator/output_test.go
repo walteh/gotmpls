@@ -10,20 +10,45 @@ import (
 	"github.com/walteh/gotmpls/gen/jsonschema/go/vscodemetamodel"
 )
 
-func TestFileGenerator(t *testing.T) {
+func TestGenerateFiles(t *testing.T) {
 	testCases := []struct {
 		name            string
 		model           *vscodemetamodel.MetaModel
 		packageName     string
-		setupTypes      func(*FileGenerator)
+		setupTypes      func(*Generator)
 		wantContains    []string
 		wantNotContains []string
 	}{
 		{
-			name:        "basic_types",
-			model:       nil,
+			name: "basic_types",
+			model: &vscodemetamodel.MetaModel{
+				MetaData: vscodemetamodel.MetaData{
+					Version: "3.17.0",
+				},
+				Structures: []vscodemetamodel.Structure{
+					{
+						Name: "StringOrInt",
+						Properties: []vscodemetamodel.Property{
+							{
+								Name: "stringValue",
+								Type: &vscodemetamodel.StringLiteralType{
+									Kind:  "stringLiteral",
+									Value: "test",
+								},
+							},
+							{
+								Name: "intValue",
+								Type: &vscodemetamodel.IntegerLiteralType{
+									Kind:  "integerLiteral",
+									Value: 42,
+								},
+							},
+						},
+					},
+				},
+			},
 			packageName: "testpkg",
-			setupTypes: func(gen *FileGenerator) {
+			setupTypes: func(gen *Generator) {
 				// Add a simple union type
 				union := &vscodemetamodel.OrType{
 					Kind: "or",
@@ -62,10 +87,45 @@ func TestFileGenerator(t *testing.T) {
 			},
 		},
 		{
-			name:        "recursive_types",
-			model:       nil,
+			name: "recursive_types",
+			model: &vscodemetamodel.MetaModel{
+				MetaData: vscodemetamodel.MetaData{
+					Version: "3.17.0",
+				},
+				Structures: []vscodemetamodel.Structure{
+					{
+						Name: "Tree",
+						Properties: []vscodemetamodel.Property{
+							{
+								Name: "stringValue",
+								Type: &vscodemetamodel.StringLiteralType{
+									Kind:  "stringLiteral",
+									Value: "leaf",
+								},
+							},
+							{
+								Name: "children",
+								Type: &vscodemetamodel.MapType{
+									Kind: "map",
+									Key: &vscodemetamodel.StringLiteralType{
+										Kind:  "stringLiteral",
+										Value: "node",
+									},
+									Value: &vscodemetamodel.ArrayType{
+										Kind: "array",
+										Element: &vscodemetamodel.ReferenceType{
+											Kind: "reference",
+											Name: "Tree", // Reference to self
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 			packageName: "testpkg",
-			setupTypes: func(gen *FileGenerator) {
+			setupTypes: func(gen *Generator) {
 				// Create a recursive type (like a binary tree)
 				treeType := &vscodemetamodel.OrType{
 					Kind: "or",
@@ -112,7 +172,7 @@ func TestFileGenerator(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create generator
-			gen := NewFileGenerator(tc.model)
+			gen := NewGenerator(tc.model)
 
 			// Setup test types if needed
 			if tc.setupTypes != nil {
@@ -147,7 +207,35 @@ func TestFileGenerator(t *testing.T) {
 
 func TestGenerateTypesFile(t *testing.T) {
 	// Create a generator with some test types
-	gen := NewFileGenerator(nil)
+	model := &vscodemetamodel.MetaModel{
+		MetaData: vscodemetamodel.MetaData{
+			Version: "3.17.0",
+		},
+		Structures: []vscodemetamodel.Structure{
+			{
+				Name: "TestUnion",
+				Properties: []vscodemetamodel.Property{
+					{
+						Name: "value",
+						Type: &vscodemetamodel.OrType{
+							Kind: "or",
+							Items: []vscodemetamodel.OrTypeItemsElem{
+								&vscodemetamodel.StringLiteralType{
+									Kind:  "stringLiteral",
+									Value: "test",
+								},
+								&vscodemetamodel.IntegerLiteralType{
+									Kind:  "integerLiteral",
+									Value: 42,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	gen := NewGenerator(model)
 
 	// Add some test types
 	union := &vscodemetamodel.OrType{
@@ -183,8 +271,70 @@ func TestGenerateTypesFile(t *testing.T) {
 }
 
 func TestSortedTypes(t *testing.T) {
-	// Create a generator
-	gen := NewFileGenerator(nil)
+	// Create a generator with a model containing types with dependencies
+	model := &vscodemetamodel.MetaModel{
+		MetaData: vscodemetamodel.MetaData{
+			Version: "3.17.0",
+		},
+		Structures: []vscodemetamodel.Structure{
+			{
+				Name: "TestArray",
+				Properties: []vscodemetamodel.Property{
+					{
+						Name: "value",
+						Type: &vscodemetamodel.ArrayType{
+							Kind: "array",
+							Element: &vscodemetamodel.BaseType{
+								Kind: "base",
+								Name: vscodemetamodel.BaseTypesString,
+							},
+						},
+					},
+				},
+			},
+			{
+				Name: "TestMap",
+				Properties: []vscodemetamodel.Property{
+					{
+						Name: "value",
+						Type: &vscodemetamodel.MapType{
+							Kind: "map",
+							Key: &vscodemetamodel.BaseType{
+								Kind: "base",
+								Name: vscodemetamodel.BaseTypesString,
+							},
+							Value: &vscodemetamodel.BaseType{
+								Kind: "base",
+								Name: vscodemetamodel.BaseTypesInteger,
+							},
+						},
+					},
+				},
+			},
+			{
+				Name: "TestUnion",
+				Properties: []vscodemetamodel.Property{
+					{
+						Name: "value",
+						Type: &vscodemetamodel.OrType{
+							Kind: "or",
+							Items: []vscodemetamodel.OrTypeItemsElem{
+								&vscodemetamodel.ReferenceType{
+									Kind: "reference",
+									Name: "TestArray",
+								},
+								&vscodemetamodel.ReferenceType{
+									Kind: "reference",
+									Name: "TestMap",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	gen := NewGenerator(model)
 
 	// Create types with dependencies
 	arrayType := &vscodemetamodel.ArrayType{

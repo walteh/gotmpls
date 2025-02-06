@@ -13,20 +13,6 @@ import (
 	"gitlab.com/tozd/go/errors"
 )
 
-// FileGenerator handles generating Go files
-type FileGenerator struct {
-	namer *TypeNamer
-	model *vscodemetamodel.MetaModel
-}
-
-// NewFileGenerator creates a new file generator
-func NewFileGenerator(model *vscodemetamodel.MetaModel) *FileGenerator {
-	return &FileGenerator{
-		namer: NewTypeNamer(),
-		model: model,
-	}
-}
-
 // FileOutput represents a generated file
 type FileOutput struct {
 	Path     string // Relative path to write the file
@@ -34,7 +20,7 @@ type FileOutput struct {
 }
 
 // GenerateFiles generates all Go files for the types
-func (g *FileGenerator) GenerateFiles(ctx context.Context, packageName string) ([]FileOutput, error) {
+func (g *Generator) GenerateFiles(ctx context.Context, packageName string) ([]FileOutput, error) {
 	var files []FileOutput
 
 	// Generate types file
@@ -54,7 +40,7 @@ func (g *FileGenerator) GenerateFiles(ctx context.Context, packageName string) (
 }
 
 // generateTypesFile generates the main types file
-func (g *FileGenerator) generateTypesFile(ctx context.Context, packageName string) (FileOutput, error) {
+func (g *Generator) generateTypesFile(ctx context.Context, packageName string) (FileOutput, error) {
 	// Get all types in dependency order
 	types, err := g.getSortedTypes()
 	if err != nil {
@@ -114,7 +100,7 @@ import (
 }
 
 // getSortedTypes returns all types sorted by dependencies
-func (g *FileGenerator) getSortedTypes() ([]TypeInfo, error) {
+func (g *Generator) getSortedTypes() ([]TypeInfo, error) {
 	// Process enumerations first
 	for _, enumeration := range g.model.Enumerations {
 		// Create type info for the enumeration
@@ -202,7 +188,7 @@ func stringPtrToString(s *string) string {
 }
 
 // generateTypeDefinition generates the type definition
-func (g *FileGenerator) generateTypeDefinition(buf *bytes.Buffer, info TypeInfo) error {
+func (g *Generator) generateTypeDefinition(buf *bytes.Buffer, info TypeInfo) error {
 	// Skip built-in types
 	if info.IsBuiltin {
 		return nil
@@ -238,6 +224,40 @@ func (g *FileGenerator) generateTypeDefinition(buf *bytes.Buffer, info TypeInfo)
 				return nil
 			}
 		}
+
+		// Check if it's a request
+		for _, req := range g.model.Requests {
+			if stringPtrToString(req.TypeName) == info.Name {
+				// Generate request type
+				buf.WriteString(fmt.Sprintf("// %s\n", stringPtrToString(req.Documentation)))
+				buf.WriteString(fmt.Sprintf("type %s struct {\n", info.Name))
+
+				// Add params field if present
+				if req.Params != nil {
+					paramInfo, err := g.namer.GetTypeInfo(req.Params)
+					if err != nil {
+						return errors.Errorf("getting type info for params: %w", err)
+					}
+					buf.WriteString(fmt.Sprintf("\tParams %s `json:\"params\" yaml:\"params\" mapstructure:\"params\"`\n", paramInfo.GoType))
+				}
+
+				// Add result field if present
+				if req.Result != nil {
+					resultInfo, err := g.namer.GetTypeInfo(req.Result)
+					if err != nil {
+						return errors.Errorf("getting type info for result: %w", err)
+					}
+					buf.WriteString(fmt.Sprintf("\tResult %s `json:\"result\" yaml:\"result\" mapstructure:\"result\"`\n", resultInfo.GoType))
+				}
+
+				buf.WriteString("}\n\n")
+
+				// Generate method constant
+				buf.WriteString(fmt.Sprintf("const %sMethod = %q\n\n", info.Name, req.Method))
+				return nil
+			}
+		}
+
 		return errors.Errorf("type %s not found in structures or enumerations", info.Name)
 	}
 
@@ -296,9 +316,9 @@ type {{.Name}} struct {
 }
 
 // generateTypeMethods generates the type methods
-func (g *FileGenerator) generateTypeMethods(buf *bytes.Buffer, info TypeInfo) error {
-	// Skip non-union types
-	if !info.IsUnion {
+func (g *Generator) generateTypeMethods(buf *bytes.Buffer, info TypeInfo) error {
+	// Skip built-in types
+	if info.IsBuiltin {
 		return nil
 	}
 
@@ -334,8 +354,10 @@ func (g *FileGenerator) generateTypeMethods(buf *bytes.Buffer, info TypeInfo) er
 		data.Fields = append(data.Fields, field)
 	}
 
-	// Parse and execute template
-	tmpl := template.Must(template.New("methods").Parse(`
+	// Choose the appropriate template based on type
+	var tmplText string
+	if info.IsUnion {
+		tmplText = `
 // Validate ensures exactly one field is set
 func (t *{{.Name}}) Validate() error {
 	count := 0
@@ -376,8 +398,29 @@ func (t *{{.Name}}) UnmarshalJSON(data []byte) error {
 
 	return errors.New("data matches no expected type")
 }
-`))
+`
+	} else {
+		tmplText = `
+// MarshalJSON implements json.Marshaler
+func (t {{.Name}}) MarshalJSON() ([]byte, error) {
+	type Alias {{.Name}}
+	return json.Marshal(struct{ *Alias }{(*Alias)(&t)})
+}
 
+// UnmarshalJSON implements json.Unmarshaler
+func (t *{{.Name}}) UnmarshalJSON(data []byte) error {
+	type Alias {{.Name}}
+	aux := struct{ *Alias }{(*Alias)(t)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	return nil
+}
+`
+	}
+
+	// Parse and execute template
+	tmpl := template.Must(template.New("methods").Parse(tmplText))
 	if err := tmpl.Execute(buf, data); err != nil {
 		return errors.Errorf("executing template: %w", err)
 	}

@@ -213,7 +213,7 @@ func TestGenerateUnionTypeName(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			namer := NewTypeNamer()
-			name, err := namer.GenerateUnionTypeName(tc.union)
+			name, err := namer.GetTypeInfo(tc.union)
 
 			if tc.wantErr {
 				require.Error(t, err, "expected error")
@@ -382,6 +382,86 @@ func TestGetTypeInfo_TupleType(t *testing.T) {
 				"is builtin should match for case %s", tc.name)
 			assert.ElementsMatch(t, tc.want.Dependencies, got.Dependencies,
 				"dependencies should match for case %s", tc.name)
+		})
+	}
+}
+
+func TestGetTypeInfo_WorkspaceFolders(t *testing.T) {
+	// This test case is based on a real example from the LSP protocol
+	// See: workspace/workspaceFolders request in metaModel.json
+
+	namer := NewTypeNamer()
+
+	tests := []struct {
+		name        string
+		input       interface{}
+		wantInfo    TypeInfo
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name: "workspace_folders_result",
+			input: &vscodemetamodel.OrType{
+				Kind: "or",
+				Items: []vscodemetamodel.OrTypeItemsElem{
+					&vscodemetamodel.ArrayType{
+						Kind: "array",
+						Element: &vscodemetamodel.ReferenceType{
+							Kind: "reference",
+							Name: "WorkspaceFolder",
+						},
+					},
+					&vscodemetamodel.BaseType{
+						Kind: "base",
+						Name: vscodemetamodel.BaseTypesNull,
+					},
+				},
+			},
+			wantInfo: TypeInfo{
+				Name:          "OrWorkspaceFolderArrayNull",
+				GoType:        "OrWorkspaceFolderArrayNull",
+				IsPointer:     true,
+				IsBuiltin:     false,
+				IsNullable:    true,
+				IsUnion:       true,
+				Documentation: "Union type of: workspace folder array, null",
+				Dependencies:  []string{"WorkspaceFolder", "Null"},
+			},
+		},
+		{
+			name: "workspace_folder_type",
+			input: &vscodemetamodel.ReferenceType{
+				Kind: "reference",
+				Name: "WorkspaceFolder",
+			},
+			wantInfo: TypeInfo{
+				Name:          "WorkspaceFolder",
+				GoType:        "WorkspaceFolder",
+				IsPointer:     true,
+				IsBuiltin:     false,
+				IsNullable:    true,
+				Documentation: "Reference to WorkspaceFolder",
+				Dependencies:  []string{"WorkspaceFolder"},
+				IsRecursive:   true,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info, err := namer.GetTypeInfo(tt.input)
+
+			if tt.wantErr {
+				require.Error(t, err, "expected error")
+				if tt.errContains != "" {
+					assert.Contains(t, err.Error(), tt.errContains,
+						"error should contain expected message")
+				}
+				return
+			}
+
+			require.NoError(t, err, "getting type info should not fail")
+			assert.Equal(t, tt.wantInfo, info, "type info should match")
 		})
 	}
 }

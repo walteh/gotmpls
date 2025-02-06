@@ -42,7 +42,7 @@ func run(ctx context.Context) error {
 	}
 
 	// Create generator
-	gen := generator.NewFileGenerator(&model)
+	gen := generator.NewGenerator(&model)
 
 	// Generate files
 	files, err := gen.GenerateFiles(ctx, "lsproto")
@@ -95,4 +95,11 @@ func stringPtr(s string) *string {
 // Helper function to create bool pointers
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+type UnionType interface {
+	IsUnion()
+}
+
+type UnionType1 struct {
 }

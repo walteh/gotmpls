@@ -19,8 +19,11 @@
 			"file": "metaModel.schema.json",
 			"source": "github.com/microsoft/vscode-languageserver-node@795aa54071f4f1e3ad7d95ba815fd286cfafab5e",
 			"permalink": "https://raw.githubusercontent.com/microsoft/vscode-languageserver-node/795aa54071f4f1e3ad7d95ba815fd286cfafab5e/protocol/metaModel.schema.json",
-			"last_updated": "2025-02-05T20:17:39.515965Z",
-			"remote_hash": "6ohOKpjNn064fur6NjtDYKx0JFgpaByZgwGJ2qKavlY="
+			"last_updated": "2025-02-06T12:17:53.291466Z",
+			"changes": [
+				"Line 3: Replaced 'definitions\": {' with '$ref\": \"#/definitions/MetaModel\",\n  \"definitions\": {'"
+			],
+			"remote_hash": "gCZvYEoE7FTvFVmpA64P71dHDh3DVj3IZm3mtLbiZTw="
 		}
 	},
 	"generated_files": {},
@@ -29,6 +32,12 @@
 		"src_ref": "tags/release/jsonrpc/9.0.0-next.6",
 		"src_path": "protocol",
 		"copy_args": {
+			"replacements": [
+				{
+					"old": "definitions\": {",
+					"new": "$ref\": \"#/definitions/MetaModel\",\n  \"definitions\": {"
+				}
+			],
 			"file_patterns": [
 				"**/metaModel.schema.json",
 				"**/metaModel.json"

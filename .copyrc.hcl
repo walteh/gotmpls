@@ -154,5 +154,12 @@ copy {
 			"**/metaModel.schema.json",
 			"**/metaModel.json",
 		]
+		replacements = [
+			{
+				old = "definitions\": {"
+				new = "$ref\": \"#/definitions/MetaModel\",\n  \"definitions\": {"
+			},
+
+		]
 	}
-}
+	}

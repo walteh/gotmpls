@@ -22,117 +22,155 @@ func NewGenerator(model *vscodemetamodel.MetaModel) *Generator {
 	}
 }
 
+// GenerateRequestType generates Go code for a request type
+func (g *Generator) GenerateRequestType(_ context.Context, req *vscodemetamodel.Request) (string, error) {
+	if req == nil {
+		return "", errors.New("request is nil")
+	}
+
+	// Get type info for params and result
+	var paramsInfo, resultInfo TypeInfo
+	var err error
+
+	if req.Params != nil {
+		paramsInfo, err = g.namer.GetTypeInfo(req.Params)
+		if err != nil {
+			return "", errors.Errorf("getting params type info: %w", err)
+		}
+	}
+
+	if req.Result != nil {
+		resultInfo, err = g.namer.GetTypeInfo(req.Result)
+		if err != nil {
+			return "", errors.Errorf("getting result type info: %w", err)
+		}
+	}
+
+	// Build the type definition
+	var code string
+
+	// Add documentation
+	if req.Documentation != nil {
+		code += fmt.Sprintf("// %s\n", *req.Documentation)
+	}
+
+	// Add request type
+	code += fmt.Sprintf("type %s struct {\n", *req.TypeName)
+
+	// Add params field if present
+	if req.Params != nil {
+		code += fmt.Sprintf("\tParams %s `json:\"params\"`\n", paramsInfo.GoType)
+	}
+
+	// Add result field if present
+	if req.Result != nil {
+		code += fmt.Sprintf("\tResult %s `json:\"result,omitempty\"`\n", resultInfo.GoType)
+	}
+
+	code += "}\n\n"
+
+	// Add method constant
+	code += fmt.Sprintf("const %sMethod = %q\n", *req.TypeName, req.Method)
+
+	return code, nil
+}
+
 // GenerateUnionType generates a Go type for a union type
 func (g *Generator) GenerateUnionType(ctx context.Context, union *vscodemetamodel.OrType) (string, error) {
-	// Generate type name
-	typeName, err := g.namer.GenerateUnionTypeName(union)
+	// Get type info for the union
+	info, err := g.namer.GetTypeInfo(union)
 	if err != nil {
-		return "", errors.Errorf("generating type name: %w", err)
+		return "", errors.Errorf("getting union type info: %w", err)
 	}
 
 	// Start with type definition
-	code := fmt.Sprintf("// %s represents a union of multiple types\n", typeName)
-	code += fmt.Sprintf("type %s struct {\n", typeName)
+	code := fmt.Sprintf("// %s represents a union type\n", info.Name)
+	code += fmt.Sprintf("type %s struct {\n", info.Name)
 
 	// Add fields for each type in the union
 	for i, item := range union.Items {
-		info, err := g.namer.GetTypeInfo(item)
+		itemInfo, err := g.namer.GetTypeInfo(item)
 		if err != nil {
 			return "", errors.Errorf("getting type info for field %d: %w", i, err)
 		}
 
 		// Add field with comment
-		code += fmt.Sprintf("\t%sValue *%s // Option %c\n",
-			info.Name, info.GoType, rune('A'+i))
+		code += fmt.Sprintf("\t%sValue *%s `json:\"%s,omitempty\"` // Option %c\n",
+			itemInfo.Name, itemInfo.GoType, itemInfo.Name, rune('A'+i))
 	}
 
 	// Close type definition
 	code += "}\n\n"
 
 	// Add validation method
-	code += g.generateValidationMethod(typeName, union)
+	code += fmt.Sprintf(`// Validate ensures exactly one field is set
+func (t *%s) Validate() error {
+	count := 0
+`, info.Name)
+
+	for _, item := range union.Items {
+		itemInfo, err := g.namer.GetTypeInfo(item)
+		if err != nil {
+			return "", errors.Errorf("getting type info for validation: %w", err)
+		}
+		code += fmt.Sprintf("\tif t.%sValue != nil { count++ }\n", itemInfo.Name)
+	}
+
+	code += `	if count != 1 {
+		return errors.New("exactly one field must be set")
+	}
+	return nil
+}
+
+`
 
 	// Add marshal method
-	code += g.generateMarshalMethod(typeName, union)
+	code += fmt.Sprintf(`// MarshalJSON implements json.Marshaler
+func (t %s) MarshalJSON() ([]byte, error) {
+	if err := t.Validate(); err != nil {
+		return nil, err
+	}
+
+`, info.Name)
+
+	for _, item := range union.Items {
+		itemInfo, err := g.namer.GetTypeInfo(item)
+		if err != nil {
+			return "", errors.Errorf("getting type info for marshaling: %w", err)
+		}
+		code += fmt.Sprintf("\tif t.%sValue != nil { return json.Marshal(*t.%sValue) }\n",
+			itemInfo.Name, itemInfo.Name)
+	}
+
+	code += `	return nil, errors.New("no field set")
+}
+
+`
 
 	// Add unmarshal method
-	code += g.generateUnmarshalMethod(typeName, union)
+	code += fmt.Sprintf(`// UnmarshalJSON implements json.Unmarshaler
+func (t *%s) UnmarshalJSON(data []byte) error {
+`, info.Name)
 
-	return code, nil
-}
-
-// generateValidationMethod generates the Validate method for the union type
-func (g *Generator) generateValidationMethod(typeName string, union *vscodemetamodel.OrType) string {
-	code := fmt.Sprintf("// Validate ensures exactly one field is set\n")
-	code += fmt.Sprintf("func (t *%s) Validate() error {\n", typeName)
-	code += "\tcount := 0\n"
-
-	// Add count checks for each field
 	for _, item := range union.Items {
-		info, _ := g.namer.GetTypeInfo(item) // Error already checked in parent
-		code += fmt.Sprintf("\tif t.%sValue != nil { count++ }\n", info.Name)
-	}
-
-	code += "\tif count != 1 {\n"
-	code += "\t\treturn errors.New(\"exactly one field must be set\")\n"
-	code += "\t}\n"
-	code += "\treturn nil\n"
-	code += "}\n\n"
-
-	return code
-}
-
-// generateMarshalMethod generates the MarshalJSON method for the union type
-func (g *Generator) generateMarshalMethod(typeName string, union *vscodemetamodel.OrType) string {
-	code := fmt.Sprintf("// MarshalJSON implements json.Marshaler\n")
-	code += fmt.Sprintf("func (t %s) MarshalJSON() ([]byte, error) {\n", typeName)
-	code += "\tif err := t.Validate(); err != nil {\n"
-	code += "\t\treturn nil, err\n"
-	code += "\t}\n\n"
-
-	// Add marshal logic for each field
-	for _, item := range union.Items {
-		info, _ := g.namer.GetTypeInfo(item) // Error already checked in parent
-		code += fmt.Sprintf("\tif t.%sValue != nil { return json.Marshal(*t.%sValue) }\n",
-			info.Name, info.Name)
-	}
-
-	code += "\treturn nil, errors.New(\"no field set\")\n"
-	code += "}\n\n"
-
-	return code
-}
-
-// generateUnmarshalMethod generates the UnmarshalJSON method for the union type
-func (g *Generator) generateUnmarshalMethod(typeName string, union *vscodemetamodel.OrType) string {
-	code := fmt.Sprintf("// UnmarshalJSON implements json.Unmarshaler\n")
-	code += fmt.Sprintf("func (t *%s) UnmarshalJSON(data []byte) error {\n", typeName)
-
-	// Add unmarshal logic for each field
-	for _, item := range union.Items {
-		info, _ := g.namer.GetTypeInfo(item) // Error already checked in parent
-
-		// Special case for null
-		if info.Name == "Null" {
-			code += "\t// Try null\n"
-			code += "\tif string(data) == \"null\" {\n"
-			code += "\t\tt.NullValue = new(bool)\n"
-			code += "\t\t*t.NullValue = true\n"
-			code += "\t\treturn nil\n"
-			code += "\t}\n\n"
-			continue
+		itemInfo, err := g.namer.GetTypeInfo(item)
+		if err != nil {
+			return "", errors.Errorf("getting type info for unmarshaling: %w", err)
 		}
 
-		code += fmt.Sprintf("\t// Try %s\n", info.Name)
-		code += fmt.Sprintf("\tvar %c %s\n", 'v', info.GoType)
-		code += fmt.Sprintf("\tif err := json.Unmarshal(data, &%c); err == nil {\n", 'v')
-		code += fmt.Sprintf("\t\tt.%sValue = &%c\n", info.Name, 'v')
-		code += "\t\treturn nil\n"
-		code += "\t}\n\n"
+		code += fmt.Sprintf(`	// Try %s
+	var v %s
+	if err := json.Unmarshal(data, &v); err == nil {
+		t.%sValue = &v
+		return nil
 	}
 
-	code += "\treturn errors.New(\"data matches no expected type\")\n"
-	code += "}\n\n"
+`, itemInfo.Name, itemInfo.GoType, itemInfo.Name)
+	}
 
-	return code
+	code += `	return errors.New("data matches no expected type")
+}
+`
+
+	return code, nil
 }
