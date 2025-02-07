@@ -15,9 +15,8 @@ copy {
 				old = "func processinline()",
 				new = "func processinline_old()",
 			},
-			{
-				old = "golang.org/x/tools/internal/jsonrpc2",
-				new = "github.com/creachadair/jrpc2"
+			{ old = "golang.org/x/tools/internal/jsonrpc2",
+				new   = "github.com/creachadair/jrpc2"
 			},
 			{
 				old = "reply jsonrpc2.Replier, r jsonrpc2.Request",
@@ -162,4 +161,6 @@ copy {
 
 		]
 	}
-	}
+}
+
+

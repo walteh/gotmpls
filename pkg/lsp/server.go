@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -16,7 +17,6 @@ import (
 	"github.com/walteh/gotmpls/pkg/position"
 	"github.com/walteh/gotmpls/pkg/semtok"
 	"gitlab.com/tozd/go/errors"
-	"gopkg.in/fsnotify.v1"
 )
 
 // normalizeURI ensures consistent URI handling by removing the file:// prefix if present
@@ -34,8 +34,8 @@ type Server struct {
 	documents *DocumentManager
 
 	// Workspace management
-	workspace          string
-	workspaceFSWatcher *fsnotify.Watcher
+	workspace string
+	// workspaceFSWatcher *fsnotify.Watcher
 
 	// Server state
 	initialized bool
@@ -111,6 +111,7 @@ func (s *Server) Exit(ctx context.Context) error {
 }
 
 func (s *Server) Initialize(ctx context.Context, params *protocol.ParamInitialize) (*protocol.InitializeResult, error) {
+	fmt.Printf("Initializing server\n")
 	logger := zerolog.Ctx(ctx)
 	logger.Debug().Msg("initializing server")
 
@@ -146,6 +147,7 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.ParamInitializ
 }
 
 func (s *Server) Initialized(ctx context.Context, params *protocol.InitializedParams) error {
+	fmt.Printf("Initialized server - yo \n")
 	logger := zerolog.Ctx(ctx)
 	logger.Debug().Msg("server initialized")
 

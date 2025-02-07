@@ -36,7 +36,8 @@
 			"walteh.retab-vscode",
 			"microsoft-dciborow.align-bicep",
 			"mortenson.go-template-transpiler-extension",
-			"casualjim.gotemplate"
+			"casualjim.gotemplate",
+			"aykutsarac.jsoncrack-vscode"
 		]
 	},
 	"settings": {
@@ -169,11 +170,25 @@
 		"[proto]": {
 			"editor.defaultFormatter": "walteh.retab-vscode"
 		},
+		"[typescript]": {
+			"editor.defaultFormatter": "esbenp.prettier-vscode"
+		},
+		"[typescriptreact]": {
+			"editor.defaultFormatter": "esbenp.prettier-vscode"
+		},
+		"[javascript]": {
+			"editor.defaultFormatter": "esbenp.prettier-vscode"
+		},
+		"[javascriptreact]": {
+			"editor.defaultFormatter": "esbenp.prettier-vscode"
+		},
+
 		//===========================================
 		// SVG Settings
 		//===========================================
 		"svg.preview.background": "transparent",
 		"align-bicep.disallowed-language-ids": ["terraform", "go"],
-		"dockerfile-tidy.formatOnSave": true
+		"dockerfile-tidy.formatOnSave": true,
+		"retab.use_wasm": false
 	}
 }

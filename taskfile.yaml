@@ -17,12 +17,7 @@ includes:
 tasks:
     generate-taskfiles:
         run: once
-        env:
-            {
-                OUTPUT_DIR: "./out",
-                SCRIPTS_DIR: "./scripts",
-                TASKFILE_OUTPUT_DIR: "./gen/taskfiles",
-            }
+        env: { OUTPUT_DIR: "./out", SCRIPTS_DIR: "./scripts", TASKFILE_OUTPUT_DIR: "./gen/taskfiles" }
         cmds:
             - ./scripts/setup-tools-for-local.sh --generate-taskfiles
         sources:
@@ -51,26 +46,6 @@ tasks:
     install-executables:
         cmds:
             - ./go install ./cmd/gotmpls
-
-    package-extension:
-        dir: code-extension
-        cmds:
-            - rm -rf node_modules
-            - rm -rf out
-            - bun install
-            - bun run package
-            - mv ./retab-*.vsix ~/Downloads
-            - open https://marketplace.visualstudio.com/manage/publishers/walteh
-
-    rebuild-extension:
-        deps:
-            - install-executables
-        dir: code-extension
-        cmds:
-            - rm -rf node_modules
-            - rm -rf out
-            - bun install
-            - bun run build
 
     jsonschema-generate:
         run: once
@@ -108,12 +83,7 @@ tasks:
             - ./go generate ./pkg/lsp/protocol/generator
 
     go-mod-tidy:
-        env:
-            {
-                GOPROXY: https://proxy.golang.org,
-                GOSUMDB: sum.golang.org,
-                GOPRIVATE: github.com/walteh,
-            }
+        env: { GOPROXY: https://proxy.golang.org, GOSUMDB: sum.golang.org, GOPRIVATE: github.com/walteh }
         cmds:
             - for: { var: GO_MODULES }
               cmd: |
@@ -121,11 +91,49 @@ tasks:
 
     go-mod-upgrade:
         run: once
-        env:
-            {
-                GOPROXY: https://proxy.golang.org,
-                GOSUMDB: sum.golang.org,
-                GOPRIVATE: github.com/walteh,
-            }
+        env: { GOPROXY: https://proxy.golang.org, GOSUMDB: sum.golang.org, GOPRIVATE: github.com/walteh }
         cmds:
-            - .go tool go-mod-upgrade --force
+            - ./go tool go-mod-upgrade --force
+
+    refresh-extension-go:
+        dir: code-extension
+        cmds:
+            - rm -rf out
+            - mkdir -p out
+            - task: wasm
+            - bun install
+
+    # not really a huge size difference in the .vsix file, and its way slower to build
+    refresh-extension-tinygo:
+        dir: code-extension
+        cmds:
+            - rm -rf out
+            - mkdir -p out
+            - task: wasm-tinygo
+            - bun install
+
+    rebuild-extension:
+        dir: code-extension
+        cmds:
+            - task: refresh-extension-go
+            - bun run build
+
+    package-extension:
+        dir: code-extension
+        cmds:
+            - task: refresh-extension-go
+            - bun run package
+            - mv ./gotmpls-*.vsix ~/Downloads
+            - open https://marketplace.visualstudio.com/manage/publishers/walteh
+
+    wasm:
+        desc: Build WASM module
+        cmds:
+            - GOOS=js GOARCH=wasm go build -o code-extension/out/gotmpls.wasm ./cmd/gotmpls-wasm
+            - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" code-extension/out/wasm_exec.js
+
+    wasm-tinygo:
+        desc: Build WASM module with TinyGo
+        cmds:
+            - GOOS=js GOARCH=wasm tinygo build -o ./code-extension/out/gotmpls.tinygo.wasm ./cmd/gotmpls-wasm
+            - cp "$(tinygo env TINYGOROOT)/targets/wasm_exec.js" ./code-extension/out/wasm_exec.tinygo.js
