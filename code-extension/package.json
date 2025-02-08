@@ -12,6 +12,7 @@
 		"Programming Languages",
 		"Linters"
 	],
+	"type": "module",
 	"activationEvents": [
 		"onLanguage:gotmpl"
 	],
@@ -85,6 +86,7 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.20.0",
+		"@types/eslint-plugin-security": "^3.0.0",
 		"@types/node": "^16.18.34",
 		"@types/vscode": "^1.96.0",
 		"@typescript-eslint/eslint-plugin": "^8.23.0",
@@ -92,6 +94,7 @@
 		"bun-types": "latest",
 		"eslint": "^9.20.0",
 		"eslint-import-resolver-typescript": "^3.7.0",
+		"eslint-plugin-functional": "^8.0.0",
 		"eslint-plugin-import": "^2.31.0",
 		"eslint-plugin-prettier": "^5.2.3",
 		"eslint-plugin-security": "^3.0.1",
