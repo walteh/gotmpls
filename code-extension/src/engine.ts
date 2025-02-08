@@ -21,7 +21,7 @@
 
 import * as vscode from "vscode";
 
-import { LanguageClient, LanguageClientOptions, MessageTransports } from "vscode-languageclient/node";
+import { LanguageClient, LanguageClientOptions, StreamInfo } from "vscode-languageclient/node";
 
 // 🔧 Engine type enum
 export enum GotmplsEngineType {
@@ -88,7 +88,7 @@ export abstract class BaseGotmplsEngine implements GotmplsEngine {
 	}
 
 	abstract initialize(context: vscode.ExtensionContext, outputChannel: vscode.OutputChannel): Promise<void>;
-	abstract createTransport(context: vscode.ExtensionContext): Promise<MessageTransports>;
+	abstract createTransport(context: vscode.ExtensionContext): Promise<StreamInfo>;
 	abstract getVersion(context: vscode.ExtensionContext): Promise<string>;
 
 	/**

@@ -1,7 +1,6 @@
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 import * as tsParser from "@typescript-eslint/parser";
 import type { Linter } from "eslint";
-import functional from "eslint-plugin-functional";
 import prettierPlugin from "eslint-plugin-prettier";
 import securityPlugin from "eslint-plugin-security";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
@@ -33,8 +32,8 @@ export default [
 			security: securityPlugin,
 		},
 	},
-	// @ts-expect-error
-	(await import("eslint-plugin-functional")).default.configs.all,
+	// // @ts-expect-error
+	// (await import("eslint-plugin-functional")).default.configs.lite,
 	{
 		plugins: {
 			"simple-import-sort": simpleImportSort,

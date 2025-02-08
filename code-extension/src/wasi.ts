@@ -18,19 +18,19 @@ import * as path from "path";
 
 import * as vscode from "vscode";
 
-import { Wasm, WasmPseudoterminal } from "@vscode/wasm-wasi/v1";
 import {
-	DataCallback,
-	Disposable,
-	Event,
-	Message,
-	MessageReader,
-	MessageTransports,
-	MessageWriter,
-	PartialMessageInfo,
-} from "vscode-languageclient/node";
+	Readable,
+	StdioPipeInDescriptor,
+	StdioPipeOutDescriptor,
+	Wasm,
+	WasmPseudoterminal,
+	Writable,
+} from "@vscode/wasm-wasi/v1";
+import { StreamInfo } from "vscode-languageclient/node";
 
 import { BaseGotmplsEngine, GotmplsEngineType } from "./engine";
+
+import { readable, writable } from "wasm_streams";
 
 // WASI module interface
 declare global {
@@ -41,155 +41,59 @@ declare global {
 	}
 }
 
-/**
- * Custom message reader for WASI communication
- */
-class WasiMessageReader implements MessageReader {
-	private readonly emitter = new vscode.EventEmitter<Message>();
-	private pty: WasmPseudoterminal | undefined;
+// /**
+//  * Converts a WASI Writable to a Node WritableStream
+//  * 📝 TODO: Consider adding error handling and backpressure support
+//  */
+// class WasiToNodeWritableStream extends NodeWritable {
+// 	constructor(wasiWritable: Writable) {
+// 		super({
+// 			write(chunk: any, encoding: BufferEncoding, callback: (error?: Error | null) => void) {
+// 				// chunk is a buffer, convert to utf-8
+// 				const utf8Chunk = new TextEncoder().encode(chunk);
+// 				console.log("writing to wasi", utf8Chunk);
+// 				return wasiWritable.write(utf8Chunk);
+// 			},
+// 			defaultEncoding: "utf-8",
+// 			highWaterMark: 1024,
+// 			decodeStrings: false,
+// 			emitClose: true,
+// 		});
+// 	}
+// }
 
-	constructor() {
-		// Initialize
-	}
-
-	public setPty(pty: WasmPseudoterminal) {
-		this.pty = pty;
-		// Handle both JSON and non-JSON data
-		let buffer = "";
-		let contentLength: number | undefined;
-
-		pty.onDidWrite((data: string) => {
-			console.log("Raw stdout (debug):", data);
-
-			// Append to buffer
-			buffer += data;
-
-			// Process complete messages
-			while (true) {
-				// If we don't have a content length yet, try to parse headers
-				if (contentLength === undefined) {
-					const headerMatch = buffer.match(/Content-Length: (\d+)\r\n\r\n/);
-					if (!headerMatch) break;
-
-					contentLength = parseInt(headerMatch[1], 10);
-					buffer = buffer.substring(headerMatch[0].length);
-				}
-
-				// If we have a content length, try to read a message
-				if (contentLength !== undefined && buffer.length >= contentLength) {
-					const message = buffer.substring(0, contentLength);
-					buffer = buffer.substring(contentLength);
-					contentLength = undefined;
-
-					try {
-						const parsed = JSON.parse(message);
-						console.log("Parsed LSP message:", parsed);
-						this.emitter.fire(parsed);
-					} catch (err) {
-						console.error("Failed to parse LSP message:", err);
-					}
-				} else {
-					break;
-				}
-			}
-		});
-	}
-
-	public get onError(): Event<Error> {
-		return new vscode.EventEmitter<Error>().event;
-	}
-
-	public get onClose(): Event<void> {
-		return new vscode.EventEmitter<void>().event;
-	}
-
-	public get onPartialMessage(): Event<PartialMessageInfo> {
-		return new vscode.EventEmitter<PartialMessageInfo>().event;
-	}
-
-	public listen(callback: DataCallback): Disposable {
-		return this.emitter.event(callback);
-	}
-
-	public dispose(): void {
-		this.emitter.dispose();
-	}
-}
-
-/**
- * Custom message writer for WASI communication
- */
-class WasiMessageWriter implements MessageWriter {
-	private readonly errorEmitter = new vscode.EventEmitter<[Error, Message | undefined, number | undefined]>();
-	private readonly closeEmitter = new vscode.EventEmitter<void>();
-	private pty: WasmPseudoterminal | undefined;
-
-	constructor() {
-		// Initialize
-	}
-
-	public setPty(pty: WasmPseudoterminal) {
-		this.pty = pty;
-	}
-
-	public get onError(): Event<[Error, Message | undefined, number | undefined]> {
-		return this.errorEmitter.event;
-	}
-
-	public get onClose(): Event<void> {
-		return this.closeEmitter.event;
-	}
-
-	public async write(msg: Message): Promise<void> {
-		if (!this.pty) {
-			return Promise.reject(new Error("No PTY available"));
-		}
-
-		try {
-			// Format as LSP message with Content-Length header
-			const msgStr = JSON.stringify(msg);
-			const data = `Content-Length: ${Buffer.byteLength(msgStr, "utf8")}\r\n\r\n${msgStr}`;
-			console.log("Raw stdin (formatted LSP):", data);
-			this.pty.write(data);
-			return Promise.resolve();
-		} catch (err) {
-			const error = err instanceof Error ? err : new Error(String(err));
-			this.errorEmitter.fire([error, msg, undefined]);
-			return Promise.reject(error);
-		}
-	}
-
-	public end(): void {
-		this.closeEmitter.fire();
-	}
-
-	public dispose(): void {
-		this.errorEmitter.dispose();
-		this.closeEmitter.dispose();
-	}
-}
+// /**
+//  * Converts a WASI Readable to a Node ReadableStream
+//  * 📝 TODO: Consider adding error handling and buffering support
+//  */
+// class WasiToNodeReadableStream extends NodeReadable {
+// 	constructor(wasiReadable: Readable) {
+// 		super({
+// 			read(size) {
+// 				wasiReadable.onData((chunk) => {
+// 					console.log("reading from wasi", new TextDecoder().decode(chunk));
+// 					this.push(chunk);
+// 				});
+// 			},
+// 		});
+// 	}
+// }
 
 export class WasiEngine extends BaseGotmplsEngine {
 	private wasi: Wasm | null = null;
-	private reader: WasiMessageReader;
-	private writer: WasiMessageWriter;
-	private inputPty: WasmPseudoterminal | undefined;
-	private outputPty: WasmPseudoterminal | undefined;
+	private reader: Readable | null = null;
+	private writer: Writable | null = null;
 	private debugPty: WasmPseudoterminal | undefined; // Keep PTY for debug output
 
 	constructor(outputChannel: vscode.OutputChannel) {
 		super(GotmplsEngineType.WASI);
 		this.outputChannel = outputChannel;
-
-		// Create reader and writer
-		this.reader = new WasiMessageReader();
-		this.writer = new WasiMessageWriter();
 	}
 
-	async createTransport(context: vscode.ExtensionContext): Promise<MessageTransports> {
+	async createTransport(context: vscode.ExtensionContext): Promise<StreamInfo> {
 		return {
-			reader: this.reader,
-			writer: this.writer,
+			reader: readable(this.reader!),
+			writer: writable(this.writer!),
 		};
 	}
 
@@ -210,8 +114,6 @@ export class WasiEngine extends BaseGotmplsEngine {
 			this.log("🏗️  Creating PTYs...");
 
 			// Create separate PTYs for LSP communication and debug
-			this.inputPty = wasm.createPseudoterminal(); // For client -> server
-			this.outputPty = wasm.createPseudoterminal(); // For server -> client
 			this.debugPty = wasm.createPseudoterminal(); // For debug output
 			this.log("✅ Created PTYs for LSP communication and debug");
 
@@ -222,14 +124,13 @@ export class WasiEngine extends BaseGotmplsEngine {
 				pty: this.debugPty as unknown as vscode.Pseudoterminal,
 			});
 
+			const stdErr = this.wasi.createReadable();
+
 			// Add verbose debug output handler
-			this.debugPty.onDidWrite((data: string) => {
-				// Log raw data with special characters visible
-				console.log("Debug raw data:", JSON.stringify(data));
-				// Log to extension output
-				this.log(`[Debug] ${data.trim()}`);
-				// Write to debug terminal
-				debugTerminal.sendText(data, false);
+			stdErr.onData((data: Uint8Array<ArrayBufferLike>) => {
+				// parse the data as utf-8
+				const str = new TextDecoder().decode(data);
+				this.log(`[wasi-stderr] ${str}`);
 			});
 
 			// Load the WASI module
@@ -242,6 +143,24 @@ export class WasiEngine extends BaseGotmplsEngine {
 			const module = await WebAssembly.compile(wasmBits);
 			this.log("✅ WASI module compiled successfully");
 
+			this.writer = this.wasi.createWritable();
+			this.reader = this.wasi.createReadable();
+
+			const writeToServerPipe: StdioPipeInDescriptor = {
+				kind: "pipeIn",
+				pipe: this.writer,
+			};
+
+			const readFromServerPipe: StdioPipeOutDescriptor = {
+				kind: "pipeOut",
+				pipe: this.reader,
+			};
+
+			const stdErrPipe: StdioPipeOutDescriptor = {
+				kind: "pipeOut",
+				pipe: stdErr,
+			};
+
 			// Create WASI process with split stdio
 			const process = await this.wasi.createProcess("gotmpls", module, {
 				args: ["serve-lsp"],
@@ -251,16 +170,16 @@ export class WasiEngine extends BaseGotmplsEngine {
 					RUST_LOG: "debug",
 				},
 				stdio: {
-					in: this.inputPty.stdio.in, // Client -> Server
-					out: this.outputPty.stdio.out, // Server -> Client
-					err: this.debugPty.stdio.out, // Server ERR -> Debug PTY
+					in: writeToServerPipe, // Client -> Server
+					out: readFromServerPipe, // Server -> Client
+					err: stdErrPipe, // Server ERR -> Debug PTY
 				},
 			});
 			this.log("✅ WASI process created successfully");
 
 			// Set up reader and writer with their respective PTYs
-			this.writer.setPty(this.inputPty); // Client writes to input PTY
-			this.reader.setPty(this.outputPty); // Client reads from output PTY
+			// this.writer.setPty(this.debugPty); // Client writes to input PTY
+			// this.reader.setPty(this.outputPty); // Client reads from output PTY
 			this.log("✅ PTY communication channels configured");
 
 			// Show the debug terminal

@@ -1,20 +1,24 @@
 {
 	"name": "gotmpls",
 	"displayName": "gotmpls",
-	"description": "a language server for template files",
+	"description": "Go template language server",
 	"version": "0.0.1",
 	"publisher": "walteh",
 	"icon": "icon.png",
 	"engines": {
-		"vscode": "^1.74.0"
+		"vscode": "^1.96.0"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/walteh/gotmpls.git"
 	},
 	"categories": [
-		"Programming Languages",
-		"Linters"
+		"Programming Languages"
 	],
-	"type": "module",
 	"activationEvents": [
-		"onLanguage:gotmpl"
+		"onLanguage:gotmpls",
+		"onLanguage:gotmpl",
+		"onLanguage:gotemplate"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -102,14 +106,15 @@
 		"eslint-plugin-unused-imports": "^4.1.4",
 		"jiti": "^2.4.2",
 		"prettier": "^3.4.2",
-		"typescript-eslint": "^8.23.0"
+		"typescript-eslint": "^8.23.0",
+		"pratica": "^2.3.0",
+		"@vscode/vsce": "^3.2.2"
 	},
 	"trustedDependencies": [
 		"bun-types"
 	],
 	"dependencies": {
 		"@vscode/wasm-wasi": "^1.0.1",
-		"@vscode/vsce": "latest",
 		"vscode-languageclient": "^9.0.1"
 	}
 }

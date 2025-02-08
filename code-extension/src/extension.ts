@@ -25,7 +25,7 @@
 import * as vscode from "vscode";
 
 import { CLIEngine } from "./cli";
-import { getConfig,GotmplsEngine, GotmplsEngineType } from "./engine";
+import { getConfig, GotmplsEngine, GotmplsEngineType } from "./engine";
 import { WasiEngine } from "./wasi";
 import { WasmEngine } from "./wasm";
 
@@ -44,6 +44,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		// Create engine instance based on configuration
 		currentEngine = createEngine(config.engine, outputChannel);
 		outputChannel.appendLine(`📦 Using ${config.engine} engine`);
+
+		console.log("hi");
 
 		// Initialize engine
 		await currentEngine.initialize(context, outputChannel);
@@ -73,14 +75,23 @@ export function deactivate(context: vscode.ExtensionContext): Thenable<void> | u
 	return currentEngine.stopServer(context);
 }
 
+var wasiEngine: WasiEngine | undefined;
+var wasmEngine: WasmEngine | undefined;
+
 function createEngine(type: GotmplsEngineType, outputChannel: vscode.OutputChannel): GotmplsEngine {
 	switch (type) {
 		case GotmplsEngineType.CLI:
 			return new CLIEngine();
 		case GotmplsEngineType.WASM:
-			return new WasmEngine(outputChannel);
+			if (!wasmEngine) {
+				wasmEngine = new WasmEngine(outputChannel);
+			}
+			return wasmEngine;
 		case GotmplsEngineType.WASI:
-			return new WasiEngine(outputChannel);
+			if (!wasiEngine) {
+				wasiEngine = new WasiEngine(outputChannel);
+			}
+			return wasiEngine;
 		default:
 			throw new Error(`Unknown engine type: ${type}`);
 	}

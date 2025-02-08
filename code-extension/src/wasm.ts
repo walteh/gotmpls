@@ -32,9 +32,9 @@ import {
 	Event,
 	Message,
 	MessageReader,
-	MessageTransports,
 	MessageWriter,
 	PartialMessageInfo,
+	StreamInfo,
 } from "vscode-languageclient/node";
 
 import { BaseGotmplsEngine, GotmplsEngineType } from "@src/engine";
@@ -222,7 +222,7 @@ export class WasmEngine extends BaseGotmplsEngine {
 		this.writer.listen(this.connection);
 	}
 
-	async createTransport(context: vscode.ExtensionContext): Promise<MessageTransports> {
+	async createTransport(context: vscode.ExtensionContext): Promise<StreamInfo> {
 		return {
 			reader: this.reader,
 			writer: this.writer,
@@ -325,22 +325,4 @@ export class WasmEngine extends BaseGotmplsEngine {
 		const extension = vscode.extensions.getExtension("walteh.gotmpls");
 		return extension?.packageJSON.version || "unknown";
 	}
-}
-
-// TODO: Add WASM utility functions
-/**
- * Loads the WASM binary and initializes the runtime
- * @param context VS Code extension context
- */
-async function loadWasmModule(context: vscode.ExtensionContext): Promise<void> {
-	// TODO: Implement WASM loading
-	throw new Error("Not implemented");
-}
-
-/**
- * Creates a memory-efficient communication channel between VS Code and WASM
- */
-function createWasmChannel(): void {
-	// TODO: Implement WASM communication channel
-	throw new Error("Not implemented");
 }
