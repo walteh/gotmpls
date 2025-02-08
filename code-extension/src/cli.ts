@@ -15,20 +15,14 @@
  * ```
  */
 
-import { spawn } from "child_process";
-import { exec } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import { exec, spawn } from "child_process";
 import { promisify } from "util";
+
 import * as vscode from "vscode";
-import {
-	createMessageConnection,
-	IPCMessageReader,
-	IPCMessageWriter,
-	LanguageClient,
-	MessageTransports,
-	StreamInfo,
-} from "vscode-languageclient/node";
+
+import { IPCMessageReader, IPCMessageWriter, MessageTransports } from "vscode-languageclient/node";
 
 import { BaseGotmplsEngine, getConfig, GotmplsEngineType } from "./engine";
 

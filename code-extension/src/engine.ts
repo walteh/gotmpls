@@ -19,15 +19,9 @@
  * ```
  */
 
-import * as path from "path";
 import * as vscode from "vscode";
-import {
-	LanguageClient,
-	LanguageClientOptions,
-	MessageTransports,
-	ServerOptions,
-	TransportKind,
-} from "vscode-languageclient/node";
+
+import { LanguageClient, LanguageClientOptions, MessageTransports } from "vscode-languageclient/node";
 
 // 🔧 Engine type enum
 export enum GotmplsEngineType {

@@ -21,17 +21,15 @@
  * - [ ] Implement performance monitoring
  */
 
-import { EventEmitter } from "events";
 import * as fs from "fs";
 import * as path from "path";
+
 import * as vscode from "vscode";
+
 import {
-	AbstractMessageReader,
-	AbstractMessageWriter,
 	DataCallback,
 	Disposable,
 	Event,
-	LanguageClient,
 	Message,
 	MessageReader,
 	MessageTransports,
@@ -39,7 +37,7 @@ import {
 	PartialMessageInfo,
 } from "vscode-languageclient/node";
 
-import { BaseGotmplsEngine, GotmplsEngineType } from "./engine";
+import { BaseGotmplsEngine, GotmplsEngineType } from "@src/engine";
 
 // Type definitions for callbacks
 type ErrorCallback = (error: [Error, Message | undefined, number | undefined]) => void;

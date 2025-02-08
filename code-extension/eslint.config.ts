@@ -1,10 +1,9 @@
-import * as pluginJs from "@eslint/js";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 import * as tsParser from "@typescript-eslint/parser";
 import type { Linter } from "eslint";
 import * as prettierPlugin from "eslint-plugin-prettier";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
-import * as globals from "globals";
+import importPlugin from "eslint-plugin-unused-imports";
 
 export default [
 	{
@@ -30,6 +29,7 @@ export default [
 	{
 		plugins: {
 			"simple-import-sort": simpleImportSort,
+			"unused-imports": importPlugin,
 		},
 		rules: {
 			"simple-import-sort/imports": [
@@ -38,22 +38,35 @@ export default [
 					groups: [
 						// Side effect imports.
 						["^\\u0000"],
+						// builtins
+						["^fs$", "^path$", "^child_process$", "^util$"],
 						// bun builtins prefixed with `bun:`.
 						["^bun:"],
 						// node builtins prefixed with `node:`.
 						["^node:"],
-						// vscode builtins prefixed with `vscode:`.
-						["^vscode:"],
+						// vscode builtins prefixed with `vscode`.
+						["^vscode$"],
 						// Packages.
-						["^@?\\w"],
+						["vscode"],
 						// Absolute imports and other imports such as Vue-style `@/foo`.
-						["^"],
+						["\S"],
 						// Relative imports.
-						["^\\."],
+						["^\\.", "^@src/"],
 					],
 				},
 			],
 			"simple-import-sort/exports": "error",
+			"no-unused-vars": "off", // or "@typescript-eslint/no-unused-vars": "off",
+			"unused-imports/no-unused-imports": "error",
+			"unused-imports/no-unused-vars": [
+				"warn",
+				{
+					vars: "all",
+					varsIgnorePattern: "^_",
+					args: "after-used",
+					argsIgnorePattern: "^_",
+				},
+			],
 		},
 	},
 

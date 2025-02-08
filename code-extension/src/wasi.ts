@@ -14,23 +14,23 @@
  * ```
  */
 
-import * as vscode from "vscode";
 import * as path from "path";
-import * as fs from "fs";
-import {
-	LanguageClient,
-	MessageTransports,
-	MessageReader,
-	MessageWriter,
-	Message,
-	Event,
-	Disposable,
-	DataCallback,
-	PartialMessageInfo,
-	NotificationMessage,
-} from "vscode-languageclient/node";
-import { BaseGotmplsEngine, GotmplsEngineType } from "./engine";
+
+import * as vscode from "vscode";
+
 import { Wasm, WasmPseudoterminal } from "@vscode/wasm-wasi/v1";
+import {
+	DataCallback,
+	Disposable,
+	Event,
+	Message,
+	MessageReader,
+	MessageTransports,
+	MessageWriter,
+	PartialMessageInfo,
+} from "vscode-languageclient/node";
+
+import { BaseGotmplsEngine, GotmplsEngineType } from "./engine";
 
 // WASI module interface
 declare global {
@@ -292,7 +292,7 @@ export class WasiEngine extends BaseGotmplsEngine {
 						if (error instanceof Error) {
 							this.log(`Stack trace: ${error.stack}`);
 						}
-					}
+					},
 				);
 			} catch (err) {
 				this.log(`❌ Error running WASI process: ${err}`);
