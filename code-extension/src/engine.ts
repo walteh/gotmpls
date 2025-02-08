@@ -19,15 +19,15 @@
  * ```
  */
 
+import * as path from "path";
 import * as vscode from "vscode";
 import {
 	LanguageClient,
 	LanguageClientOptions,
+	MessageTransports,
 	ServerOptions,
 	TransportKind,
-	MessageTransports,
 } from "vscode-languageclient/node";
-import * as path from "path";
 
 // 🔧 Engine type enum
 export enum GotmplsEngineType {
@@ -137,7 +137,7 @@ export abstract class BaseGotmplsEngine implements GotmplsEngine {
 			"gotmpls",
 			"gotmpls",
 			() => Promise.resolve(transport),
-			this.createClientOptions(workspaceFolder)
+			this.createClientOptions(workspaceFolder),
 		);
 
 		// Set up telemetry handling

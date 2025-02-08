@@ -1,12 +1,27 @@
 {
 	"compilerOptions": {
+		"inlineSourceMap": true,
+		"moduleResolution": "nodenext",
 		"module": "nodenext",
 		"target": "ES2020",
 		"outDir": "out",
-		"lib": ["ES2020", "dom"],
-		"sourceMap": true,
-		"rootDir": "src",
-		"strict": true
+		"lib": ["ES2020", "DOM", "DOM.Iterable"],
+		// "sourceMap": true,
+		"rootDir": ".",
+		"strict": true,
+
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noFallthroughCasesInSwitch": true,
+		"baseUrl": "./",
+		"paths": {
+			"@src/*": ["src/*"]
+		},
+		"allowImportingTsExtensions": true,
+		"resolveJsonModule": true,
+		"isolatedModules": true,
+		"noEmit": true
+		// "esModuleInterop": true
 	},
-	"exclude": ["node_modules", ".vscode-test"]
+	"exclude": ["node_modules", "dist", "out"]
 }

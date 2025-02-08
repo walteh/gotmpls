@@ -23,10 +23,11 @@
  */
 
 import * as vscode from "vscode";
+
 import { CLIEngine } from "./cli";
-import { WasmEngine } from "./wasm";
+import { getConfig,GotmplsEngine, GotmplsEngineType } from "./engine";
 import { WasiEngine } from "./wasi";
-import { GotmplsEngine, GotmplsEngineType, getConfig } from "./engine";
+import { WasmEngine } from "./wasm";
 
 // Current engine instance
 let currentEngine: GotmplsEngine | undefined;

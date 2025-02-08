@@ -21,24 +21,25 @@
  * - [ ] Implement performance monitoring
  */
 
-import * as vscode from "vscode";
-import * as path from "path";
+import { EventEmitter } from "events";
 import * as fs from "fs";
+import * as path from "path";
+import * as vscode from "vscode";
 import {
-	LanguageClient,
-	MessageTransports,
-	MessageReader,
-	MessageWriter,
-	Message,
-	Event,
-	Disposable,
-	DataCallback,
-	PartialMessageInfo,
 	AbstractMessageReader,
 	AbstractMessageWriter,
+	DataCallback,
+	Disposable,
+	Event,
+	LanguageClient,
+	Message,
+	MessageReader,
+	MessageTransports,
+	MessageWriter,
+	PartialMessageInfo,
 } from "vscode-languageclient/node";
+
 import { BaseGotmplsEngine, GotmplsEngineType } from "./engine";
-import { EventEmitter } from "events";
 
 // Type definitions for callbacks
 type ErrorCallback = (error: [Error, Message | undefined, number | undefined]) => void;
@@ -280,7 +281,7 @@ export class WasmEngine extends BaseGotmplsEngine {
 							this._idPool.push(id);
 						}
 					},
-					"syscall/js.finalizeRef-tinygo":`
+					"syscall/js.finalizeRef-tinygo":`,
 				);
 			}
 

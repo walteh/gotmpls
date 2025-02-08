@@ -45,10 +45,18 @@
 		// ESLint Configuration
 		//===========================================
 		"eslint.options": {
-			"flags": ["unstable_ts_config"]
+			"flags": ["unstable_config_lookup_from_file"]
 		},
+		"eslint.enable": true,
+		// "eslint.nodePath": "bun",
 		"eslint.useESLintClass": true,
-		//===========================================
+		"eslint.useFlatConfig": true,
+		"eslint.debug": true,
+		// // "eslint.runtime": "bun",
+		// "eslint.execArgv": ["--bun"],
+		// "eslint.trace.server": "messages",
+		// "eslint.workingDirectories": [{ "mode": "auto" }],
+		//================================''===========
 		// Editor General Settings
 		//===========================================
 		"editor.formatOnSave": true,
@@ -58,6 +66,8 @@
 		"editor.codeActionsOnSave": {
 			"source.fixAll.eslint": "always",
 			// "source.organizeImports": "always",
+			// "source.organizeImports": "explicit",
+			// "source.addMissingImports": "explicit",
 			"source.fixAll": "always"
 		},
 		"workbench.tree.indent": 16,

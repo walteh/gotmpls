@@ -15,21 +15,22 @@
  * ```
  */
 
-import * as vscode from "vscode";
-import * as path from "path";
+import { spawn } from "child_process";
+import { exec } from "child_process";
 import * as fs from "fs";
+import * as path from "path";
+import { promisify } from "util";
+import * as vscode from "vscode";
 import {
-	LanguageClient,
-	MessageTransports,
-	StreamInfo,
 	createMessageConnection,
 	IPCMessageReader,
 	IPCMessageWriter,
+	LanguageClient,
+	MessageTransports,
+	StreamInfo,
 } from "vscode-languageclient/node";
-import { BaseGotmplsEngine, GotmplsEngineType, getConfig } from "./engine";
-import { spawn } from "child_process";
-import { promisify } from "util";
-import { exec } from "child_process";
+
+import { BaseGotmplsEngine, getConfig, GotmplsEngineType } from "./engine";
 
 const execAsync = promisify(exec);
 
@@ -167,7 +168,7 @@ export class CLIEngine extends BaseGotmplsEngine {
 		}
 
 		throw new Error(
-			`Executable '${executable}' not found in PATH. Please install it with 'go install github.com/walteh/gotmpls/cmd/gotmpls@latest'`
+			`Executable '${executable}' not found in PATH. Please install it with 'go install github.com/walteh/gotmpls/cmd/gotmpls@latest'`,
 		);
 	}
 }
