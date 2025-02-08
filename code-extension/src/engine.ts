@@ -33,6 +33,7 @@ import * as path from "path";
 export enum GotmplsEngineType {
 	CLI = "cli",
 	WASM = "wasm",
+	WASI = "wasi",
 }
 
 // 📝 Language IDs enum

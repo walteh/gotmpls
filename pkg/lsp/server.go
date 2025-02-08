@@ -3,6 +3,7 @@ package lsp
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -147,7 +148,7 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.ParamInitializ
 }
 
 func (s *Server) Initialized(ctx context.Context, params *protocol.InitializedParams) error {
-	fmt.Printf("Initialized server - yo \n")
+	fmt.Fprintf(os.Stderr, "Initialized server - yo \n")
 	logger := zerolog.Ctx(ctx)
 	logger.Debug().Msg("server initialized")
 

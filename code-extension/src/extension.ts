@@ -2,7 +2,7 @@
  * Gotmpls VS Code Extension
  *
  * This extension provides language server capabilities for Go templates.
- * It supports multiple engine implementations (CLI, WASM) through a common interface.
+ * It supports multiple engine implementations (CLI, WASM, WASI) through a common interface.
  *
  * Architecture Overview:
  * ```
@@ -25,6 +25,7 @@
 import * as vscode from "vscode";
 import { CLIEngine } from "./cli";
 import { WasmEngine } from "./wasm";
+import { WasiEngine } from "./wasi";
 import { GotmplsEngine, GotmplsEngineType, getConfig } from "./engine";
 
 // Current engine instance
@@ -40,7 +41,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		const config = getConfig();
 
 		// Create engine instance based on configuration
-		currentEngine = createEngine(config.engine);
+		currentEngine = createEngine(config.engine, outputChannel);
 		outputChannel.appendLine(`📦 Using ${config.engine} engine`);
 
 		// Initialize engine
@@ -71,15 +72,14 @@ export function deactivate(context: vscode.ExtensionContext): Thenable<void> | u
 	return currentEngine.stopServer(context);
 }
 
-const outputChannel = vscode.window.createOutputChannel("gotmpls");
-const wasmEngine = new WasmEngine(outputChannel);
-
-function createEngine(type: GotmplsEngineType): GotmplsEngine {
+function createEngine(type: GotmplsEngineType, outputChannel: vscode.OutputChannel): GotmplsEngine {
 	switch (type) {
 		case GotmplsEngineType.CLI:
 			return new CLIEngine();
 		case GotmplsEngineType.WASM:
-			return wasmEngine;
+			return new WasmEngine(outputChannel);
+		case GotmplsEngineType.WASI:
+			return new WasiEngine(outputChannel);
 		default:
 			throw new Error(`Unknown engine type: ${type}`);
 	}

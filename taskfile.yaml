@@ -100,7 +100,7 @@ tasks:
         cmds:
             - rm -rf out
             - mkdir -p out
-            - task: wasm
+            - task: wasi
             - bun install
 
     # not really a huge size difference in the .vsix file, and its way slower to build
@@ -137,3 +137,15 @@ tasks:
         cmds:
             - GOOS=js GOARCH=wasm tinygo build -o ./code-extension/out/gotmpls.tinygo.wasm ./cmd/gotmpls-wasm
             - cp "$(tinygo env TINYGOROOT)/targets/wasm_exec.js" ./code-extension/out/wasm_exec.tinygo.js
+
+    wasi:
+        desc: Build WASI module
+        cmds:
+            - GOOS=wasip1 GOARCH=wasm go build -o ./code-extension/out/gotmpls.wasi.wasm ./cmd/gotmpls-wasi
+            - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" ./code-extension/out/wasm_exec.wasi.js
+
+    wasi-tinygo:
+        desc: Build WASI module
+        cmds:
+            - GOOS=wasip1 GOARCH=wasm tinygo build -o ./code-extension/out/gotmpls.wasi.wasm ./cmd/gotmpls-wasi
+            - cp "$(tinygo env TINYGOROOT)/targets/wasm_exec.js" ./code-extension/out/wasm_exec.wasi.js

@@ -59,10 +59,23 @@
 					"type": "boolean",
 					"default": true,
 					"description": "Enable/disable completion suggestions."
+				},
+				"gotmpls.engine": {
+					"type": "string",
+					"enum": [
+						"cli",
+						"wasm",
+						"wasi"
+					],
+					"default": "wasi",
+					"description": "The engine to use for the language server"
 				}
 			}
 		}
 	},
+	"extensionDependencies": [
+		"ms-vscode.wasm-wasi-core"
+	],
 	"scripts": {
 		"vscode:prepublish": "bun run build",
 		"build": "bun build ./src/extension.ts --outdir ./out --target node --external vscode --format cjs",
@@ -80,5 +93,7 @@
 	"trustedDependencies": [
 		"bun-types"
 	],
-	"dependencies": {}
+	"dependencies": {
+		"@vscode/wasm-wasi": "^1.0.1"
+	}
 }
