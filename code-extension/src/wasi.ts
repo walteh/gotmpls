@@ -19,18 +19,16 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import {
-	Readable,
+	ProcessOptions,
 	StdioPipeInDescriptor,
 	StdioPipeOutDescriptor,
 	Wasm,
 	WasmPseudoterminal,
-	Writable,
 } from "@vscode/wasm-wasi/v1";
-import { StreamInfo } from "vscode-languageclient/node";
+import { createStdioOptions, createUriConverters, startServer } from "@vscode/wasm-wasi-lsp";
+import { LanguageClient, LanguageClientOptions, MessageTransports, ServerOptions } from "vscode-languageclient/node";
 
 import { BaseGotmplsEngine, GotmplsEngineType } from "./engine";
-
-import { readable, writable } from "wasm_streams";
 
 // WASI module interface
 declare global {
@@ -79,10 +77,106 @@ declare global {
 // 	}
 // }
 
+export async function wasi_activate(
+	context: vscode.ExtensionContext,
+	outputChannel: vscode.OutputChannel,
+	baseClientOptions: LanguageClientOptions,
+) {
+	const wasm: Wasm = await Wasm.load();
+
+	const channel = outputChannel;
+	// The server options to run the WebAssembly language server.
+	const serverOptions: ServerOptions = async () => {
+		const options: ProcessOptions = {
+			trace: true,
+			env: {
+				GOTMPLS_DEBUG: "1",
+				RUST_BACKTRACE: "1",
+				RUST_LOG: "debug",
+			},
+			stdio: createStdioOptions(),
+			mountPoints: [{ kind: "workspaceFolder" }],
+		};
+
+		// Load the WebAssembly code
+		const filename = vscode.Uri.joinPath(context.extensionUri, "out", "gotmpls.wasi.wasm");
+		const bits = await vscode.workspace.fs.readFile(filename);
+		const module = await WebAssembly.compile(bits);
+
+		// Create the wasm worker that runs the LSP server
+		const process = await wasm.createProcess(
+			"gotmpls",
+			module,
+			{ initial: 10000, maximum: 10000, shared: true, buffer: new ArrayBuffer(10000) },
+			options,
+		);
+
+		// Hook stderr to the output channel
+		const decoder = new TextDecoder("utf-8");
+		process.stderr!.onData((data) => {
+			channel.appendLine("[wasi-stderr] " + decoder.decode(data));
+		});
+
+		process.stdout!.onData((data) => {
+			channel.appendLine("[wasi-stdout] " + decoder.decode(data));
+		});
+
+		// const writer = wasm.createWritable();
+
+		// process.stdin = {
+		// 	kind: "pipeIn",
+		// 	pipe: writer,
+		// };
+
+		return startServer(process);
+	};
+
+	// const clientOptions: LanguageClientOptions = {
+	// 	documentSelector: [{ language: "plaintext" }],
+	// 	outputChannel: channel,
+	// 	uriConverters: createUriConverters(),
+	// };
+
+	baseClientOptions.uriConverters = createUriConverters();
+	// baseClientOptions.middleware = {
+	// 	sendRequest: (method, args, options, next) => {
+	// 		channel.appendLine("[middleware] " + method + " " + JSON.stringify(args));
+	// 		return next(method, args, options);
+	// 	},
+	// 	sendNotification: (atype, next) => {
+	// 		channel.appendLine("[middleware] " + atype);
+	// 		return next(atype);
+	// 	},
+	// };
+
+	// baseClientOptions.progressOnInitialization = true;
+	// baseClientOptions.connectionOptions = {
+	// 	messageStrategy: {
+	// 		handleMessage: (message, next) => {
+	// 			console.log("[middleware] " + message);
+	// 			return next(message);
+	// 		},
+	// 	},
+	// };
+	// baseClientOptions.initializationFailedHandler = (err): boolean => {
+	// 	channel.appendLine("[middleware error] " + err);
+	// 	return true;
+	// };
+	// baseClientOptions.initializationOptions = {
+	// 	trace: {
+	// 		server: true,
+	// 	},
+	// };
+
+	let client = new LanguageClient("gotmpls", "gotmpls", serverOptions, baseClientOptions);
+
+	await client.start();
+}
+
 export class WasiEngine extends BaseGotmplsEngine {
-	private wasi: Wasm | null = null;
-	private reader: Readable | null = null;
-	private writer: Writable | null = null;
+	// private wasi: Wasm | null = null;
+	// private reader: Readable | null = null;
+	// private writer: Writable | null = null;
 	private debugPty: WasmPseudoterminal | undefined; // Keep PTY for debug output
 
 	constructor(outputChannel: vscode.OutputChannel) {
@@ -90,24 +184,20 @@ export class WasiEngine extends BaseGotmplsEngine {
 		this.outputChannel = outputChannel;
 	}
 
-	async createTransport(context: vscode.ExtensionContext): Promise<StreamInfo> {
-		return {
-			reader: readable(this.reader!),
-			writer: writable(this.writer!),
-		};
-	}
-
-	async initialize(context: vscode.ExtensionContext): Promise<void> {
-		if (this.initialized) {
-			return;
-		}
+	async initialize(
+		context: vscode.ExtensionContext,
+		outputChannel: vscode.OutputChannel,
+	): Promise<MessageTransports> {
+		// if (this.initialized) {
+		// 	return;
+		// }
 
 		this.log("🔍 Starting WASI initialization...");
 		try {
 			// Create WASI instance
 			this.log("📦 Creating WASI instance...");
 			const wasm = await Wasm.load();
-			this.wasi = wasm;
+			// this.wasi = wasm;
 			this.log("✅ WASI instance created successfully");
 
 			// Create WASI process with PTY stdio
@@ -124,7 +214,7 @@ export class WasiEngine extends BaseGotmplsEngine {
 				pty: this.debugPty as unknown as vscode.Pseudoterminal,
 			});
 
-			const stdErr = this.wasi.createReadable();
+			const stdErr = wasm.createReadable();
 
 			// Add verbose debug output handler
 			stdErr.onData((data: Uint8Array<ArrayBufferLike>) => {
@@ -143,17 +233,17 @@ export class WasiEngine extends BaseGotmplsEngine {
 			const module = await WebAssembly.compile(wasmBits);
 			this.log("✅ WASI module compiled successfully");
 
-			this.writer = this.wasi.createWritable();
-			this.reader = this.wasi.createReadable();
+			const writer = wasm.createWritable();
+			const reader = wasm.createReadable();
 
 			const writeToServerPipe: StdioPipeInDescriptor = {
 				kind: "pipeIn",
-				pipe: this.writer,
+				pipe: writer,
 			};
 
 			const readFromServerPipe: StdioPipeOutDescriptor = {
 				kind: "pipeOut",
-				pipe: this.reader,
+				pipe: reader,
 			};
 
 			const stdErrPipe: StdioPipeOutDescriptor = {
@@ -162,7 +252,7 @@ export class WasiEngine extends BaseGotmplsEngine {
 			};
 
 			// Create WASI process with split stdio
-			const process = await this.wasi.createProcess("gotmpls", module, {
+			const process = await wasm.createProcess("gotmpls", module, {
 				args: ["serve-lsp"],
 				env: {
 					GOTMPLS_DEBUG: "1",
@@ -186,40 +276,42 @@ export class WasiEngine extends BaseGotmplsEngine {
 			debugTerminal.show();
 			this.log("✅ Debug terminal shown");
 
-			// Run the process in the background
-			this.log("▶️  Starting WASI process...");
-			try {
-				const processPromise = process.run();
-				this.log("✅ WASI process started");
+			return startServer(process, reader, writer);
 
-				// wait for initialization
-				await new Promise((resolve) => setTimeout(resolve, 5000));
+			// // Run the process in the background
+			// this.log("▶️  Starting WASI process...");
+			// try {
+			// 	const transport = await startServer(process, this.reader!, this.writer!);
+			// 	this.log("✅ WASI process started");
 
-				this.initialized = true;
-				this.log("🎉 WASI module fully initialized");
+			// 	// wait for initialization
+			// 	await new Promise((resolve) => setTimeout(resolve, 5000));
 
-				// Handle process completion
-				processPromise.then(
-					(result) => {
-						this.log(`✅ Process completed with code: ${result}`);
-						if (result !== 0) {
-							this.log(`⚠️  Process exited with non-zero code: ${result}`);
-						}
-					},
-					(error) => {
-						this.log(`❌ Process failed with error: ${error}`);
-						if (error instanceof Error) {
-							this.log(`Stack trace: ${error.stack}`);
-						}
-					},
-				);
-			} catch (err) {
-				this.log(`❌ Error running WASI process: ${err}`);
-				if (err instanceof Error) {
-					this.log(`Stack trace: ${err.stack}`);
-				}
-				throw err;
-			}
+			// 	this.initialized = true;
+			// 	this.log("🎉 WASI module fully initialized");
+
+			// 	// Handle process completion
+			// 	processPromise.then(
+			// 		(result) => {
+			// 			this.log(`✅ Process completed with code: ${result}`);
+			// 			if (result !== 0) {
+			// 				this.log(`⚠️  Process exited with non-zero code: ${result}`);
+			// 			}
+			// 		},
+			// 		(error) => {
+			// 			this.log(`❌ Process failed with error: ${error}`);
+			// 			if (error instanceof Error) {
+			// 				this.log(`Stack trace: ${error.stack}`);
+			// 			}
+			// 		},
+			// 	);
+			// } catch (err) {
+			// 	this.log(`❌ Error running WASI process: ${err}`);
+			// 	if (err instanceof Error) {
+			// 		this.log(`Stack trace: ${err.stack}`);
+			// 	}
+			// 	throw err;
+			// }
 		} catch (err) {
 			this.log(`❌ Error initializing WASI: ${err}`);
 			if (err instanceof Error) {

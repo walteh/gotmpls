@@ -21,7 +21,7 @@
 
 import * as vscode from "vscode";
 
-import { LanguageClient, LanguageClientOptions, StreamInfo } from "vscode-languageclient/node";
+import { LanguageClient, LanguageClientOptions, MessageTransports } from "vscode-languageclient/node";
 
 // 🔧 Engine type enum
 export enum GotmplsEngineType {
@@ -46,13 +46,16 @@ export interface GotmplsEngine {
 	 * @param context VS Code extension context
 	 * @param outputChannel Output channel for logging
 	 */
-	initialize(context: vscode.ExtensionContext, outputChannel: vscode.OutputChannel): Promise<void>;
+	initialize(context: vscode.ExtensionContext, outputChannel: vscode.OutputChannel): Promise<MessageTransports>;
 
 	/**
 	 * Start the language server
 	 * @returns LanguageClient instance
 	 */
-	startServer(context: vscode.ExtensionContext): Promise<LanguageClient>;
+	startServer(
+		context: vscode.ExtensionContext,
+		messageTransports: Promise<MessageTransports>,
+	): Promise<LanguageClient>;
 
 	/**
 	 * Stop the language server
@@ -75,6 +78,28 @@ export interface GotmplsEngine {
 	getType(): GotmplsEngineType;
 }
 
+export function createClientOptions(
+	workspaceFolder: vscode.WorkspaceFolder,
+	outputChannel: vscode.OutputChannel,
+): LanguageClientOptions {
+	const config = getConfig();
+	return {
+		documentSelector: [{ scheme: "file", language: "gotmpl" }],
+		synchronize: {
+			fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{tmpl,go}"),
+			configurationSection: "gotmpls",
+		},
+		workspaceFolder: workspaceFolder,
+		outputChannel: outputChannel,
+		traceOutputChannel: outputChannel,
+		initializationOptions: {
+			trace: {
+				server: config.trace.server,
+			},
+		},
+	};
+}
+
 // 🛠️ Base class for engine implementations
 export abstract class BaseGotmplsEngine implements GotmplsEngine {
 	protected initialized: boolean = false;
@@ -87,8 +112,10 @@ export abstract class BaseGotmplsEngine implements GotmplsEngine {
 		this.outputChannel = undefined;
 	}
 
-	abstract initialize(context: vscode.ExtensionContext, outputChannel: vscode.OutputChannel): Promise<void>;
-	abstract createTransport(context: vscode.ExtensionContext): Promise<StreamInfo>;
+	abstract initialize(
+		context: vscode.ExtensionContext,
+		outputChannel: vscode.OutputChannel,
+	): Promise<MessageTransports>;
 	abstract getVersion(context: vscode.ExtensionContext): Promise<string>;
 
 	/**
@@ -113,24 +140,20 @@ export abstract class BaseGotmplsEngine implements GotmplsEngine {
 		};
 	}
 
-	async startServer(context: vscode.ExtensionContext): Promise<LanguageClient> {
-		if (!this.initialized) {
-			throw new Error("Engine not initialized");
-		}
-
+	async startServer(
+		context: vscode.ExtensionContext,
+		messageTransports: Promise<MessageTransports>,
+	): Promise<LanguageClient> {
 		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 		if (!workspaceFolder) {
 			throw new Error("No workspace folder found");
 		}
 
-		// Get transport from the specific engine implementation
-		const transport = await this.createTransport(context);
-
 		// Create the language client
 		this.client = new LanguageClient(
 			"gotmpls",
 			"gotmpls",
-			() => Promise.resolve(transport),
+			() => messageTransports,
 			this.createClientOptions(workspaceFolder),
 		);
 

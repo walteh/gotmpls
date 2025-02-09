@@ -32,9 +32,9 @@ import {
 	Event,
 	Message,
 	MessageReader,
+	MessageTransports,
 	MessageWriter,
 	PartialMessageInfo,
-	StreamInfo,
 } from "vscode-languageclient/node";
 
 import { BaseGotmplsEngine, GotmplsEngineType } from "@src/engine";
@@ -222,13 +222,6 @@ export class WasmEngine extends BaseGotmplsEngine {
 		this.writer.listen(this.connection);
 	}
 
-	async createTransport(context: vscode.ExtensionContext): Promise<StreamInfo> {
-		return {
-			reader: this.reader,
-			writer: this.writer,
-		};
-	}
-
 	private async waitForInit(timeout: number = 5000): Promise<void> {
 		this.log("Waiting for WASM initialization...");
 		const start = Date.now();
@@ -241,11 +234,10 @@ export class WasmEngine extends BaseGotmplsEngine {
 		this.log("WASM initialization complete");
 	}
 
-	async initialize(context: vscode.ExtensionContext): Promise<void> {
-		if (this.initialized) {
-			return;
-		}
-
+	async initialize(
+		context: vscode.ExtensionContext,
+		outputChannel: vscode.OutputChannel,
+	): Promise<MessageTransports> {
 		this.log("Initializing WASM module...");
 		try {
 			// Load and execute wasm_exec.js
@@ -314,6 +306,11 @@ export class WasmEngine extends BaseGotmplsEngine {
 			await this.waitForInit();
 			this.log("WASM module fully initialized");
 			this.initialized = true;
+
+			return Promise.resolve({
+				reader: this.reader,
+				writer: this.writer,
+			});
 		} catch (err) {
 			this.log(`Error initializing WASM: ${err}`);
 			throw err;

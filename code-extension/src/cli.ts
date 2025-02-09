@@ -36,7 +36,10 @@ export class CLIEngine extends BaseGotmplsEngine {
 		super(GotmplsEngineType.CLI);
 	}
 
-	async initialize(context: vscode.ExtensionContext, outputChannel: vscode.OutputChannel): Promise<void> {
+	async initialize(
+		context: vscode.ExtensionContext,
+		outputChannel: vscode.OutputChannel,
+	): Promise<MessageTransports> {
 		this.outputChannel = outputChannel;
 		this.log("Initializing CLI engine...");
 
@@ -55,6 +58,8 @@ export class CLIEngine extends BaseGotmplsEngine {
 			this.log(`Error initializing CLI engine: ${err}`);
 			throw err;
 		}
+
+		return this.createTransport(context);
 	}
 
 	async createTransport(context: vscode.ExtensionContext): Promise<MessageTransports> {

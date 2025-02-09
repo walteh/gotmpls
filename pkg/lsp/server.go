@@ -62,7 +62,7 @@ func NewServer(ctx context.Context) *Server {
 		id:          xid.New().String(),
 		documents:   NewDocumentManager(),
 		cancelFuncs: &sync.Map{},
-		debug:       false, // Disabled debug mode
+		debug:       true, // Disabled debug mode
 	}
 }
 
@@ -112,7 +112,7 @@ func (s *Server) Exit(ctx context.Context) error {
 }
 
 func (s *Server) Initialize(ctx context.Context, params *protocol.ParamInitialize) (*protocol.InitializeResult, error) {
-	fmt.Printf("Initializing server\n")
+	fmt.Fprintf(os.Stderr, "Initializing server\n")
 	logger := zerolog.Ctx(ctx)
 	logger.Debug().Msg("initializing server")
 
