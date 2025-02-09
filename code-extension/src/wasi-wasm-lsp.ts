@@ -2,9 +2,10 @@
  * Copyright (c) Microsoft Corporation. All rights reserved.
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * ------------------------------------------------------------------------------------------ */
+
 import * as vscode from "vscode";
 
-import { Readable, type Stdio, WasmProcess, Writable } from "@vscode/wasm-wasi/v1";
+import { Readable, type Stdio, Wasm, WasmProcess, Writable } from "@vscode/wasm-wasi/v1";
 import {
 	Disposable,
 	Emitter,
@@ -15,6 +16,8 @@ import {
 	ReadableStreamMessageReader,
 	WriteableStreamMessageWriter,
 } from "vscode-languageclient";
+
+import { WasmMessageReader, WasmMessageWriter } from "./wasm";
 
 class ReadableStreamImpl implements RAL.ReadableStream {
 	private readonly errorEmitter: Emitter<[Error, Message | undefined, number | undefined]>;
@@ -76,33 +79,51 @@ class WritableStreamImpl implements RAL.WritableStream {
 	}
 
 	public get onError(): Event<[Error, Message | undefined, number | undefined]> {
-		return this.errorEmitter.event;
+		const prevEvent = this.errorEmitter.event;
+		return (listener: (e: [Error, Message | undefined, number | undefined]) => any): Disposable => {
+			return prevEvent((event) => {
+				console.log("onError", event);
+				listener(event);
+			});
+		};
 	}
 
 	public fireError(error: any, message?: Message, count?: number): void {
+		console.log("fireError", error, message, count);
 		this.errorEmitter.fire([error, message, count]);
 	}
 
 	public get onClose(): Event<void> {
-		return this.closeEmitter.event;
+		const prevEvent = this.closeEmitter.event;
+		return (listener: () => any, thisArgs?: any, disposables?: Disposable[]): Disposable => {
+			return prevEvent(() => {
+				console.log("onClose");
+				listener();
+			});
+		};
 	}
 
 	public fireClose(): void {
+		console.log("fireClose");
 		this.closeEmitter.fire(undefined);
 	}
 
 	public onEnd(listener: () => void): Disposable {
+		console.log("onEnd, this.endEmitter.event", this.endEmitter.event);
 		return this.endEmitter.event(listener);
 	}
 
 	public fireEnd(): void {
+		console.log("fireEnd");
 		this.endEmitter.fire(undefined);
 	}
 
 	public write(data: string | Uint8Array, _encoding?: MessageBufferEncoding): Promise<void> {
 		if (typeof data === "string") {
+			console.log("writez", data);
 			return this.writable.write(data, "utf-8");
 		} else {
+			console.log("writeyu", data);
 			return this.writable.write(data);
 		}
 	}
@@ -110,7 +131,28 @@ class WritableStreamImpl implements RAL.WritableStream {
 	public end(): void {}
 }
 
-export function createStdioOptions(): Stdio {
+// export function createStdioOptions(): Stdio {
+// 	const tmpdirz = tmpdir();
+// 	const stdin = path.join(tmpdirz, "stdin");
+// 	const stdout = path.join(tmpdirz, "stdout");
+// 	const stderr = path.join(tmpdirz, "stderr");
+// 	return {
+// 		in: {
+// 			kind: "file",
+// 			path: stdin,
+// 		},
+// 		out: {
+// 			kind: "file",
+// 			path: stdout,
+// 		},
+// 		err: {
+// 			kind: "file",
+// 			path: stderr,
+// 		},
+// 	};
+// }
+
+export function createStdioOptions(wasm: Wasm): Stdio {
 	return {
 		in: {
 			kind: "pipeIn",
@@ -152,7 +194,43 @@ export async function startServer(
 	return {
 		reader: new ReadableStreamMessageReader(reader),
 		writer: new WriteableStreamMessageWriter(writer),
-		detached: false,
+		detached: true,
+	};
+}
+
+export async function startServerFromWasm(
+	process: WasmProcess,
+	readable: WasmMessageReader,
+	writable: WasmMessageWriter,
+): Promise<MessageTransports> {
+	if (readable === undefined || writable === undefined) {
+		throw new Error("Process created without streams or no streams provided.");
+	}
+
+	process.run().then(
+		(value) => {
+			if (value === 0) {
+				readable.dispose();
+				writable.dispose();
+			} else {
+				console.log("process.run().then", value);
+				writable.write({
+					jsonrpc: "2.0",
+				});
+			}
+		},
+		(error) => {
+			console.log("process.run().then", error);
+			writable.write({
+				jsonrpc: "2.0",
+			});
+		},
+	);
+
+	return {
+		reader: readable,
+		writer: writable,
+		detached: true,
 	};
 }
 

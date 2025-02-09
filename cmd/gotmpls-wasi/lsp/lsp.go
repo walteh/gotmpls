@@ -117,8 +117,12 @@ func ServeLSP(ctx context.Context) error {
 	instance := protocol.NewServerInstance(ctx, server, opts)
 
 	// Create LSP channel
-	transport := NewStdioTransport()
-	ch := channel.LSP(transport.reader, transport.writer)
+	transport := NewJSTransport(yo_send)
+	// Get reader and writer from transport
+	reader, writer := transport.GetChannelStreams()
+
+	// Create basic channel
+	ch := channel.LSP(reader, writer)
 
 	// Start server
 	srv, err := instance.Instance().StartAndDetach(ch)

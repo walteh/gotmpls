@@ -25,10 +25,11 @@ import {
 	Wasm,
 	WasmPseudoterminal,
 } from "@vscode/wasm-wasi/v1";
-import { createStdioOptions, createUriConverters, startServer } from "@vscode/wasm-wasi-lsp";
 import { LanguageClient, LanguageClientOptions, MessageTransports, ServerOptions } from "vscode-languageclient/node";
 
 import { BaseGotmplsEngine, GotmplsEngineType } from "./engine";
+import { startMessageConnection } from "./wasm";
+import { createStdioOptions, createUriConverters, startServer, startServerFromWasm } from "@src/wasi-wasm-lsp";
 
 // WASI module interface
 declare global {
@@ -87,14 +88,25 @@ export async function wasi_activate(
 	const channel = outputChannel;
 	// The server options to run the WebAssembly language server.
 	const serverOptions: ServerOptions = async () => {
+		const [connection, reader, writer] = startMessageConnection();
+
 		const options: ProcessOptions = {
 			trace: true,
+
 			env: {
 				GOTMPLS_DEBUG: "1",
 				RUST_BACKTRACE: "1",
 				RUST_LOG: "debug",
+				zzz: {
+					yo_send: (msg: string) => {
+						console.log("yo_send", msg);
+					},
+					yo_recv: (msg: string) => {
+						console.log("yo_recv b", msg);
+					},
+				},
 			},
-			stdio: createStdioOptions(),
+			stdio: createStdioOptions(wasm),
 			mountPoints: [{ kind: "workspaceFolder" }],
 		};
 
@@ -103,13 +115,15 @@ export async function wasi_activate(
 		const bits = await vscode.workspace.fs.readFile(filename);
 		const module = await WebAssembly.compile(bits);
 
+		const memory: WebAssembly.MemoryDescriptor | WebAssembly.Memory = {
+			initial: 10000,
+			maximum: 10000,
+			shared: true,
+			buffer: new ArrayBuffer(10000),
+		};
+
 		// Create the wasm worker that runs the LSP server
-		const process = await wasm.createProcess(
-			"gotmpls",
-			module,
-			{ initial: 10000, maximum: 10000, shared: true, buffer: new ArrayBuffer(10000) },
-			options,
-		);
+		const process = await wasm.createProcess("gotmpls", module, memory, options);
 
 		// Hook stderr to the output channel
 		const decoder = new TextDecoder("utf-8");
@@ -117,56 +131,14 @@ export async function wasi_activate(
 			channel.appendLine("[wasi-stderr] " + decoder.decode(data));
 		});
 
-		process.stdout!.onData((data) => {
-			channel.appendLine("[wasi-stdout] " + decoder.decode(data));
-		});
+		// process.stdout!.onData((data) => {
+		// 	channel.appendLine("[wasi-stdout] " + decoder.decode(data));
+		// });
 
-		// const writer = wasm.createWritable();
-
-		// process.stdin = {
-		// 	kind: "pipeIn",
-		// 	pipe: writer,
-		// };
-
-		return startServer(process);
+		return startServerFromWasm(process, reader, writer);
 	};
 
-	// const clientOptions: LanguageClientOptions = {
-	// 	documentSelector: [{ language: "plaintext" }],
-	// 	outputChannel: channel,
-	// 	uriConverters: createUriConverters(),
-	// };
-
 	baseClientOptions.uriConverters = createUriConverters();
-	// baseClientOptions.middleware = {
-	// 	sendRequest: (method, args, options, next) => {
-	// 		channel.appendLine("[middleware] " + method + " " + JSON.stringify(args));
-	// 		return next(method, args, options);
-	// 	},
-	// 	sendNotification: (atype, next) => {
-	// 		channel.appendLine("[middleware] " + atype);
-	// 		return next(atype);
-	// 	},
-	// };
-
-	// baseClientOptions.progressOnInitialization = true;
-	// baseClientOptions.connectionOptions = {
-	// 	messageStrategy: {
-	// 		handleMessage: (message, next) => {
-	// 			console.log("[middleware] " + message);
-	// 			return next(message);
-	// 		},
-	// 	},
-	// };
-	// baseClientOptions.initializationFailedHandler = (err): boolean => {
-	// 	channel.appendLine("[middleware error] " + err);
-	// 	return true;
-	// };
-	// baseClientOptions.initializationOptions = {
-	// 	trace: {
-	// 		server: true,
-	// 	},
-	// };
 
 	let client = new LanguageClient("gotmpls", "gotmpls", serverOptions, baseClientOptions);
 

@@ -63,6 +63,12 @@ declare global {
 		run: (instance: any) => void;
 	}
 
+	interface Yo {
+		yo_send: (msg: string) => void;
+		yo_recv: (msg: string) => void;
+	}
+	var zzz: Yo;
+
 	var gotmpls_wasm: GotmplsWasm;
 	var gotmpls_initialized: boolean;
 	var gotmpls_receive: (msg: string) => void;
@@ -71,7 +77,7 @@ declare global {
 /**
  * Custom message reader for WASM communication
  */
-class WasmMessageReader implements MessageReader {
+export class WasmMessageReader implements MessageReader {
 	private readonly emitter = new vscode.EventEmitter<Message>();
 	private connection: MessageConnection | undefined;
 
@@ -111,7 +117,7 @@ class WasmMessageReader implements MessageReader {
 /**
  * Custom message writer for WASM communication
  */
-class WasmMessageWriter implements MessageWriter {
+export class WasmMessageWriter implements MessageWriter {
 	private readonly errorEmitter = new vscode.EventEmitter<[Error, Message | undefined, number | undefined]>();
 	private readonly closeEmitter = new vscode.EventEmitter<void>();
 	private connection: MessageConnection | undefined;
@@ -138,36 +144,13 @@ class WasmMessageWriter implements MessageWriter {
 			// Convert the message to a string
 			const msgStr = JSON.stringify(msg);
 
-			// Send to WASM
-			if (globalThis.gotmpls_wasm?.serve_lsp) {
-				// First time initialization
-				if (!this.initialized) {
-					this.initialized = true;
-					globalThis.gotmpls_wasm.serve_lsp((response: string) => {
-						// Handle response from WASM
-						if (this.connection) {
-							this.connection.receiveMessage(JSON.parse(response));
-						}
-					});
-				}
-
-				// Send the message through the registered receive function
-				if (globalThis.gotmpls_receive) {
-					globalThis.gotmpls_receive(msgStr);
-				} else {
-					throw new Error("WASM receive function not registered");
-				}
-
-				return Promise.resolve();
+			if (globalThis.zzz.yo_recv) {
+				globalThis.zzz.yo_recv(msgStr);
+			} else {
+				throw new Error("WASM receive function not registered");
 			}
-
-			const error = new Error("WASM module not initialized");
-			this.errorEmitter.fire([error, msg, undefined]);
-			return Promise.reject(error);
-		} catch (err) {
-			const error = err instanceof Error ? err : new Error(String(err));
-			this.errorEmitter.fire([error, msg, undefined]);
-			return Promise.reject(error);
+		} catch (error) {
+			this.errorEmitter.fire([error as Error, undefined, undefined]);
 		}
 	}
 
@@ -184,6 +167,38 @@ class WasmMessageWriter implements MessageWriter {
 	public listen(connection: MessageConnection): void {
 		this.connection = connection;
 	}
+}
+
+export function startMessageConnection(): [MessageConnection, WasmMessageReader, WasmMessageWriter] {
+	// Create reader and writer
+	const reader = new WasmMessageReader();
+	const writer = new WasmMessageWriter();
+
+	globalThis.zzz = {
+		yo_send: (msg: any) => {
+			console.log("yo_send", msg);
+			writer.write(msg);
+		},
+		yo_recv: (msg: any) => {
+			console.log("yo_recv d", msg);
+			throw new Error("yo_recv not implemented");
+		},
+	};
+
+	// Create connection
+	const connection = {
+		receiveMessage: (message: any) => {
+			reader.receive(message);
+		},
+		sendMessage: (message: any) => {
+			writer.write(message);
+		},
+	};
+
+	// Connect writer
+	writer.listen(connection);
+
+	return [connection, reader, writer] as const;
 }
 
 /**

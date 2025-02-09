@@ -141,7 +141,7 @@ tasks:
     wasi:
         desc: Build WASI module
         cmds:
-            - GOOS=wasip1 GOARCH=wasm go build -o ./code-extension/out/gotmpls.wasi.wasm -mod=vendor ./cmd/gotmpls-wasi
+            - GOOS=wasip1 GOARCH=wasm go build -o ./code-extension/out/gotmpls.wasi.wasm ./cmd/gotmpls-wasi
             - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" ./code-extension/out/wasm_exec.wasi.js
 
     wasi-tinygo:
