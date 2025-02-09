@@ -39,10 +39,6 @@ import {
 
 import { BaseGotmplsEngine, GotmplsEngineType } from "@src/engine";
 
-// Type definitions for callbacks
-type ErrorCallback = (error: [Error, Message | undefined, number | undefined]) => void;
-type CloseCallback = () => void;
-
 // WASM module interface
 declare global {
 	interface result {
@@ -167,38 +163,6 @@ export class WasmMessageWriter implements MessageWriter {
 	public listen(connection: MessageConnection): void {
 		this.connection = connection;
 	}
-}
-
-export function startMessageConnection(): [MessageConnection, WasmMessageReader, WasmMessageWriter] {
-	// Create reader and writer
-	const reader = new WasmMessageReader();
-	const writer = new WasmMessageWriter();
-
-	globalThis.zzz = {
-		yo_send: (msg: any) => {
-			console.log("yo_send", msg);
-			writer.write(msg);
-		},
-		yo_recv: (msg: any) => {
-			console.log("yo_recv d", msg);
-			throw new Error("yo_recv not implemented");
-		},
-	};
-
-	// Create connection
-	const connection = {
-		receiveMessage: (message: any) => {
-			reader.receive(message);
-		},
-		sendMessage: (message: any) => {
-			writer.write(message);
-		},
-	};
-
-	// Connect writer
-	writer.listen(connection);
-
-	return [connection, reader, writer] as const;
 }
 
 /**

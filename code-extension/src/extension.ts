@@ -25,8 +25,7 @@
 import * as vscode from "vscode";
 
 import { CLIEngine } from "./cli";
-import { createClientOptions, getConfig, GotmplsEngine, GotmplsEngineType } from "./engine";
-import { wasi_activate } from "./wasi";
+import { getConfig, GotmplsEngine, GotmplsEngineType } from "./engine";
 import { WasmEngine } from "./wasm";
 
 // Current engine instance
@@ -44,34 +43,32 @@ export async function activate(context: vscode.ExtensionContext) {
 		// Create engine instance based on configuration
 		outputChannel.appendLine(`📦 Using ${config.engine} engine`);
 
-		console.log("hi");
-
 		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 		if (!workspaceFolder) {
 			throw new Error("No workspace folder found");
 		}
 
-		const baseClientOptions = createClientOptions(workspaceFolder, outputChannel);
+		// const baseClientOptions = createClientOptions(workspaceFolder, outputChannel);
 
-		if (config.engine === GotmplsEngineType.WASI) {
-			await wasi_activate(context, outputChannel, baseClientOptions);
-			outputChannel.appendLine("🌟 WASI engine started");
-		} else {
-			const engine = createEngine(config.engine, outputChannel);
-			// Initialize engine
-			const messageTransports = engine.initialize(context, outputChannel);
-			outputChannel.appendLine("✅ Engine initialized");
+		// if (config.engine === GotmplsEngineType.WASI) {
+		// 	await wasi_activate(context, outputChannel, baseClientOptions);
+		// 	outputChannel.appendLine("🌟 WASI engine started");
+		// } else {
+		const engine = createEngine(config.engine, outputChannel);
+		// Initialize engine
+		const messageTransports = engine.initialize(context, outputChannel);
+		outputChannel.appendLine("✅ Engine initialized");
 
-			// Start server
-			await engine.startServer(context, messageTransports);
-			outputChannel.appendLine("🌟 Language server started");
-			context.subscriptions.push({
-				dispose: () => {
-					engine.stopServer(context);
-					outputChannel.dispose();
-				},
-			});
-		}
+		// Start server
+		await engine.startServer(context, messageTransports);
+		outputChannel.appendLine("🌟 Language server started");
+		context.subscriptions.push({
+			dispose: () => {
+				engine.stopServer(context);
+				outputChannel.dispose();
+			},
+		});
+		// }
 		// Register cleanup
 	} catch (err) {
 		outputChannel.appendLine(`❌ Error activating extension: ${err}`);

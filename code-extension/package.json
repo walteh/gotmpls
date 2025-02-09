@@ -72,7 +72,7 @@
 						"wasm",
 						"wasi"
 					],
-					"default": "wasi",
+					"default": "cli",
 					"description": "The engine to use for the language server"
 				}
 			}
