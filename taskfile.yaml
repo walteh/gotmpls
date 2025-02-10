@@ -19,21 +19,21 @@ tasks:
         run: once
         env: { OUTPUT_DIR: "./out", SCRIPTS_DIR: "./scripts", TASKFILE_OUTPUT_DIR: "./gen/taskfiles" }
         cmds:
-            - ./scripts/setup-tools-for-local.sh --generate-taskfiles
+          - ./scripts/setup-tools-for-local.sh --generate-taskfiles
         sources:
-            - ./tools/**/*
-            - ./scripts/**/*
+          - ./tools/**/*
+          - ./scripts/**/*
         generates:
-            - "./gen/taskfiles/**/*"
+          - "./gen/taskfiles/**/*"
 
     mockery:
         cmds:
-            - ./go tool mockery
-            - find ./gen/mockery -type f -not -mmin -1 -delete
+          - ./go tool mockery
+          - find ./gen/mockery -type f -not -mmin -1 -delete
         generates:
-            - ./gen/mockery/*.go
+          - ./gen/mockery/*.go
         sources:
-            - ./**/*.go
+          - ./**/*.go
 
     test:
         cmd: ./go test ./...
@@ -45,107 +45,112 @@ tasks:
 
     install-executables:
         cmds:
-            - ./go install ./cmd/gotmpls
+          - ./go install ./cmd/gotmpls
 
     jsonschema-generate:
         run: once
-        deps: [copyrc]
+        deps: [ copyrc ]
         cmds:
-            - mkdir -p ./gen/jsonschema/go/tmlanguage ./gen/jsonschema/go/vscodemetamodel
-            - ./go tool go-jsonschema ./gen/jsonschema/json/vscodemetamodel/metaModel.schema.json -o=./gen/jsonschema/go/vscodemetamodel/model.go -p=vscodemetamodel
-            - ./go tool go-jsonschema ./gen/jsonschema/json/schemastore/tmlanguage.json -o=./gen/jsonschema/go/tmlanguage/model.go -p=tmlanguage -v
-            # - ../../../github/quicktype/script/quicktype -s schema ./gen/jsonschema/json/vscodemetamodel/metaModel.schema.json --out gen/jsonschema/go/vscodemetamodel/model.go --package vscodemetamodel --prefix-enums-with-type-name
-            # - ../../../github/quicktype/script/quicktype -s schema ./gen/jsonschema/json/schemastore/tmlanguage.json --out gen/jsonschema/go/tmlanguage/model.go --package tmlanguage
+          - mkdir -p ./gen/jsonschema/go/tmlanguage ./gen/jsonschema/go/vscodemetamodel
+          - ./go tool go-jsonschema ./gen/jsonschema/json/vscodemetamodel/metaModel.schema.json -o=./gen/jsonschema/go/vscodemetamodel/model.go -p=vscodemetamodel
+          - ./go tool go-jsonschema ./gen/jsonschema/json/schemastore/tmlanguage.json -o=./gen/jsonschema/go/tmlanguage/model.go -p=tmlanguage -v
+          # - ../../../github/quicktype/script/quicktype -s schema ./gen/jsonschema/json/vscodemetamodel/metaModel.schema.json --out gen/jsonschema/go/vscodemetamodel/model.go --package vscodemetamodel --prefix-enums-with-type-name
+          # - ../../../github/quicktype/script/quicktype -s schema ./gen/jsonschema/json/schemastore/tmlanguage.json --out gen/jsonschema/go/tmlanguage/model.go --package tmlanguage
         generates:
-            - ./gen/jsonschema/go/*.go
+          - ./gen/jsonschema/go/*.go
         sources:
-            - ./gen/jsonschemas/vscode/metaModel.schema.json
-            - ./gen/jsonschemas/schemastore/tmlanguage.schema.json
+          - ./gen/jsonschemas/vscode/metaModel.schema.json
+          - ./gen/jsonschemas/schemastore/tmlanguage.schema.json
 
     copyrc:
         desc: copyrc
         cmds:
-            - ./go tool copyrc -config=.copyrc.hcl -force
+          - ./go tool copyrc -config=.copyrc.hcl -force
         sources:
-            - .copyrc.hcl
+          - .copyrc.hcl
         generates:
-            - "**/*.copyrc.lock"
+          - "**/*.copyrc.lock"
         status:
-            - ./go tool copyrc -config=.copyrc.hcl -status
+          - ./go tool copyrc -config=.copyrc.hcl -status
 
     generate-lsp-protocol:
-        deps: [copyrc]
+        deps: [ copyrc ]
         sources:
-            - "./pkg/lsp/protocol/generator/*.go"
+          - "./pkg/lsp/protocol/generator/*.go"
         generates:
-            - "./pkg/lsp/protocol/*.gen.go"
+          - "./pkg/lsp/protocol/*.gen.go"
         cmds:
-            - ./go generate ./pkg/lsp/protocol/generator
+          - ./go generate ./pkg/lsp/protocol/generator
 
     go-mod-tidy:
         env: { GOPROXY: https://proxy.golang.org, GOSUMDB: sum.golang.org, GOPRIVATE: github.com/walteh }
         cmds:
-            - for: { var: GO_MODULES }
-              cmd: |
-                  cd {{.ITEM}} && go mod tidy
+          - for: { var: GO_MODULES }
+            cmd: |
+                cd {{.ITEM}} && go mod tidy
 
     go-mod-upgrade:
         run: once
         env: { GOPROXY: https://proxy.golang.org, GOSUMDB: sum.golang.org, GOPRIVATE: github.com/walteh }
         cmds:
-            - ./go tool go-mod-upgrade --force
+          - ./go tool go-mod-upgrade --force
 
     refresh-extension-go:
         dir: code-extension
         cmds:
-            - rm -rf out
-            - mkdir -p out
-            - task: wasi
-            - bun install
+          - rm -rf out
+          - mkdir -p out
+          - task: go
+          - bun install
 
     # not really a huge size difference in the .vsix file, and its way slower to build
     refresh-extension-tinygo:
         dir: code-extension
         cmds:
-            - rm -rf out
-            - mkdir -p out
-            - task: wasm-tinygo
-            - bun install
+          - rm -rf out
+          - mkdir -p out
+          - task: wasm-tinygo
+          - bun install
 
     rebuild-extension:
         dir: code-extension
         cmds:
-            - task: refresh-extension-go
-            - bun run build
+          - task: refresh-extension-go
+          - bun run build
 
     package-extension:
         dir: code-extension
         cmds:
-            - task: refresh-extension-go
-            - bun run package
-            - mv ./gotmpls-*.vsix ~/Downloads
-            - open https://marketplace.visualstudio.com/manage/publishers/walteh
+          - task: refresh-extension-go
+          - bun run package
+          - mv ./gotmpls-*.vsix ~/Downloads
+          - open https://marketplace.visualstudio.com/manage/publishers/walteh
+
+    go:
+        desc: Build WASM module
+        cmds:
+          - go build -o code-extension/out/gotmpls ./cmd/gotmpls
 
     wasm:
         desc: Build WASM module
         cmds:
-            - GOOS=js GOARCH=wasm go build -o code-extension/out/gotmpls.wasm ./cmd/gotmpls-wasm
-            - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" code-extension/out/wasm_exec.js
+          - GOOS=js GOARCH=wasm go build -o code-extension/out/gotmpls.wasm ./cmd/gotmpls-wasm
+          - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" code-extension/out/wasm_exec.js
 
     wasm-tinygo:
         desc: Build WASM module with TinyGo
         cmds:
-            - GOOS=js GOARCH=wasm tinygo build -o ./code-extension/out/gotmpls.tinygo.wasm ./cmd/gotmpls-wasm
-            - cp "$(tinygo env TINYGOROOT)/targets/wasm_exec.js" ./code-extension/out/wasm_exec.tinygo.js
+          - GOOS=js GOARCH=wasm tinygo build -o ./code-extension/out/gotmpls.tinygo.wasm ./cmd/gotmpls-wasm
+          - cp "$(tinygo env TINYGOROOT)/targets/wasm_exec.js" ./code-extension/out/wasm_exec.tinygo.js
 
     wasi:
         desc: Build WASI module
         cmds:
-            - GOOS=wasip1 GOARCH=wasm go build -o ./code-extension/out/gotmpls.wasi.wasm ./cmd/gotmpls-wasi
-            - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" ./code-extension/out/wasm_exec.wasi.js
+          - GOOS=wasip1 GOARCH=wasm go build -o ./code-extension/out/gotmpls.wasi.wasm ./cmd/gotmpls-wasi
+          - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" ./code-extension/out/wasm_exec.wasi.js
 
     wasi-tinygo:
         desc: Build WASI module
         cmds:
-            - GOOS=wasip1 GOARCH=wasm tinygo build -o ./code-extension/out/gotmpls.wasi.wasm ./cmd/gotmpls-wasi
-            - cp "$(tinygo env TINYGOROOT)/targets/wasm_exec.js" ./code-extension/out/wasm_exec.wasi.js
+          - GOOS=wasip1 GOARCH=wasm tinygo build -o ./code-extension/out/gotmpls.wasi.wasm ./cmd/gotmpls-wasi
+          - cp "$(tinygo env TINYGOROOT)/targets/wasm_exec.js" ./code-extension/out/wasm_exec.wasi.js

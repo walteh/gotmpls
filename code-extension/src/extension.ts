@@ -24,9 +24,9 @@
 
 import * as vscode from "vscode";
 
-import { CLIEngine } from "./cli";
-import { getConfig, GotmplsEngine, GotmplsEngineType } from "./engine";
-import { WasmEngine } from "./wasm";
+import { BundledEngine, GoRunEngine, GoToolEngine, LocalEngine, PathEngine } from "@src/cli";
+import { getConfig, GotmplsEngine, GotmplsEngineType } from "@src/engine";
+import { WasmEngine } from "@src/wasm";
 
 // Current engine instance
 // let currentEngine: GotmplsEngine | undefined;
@@ -87,13 +87,23 @@ var wasmEngine: WasmEngine | undefined;
 
 function createEngine(type: GotmplsEngineType, outputChannel: vscode.OutputChannel): GotmplsEngine {
 	switch (type) {
-		case GotmplsEngineType.CLI:
-			return new CLIEngine();
 		case GotmplsEngineType.WASM:
 			if (!wasmEngine) {
 				wasmEngine = new WasmEngine(outputChannel);
 			}
 			return wasmEngine;
+		case GotmplsEngineType.BUNDLED:
+			return new BundledEngine();
+		case GotmplsEngineType.GO_TOOL:
+			return new GoToolEngine();
+		case GotmplsEngineType.GO_RUN:
+			return new GoRunEngine();
+		case GotmplsEngineType.SYSTEM_PATH:
+			return new PathEngine();
+		case GotmplsEngineType.LOCAL:
+			return new LocalEngine();
+		case GotmplsEngineType.CLI: // Backward compatibility
+			return new PathEngine();
 		default:
 			throw new Error(`Unknown engine type: ${type}`);
 	}

@@ -35,10 +35,29 @@
 		"configuration": {
 			"title": "gotmpls",
 			"properties": {
+				"gotmpls.engine": {
+					"type": "string",
+					"enum": [
+						"wasm",
+						"wasi",
+						"bundled",
+						"go-tool",
+						"go-run",
+						"system-path",
+						"local"
+					],
+					"default": "bundled",
+					"description": "The engine to use. Options:\n- wasm: Uses WebAssembly for best performance\n- wasi: Uses WASI runtime\n- bundled: Uses bundled executable (falls back to go-run)\n- go-tool: Uses 'go tool github.com/walteh/gotmpls/cmd/gotmpls'\n- go-run: Uses 'go run github.com/walteh/gotmpls/cmd/gotmpls@version'\n- path: Uses 'gotmpls' from system PATH\n- local: Uses specified executable path"
+				},
 				"gotmpls.executable": {
 					"type": "string",
-					"default": "gotmpls",
-					"description": "Path to the gotmpls executable. Can be absolute or relative to workspace root."
+					"default": "",
+					"description": "Path to the gotmpls executable. Only used when engine is set to 'local'. Can be absolute or relative to workspace root."
+				},
+				"gotmpls.disable_wasm_fallback": {
+					"type": "boolean",
+					"default": false,
+					"description": "Disable automatic fallback to WASM engine when other engines fail."
 				},
 				"gotmpls.trace.server": {
 					"type": "string",
@@ -64,16 +83,6 @@
 					"type": "boolean",
 					"default": true,
 					"description": "Enable/disable completion suggestions."
-				},
-				"gotmpls.engine": {
-					"type": "string",
-					"enum": [
-						"cli",
-						"wasm",
-						"wasi"
-					],
-					"default": "cli",
-					"description": "The engine to use for the language server"
 				}
 			}
 		}

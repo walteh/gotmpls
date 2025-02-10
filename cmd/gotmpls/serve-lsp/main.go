@@ -2,6 +2,7 @@ package serve_lsp
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/creachadair/jrpc2"
@@ -60,6 +61,9 @@ func (me *Handler) Run(ctx context.Context) error {
 
 	opts := &jrpc2.ServerOptions{
 		RPCLog: &RPCLogger{},
+		Logger: func(msg string) {
+			zerolog.Ctx(ctx).Info().Str("name", "gotmpls").Msg(msg)
+		},
 	}
 
 	instance := protocol.NewServerInstance(ctx, server, opts)
@@ -68,6 +72,8 @@ func (me *Handler) Run(ctx context.Context) error {
 	if err != nil {
 		return errors.Errorf("error running language server: %w", err)
 	}
+
+	fmt.Fprintf(os.Stderr, "[lsp] server started\n")
 
 	server.SetCallbackClient(instance.Instance().ForwardingClient())
 

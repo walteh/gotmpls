@@ -25,9 +25,14 @@ import { LanguageClient, LanguageClientOptions, MessageTransports } from "vscode
 
 // 🔧 Engine type enum
 export enum GotmplsEngineType {
-	CLI = "cli",
 	WASM = "wasm",
 	WASI = "wasi",
+	BUNDLED = "bundled",
+	GO_TOOL = "go-tool",
+	GO_RUN = "go-run",
+	SYSTEM_PATH = "system-path",
+	LOCAL = "local",
+	CLI = "cli", // kept for backward compatibility
 }
 
 // 📝 Language IDs enum
